@@ -1,0 +1,16 @@
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+bin
+target
+.DS_Store
+*.txt
+*.coverprofile
+*.prof
+
+config/*.*
+!config/config.go
+*.csv
