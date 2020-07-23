@@ -1,7 +1,6 @@
 package datastore
 
 import (
-	"github.com/ernestrc/blue/rpc"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -14,6 +13,4 @@ import (
 type Entity interface {
 	FromProto(proto.Message)
 	ToProto() proto.Message
-
-	ToProtoResource() *rpc.Resource
 }
