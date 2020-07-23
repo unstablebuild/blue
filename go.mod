@@ -4,9 +4,11 @@ go 1.14
 
 require (
 	cloud.google.com/go/firestore v1.2.0
+	github.com/adrianmo/go-nmea v1.2.0
 	github.com/ernestrc/logd-go v0.0.0-20180509171507-65871c1d5504
 	github.com/golang/protobuf v1.3.5
 	github.com/google/uuid v1.1.1
+	github.com/jacobsa/go-serial v0.0.0-20180131005756-15cf729a72d4
 	github.com/mitchellh/mapstructure v1.3.2
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.6.1
