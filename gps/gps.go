@@ -5,6 +5,9 @@ import (
 	"io"
 )
 
+// DefaultPort is the default port used by GPS servers and clients.
+const DefaultPort = 4677
+
 // Coordinates represent a set GPS coordinates represented by a latitude and longitude.
 type Coordinates struct {
 	Latitude  float64

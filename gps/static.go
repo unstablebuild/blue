@@ -6,9 +6,9 @@ type staticPositioner struct {
 	pos Coordinates
 }
 
-// NewStaticPosition returns a Positioner that always yields the same
+// NewStaticPositioner returns a Positioner that always yields the same
 // GPS position.
-func NewStaticPosition(pos Coordinates) Positioner {
+func NewStaticPositioner(pos Coordinates) Positioner {
 	return staticPositioner{pos: pos}
 }
 
