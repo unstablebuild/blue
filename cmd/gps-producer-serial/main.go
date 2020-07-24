@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -30,7 +29,6 @@ var (
 
 	dtlsConfig = dtls.Config{
 		PSK: func(hint []byte) ([]byte, error) {
-			// fmt.Printf("Server's hint: %s \n", hint)
 			return []byte{0xAB, 0xC1, 0x23}, nil
 		},
 		PSKIdentityHint:      []byte("Pion DTLS Server"),
@@ -44,32 +42,18 @@ var (
 func main() {
 	logging.SetDefaults(true)
 
-	pos, err := gps.NewSerialDevicePositioner(serialOpts)
+	p, err := gps.NewSerialDevicePositioner(serialOpts)
 	if err != nil {
 		log.Fatalf("failed to create serial device GPS positioner: %s\n", err)
 	}
-	pos = gps.WithLoggingPositioner(pos, "serial-device-"+serialDevice)
-	defer pos.Close()
+	p = gps.WithLoggingPositioner(p, "serial-device-"+serialDevice)
+	defer p.Close()
 
-	c, err := gps.NewDTLSSender(ip, gps.DefaultPort, dtlsConfig)
+	s, err := gps.NewDTLSSender(ip, gps.DefaultPort, dtlsConfig)
 	if err != nil {
 		log.Fatalf("failed to create gps client: %v", err)
 	}
-	defer c.Close()
+	defer s.Close()
 
-	for {
-		ctx := context.Background()
-		p, err := pos.Position(ctx)
-		if err != nil {
-			continue // logged by logging Positioner
-		}
-
-		err = c.Send(ctx, p)
-		if err != nil {
-			log.Warnf("failed to send GPS position to server: %v", err)
-		}
-
-		// TODO use timer to wake up instead of sleep
-		time.Sleep(cadence)
-	}
+	gps.SendPositionAtCadence(p, s, cadence)
 }
