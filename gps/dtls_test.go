@@ -61,7 +61,7 @@ func TestSimpleDTLS(t *testing.T) {
 	t.Run("client/server establish communication", func(t *testing.T) {
 		var meta ConnectionMetadata
 		var wg sync.WaitGroup
-		wg.Add(3)
+		wg.Add(2)
 		mockRx := &testingReceiver{
 			onClose: func(_meta ConnectionMetadata) {
 				assert.Equal(t, meta, _meta)
@@ -81,6 +81,9 @@ func TestSimpleDTLS(t *testing.T) {
 
 		err := client.Send(ctx, pos)
 		assert.NoError(t, err)
+
+		wg.Wait()
+		wg.Add(1)
 
 		assert.NoError(t, client.Close())
 		assert.NoError(t, server.Close())
