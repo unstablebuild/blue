@@ -60,9 +60,9 @@ func (p *serialDevicePositioner) Position(ctx context.Context) (Coordinates, err
 
 	data := s.(nmea.GGA)
 	return Coordinates{
-		Latitude:  data.Latitude,
-		Longitude: data.Longitude,
-		Altitude:  data.Altitude,
+		Latitude:  float32(data.Latitude),
+		Longitude: float32(data.Longitude),
+		Altitude:  float32(data.Altitude),
 	}, nil
 }
 

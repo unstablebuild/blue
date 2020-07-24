@@ -14,48 +14,47 @@ import (
 	"github.com/pion/dtls/v2"
 )
 
+// DefaultPort is the default port used by GPS servers and clients.
+const DefaultPort = 4677
+
 const maxDatagramSize = 8192
 
-// Server is a DTLS GPS server.
-type Server struct {
+// DTLSServer is a DTLS GPS server.
+type DTLSServer struct {
 	cancelCtx context.Context
 	cancel    func()
 	listener  net.Listener
 	addr      *net.UDPAddr
 
-	conns map[string]net.Conn
-	lock  sync.RWMutex
+	receivers []Receiver
+	conns     map[ConnectionMetadata]net.Conn
+	lock      sync.RWMutex
 }
 
-// NewServer allocates storage for a new instance of Server and initializes it.
-func NewServer(ip string, port int) (*Server, error) {
+// NewDTLSServer allocates storage for a new instance of DTLSServer and initializes it.
+// dtls.Config.ConnectContextMaker is overriden by this constructor to set
+// a connect timeout of 30s. GPS Coordinates received are delegated to receivers.
+func NewDTLSServer(
+	ip string, port int, config dtls.Config, receivers ...Receiver,
+) (*DTLSServer, error) {
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
 		return nil, errors.New("invalid IP address")
 	}
 
-	s := new(Server)
-	s.conns = make(map[string]net.Conn)
+	s := new(DTLSServer)
+	s.conns = make(map[ConnectionMetadata]net.Conn)
 	s.addr = &net.UDPAddr{IP: parsedIP, Port: port}
+	s.receivers = receivers
 
 	s.cancelCtx, s.cancel = context.WithCancel(context.Background())
 
-	config := &dtls.Config{
-		PSK: func(hint []byte) ([]byte, error) {
-			// fmt.Printf("Client's hint: %s \n", hint)
-			return []byte{0xAB, 0xC1, 0x23}, nil
-		},
-		PSKIdentityHint:      []byte("Pion DTLS Client"),
-		CipherSuites:         []dtls.CipherSuiteID{dtls.TLS_PSK_WITH_AES_128_CCM_8},
-		ExtendedMasterSecret: dtls.RequireExtendedMasterSecret,
-		// Create timeout context for accepted connection.
-		ConnectContextMaker: func() (context.Context, func()) {
-			return context.WithTimeout(s.cancelCtx, 30*time.Second)
-		},
+	config.ConnectContextMaker = func() (context.Context, func()) {
+		return context.WithTimeout(s.cancelCtx, 30*time.Second)
 	}
 
 	var err error
-	s.listener, err = dtls.Listen("udp", s.addr, config)
+	s.listener, err = dtls.Listen("udp", s.addr, &config)
 	if err != nil {
 		s.cancel()
 		return nil, err
@@ -64,32 +63,35 @@ func NewServer(ip string, port int) (*Server, error) {
 	return s, nil
 }
 
-func (s *Server) connectionRemove(conn *dtls.Conn) {
+func (s *DTLSServer) connectionRemove(meta ConnectionMetadata, conn *dtls.Conn) {
 	s.lock.Lock()
-	defer s.lock.Unlock()
+	delete(s.conns, meta)
+	s.lock.Unlock()
 
-	delete(s.conns, conn.RemoteAddr().String())
 	err := conn.Close()
 	if err != nil {
-		log.Warn("Failed to disconnect", conn.RemoteAddr(), err)
+		log.Warnf("Failed to disconnect %v: %s", conn.RemoteAddr(), err)
 	} else {
-		log.Info("Disconnected ", conn.RemoteAddr())
+		log.Debugf("Disconnected %v", conn.RemoteAddr())
+		for _, r := range s.receivers {
+			r.OnClose(meta)
+		}
 	}
 }
 
-func (s *Server) connectionRead(conn *dtls.Conn) {
+func (s *DTLSServer) connectionRead(meta ConnectionMetadata, conn *dtls.Conn) {
 	s.lock.Lock()
-	s.conns[conn.RemoteAddr().String()] = conn
+	s.conns[meta] = conn
 	s.lock.Unlock()
 
-	log.Debugf("Reading messages from %s", conn.RemoteAddr())
+	log.Debugf("Reading messages from %v", meta)
 
 	b := make([]byte, maxDatagramSize)
 	for {
 		n, err := conn.Read(b)
 		if err != nil {
 			log.Errorf("failed to read: %v", err)
-			s.connectionRemove(conn)
+			s.connectionRemove(meta, conn)
 			return
 		}
 
@@ -97,21 +99,48 @@ func (s *Server) connectionRead(conn *dtls.Conn) {
 		err = proto.Unmarshal(b[:n], &in)
 		if err != nil {
 			log.Errorf("failed to unmarshal coordinates: %v", err)
-			s.connectionRemove(conn)
+			s.connectionRemove(meta, conn)
 			return
 		}
 
-		// TODO handle gps position through handlers?
-		log.Infof("received GPS position: %v", in)
+		for _, r := range s.receivers {
+			r.Receive(meta, Coordinates{
+				Altitude:  in.GetAltitude(),
+				Latitude:  in.GetLatitude(),
+				Longitude: in.GetLongitude(),
+			})
+		}
 	}
 }
 
-// ListenAndServe starts accepting new connections and reading GPS coordinates.
-func (s *Server) ListenAndServe() error {
-	log.Infof("GPS Server listening on udp addr %v", s.addr)
+func (s *DTLSServer) serveOne() error {
+	conn, err := s.listener.Accept()
+	if err != nil {
+		return err
+	}
+
+	meta := ConnectionMetadata{
+		RemoteAddr: conn.RemoteAddr(),
+		LocalAddr:  conn.LocalAddr(),
+	}
+
+	log.Debugf("Accepted new connection: %v", meta)
+
+	for _, r := range s.receivers {
+		r.OnOpen(meta)
+	}
+
+	go s.connectionRead(meta, conn.(*dtls.Conn))
+
+	return nil
+}
+
+// Serve starts accepting new connections and reading GPS coordinates.
+func (s *DTLSServer) Serve() error {
+	log.Debugf("GPS DTLSServer listening on udp addr %v", s.addr)
 
 	for {
-		conn, err := s.listener.Accept()
+		err := s.serveOne()
 		switch e := err.(type) {
 		case nil:
 		case (net.Error):
@@ -123,20 +152,27 @@ func (s *Server) ListenAndServe() error {
 		default:
 			return err
 		}
-
-		log.Infof("Accepted new connection: %s", conn.RemoteAddr())
-
-		go s.connectionRead(conn.(*dtls.Conn))
 	}
 }
 
-// Close closes all resources associated with this instance of Server.
-func (s *Server) Close() error {
+// Addr returns the address that this instance of DTLSServer is listening on.
+func (s *DTLSServer) Addr() *net.UDPAddr {
+	if s.listener == nil {
+		panic("called Addr() before ServeAndListen was called")
+	}
+	return s.listener.Addr().(*net.UDPAddr)
+}
+
+// Close closes all resources associated with this instance of DTLSServer.
+func (s *DTLSServer) Close() error {
 	s.cancel()
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	for _, c := range s.conns {
+	for meta, c := range s.conns {
+		for _, r := range s.receivers {
+			r.OnClose(meta)
+		}
 		_ = c.Close()
 	}
 	s.conns = nil

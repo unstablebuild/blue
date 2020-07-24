@@ -1,8 +1,10 @@
 package gps
 
 import (
+	"context"
 	"errors"
 	"net"
+	"time"
 
 	"github.com/ernestrc/blue/rpc"
 	"github.com/golang/protobuf/proto"
@@ -10,40 +12,42 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const connectTimeout = 5 * time.Second
+
 type dtlsSender struct {
-	conn *dtls.Conn
+	conn   net.Conn
+	addr   *net.UDPAddr
+	config dtls.Config
 }
 
-func NewDTLSSender(ip string, port int) (Sender, error) {
+// NewDTLSSender returns a Sender that transmits the GPS location at the GPS
+// server at ip and port, with the given DTLS configuration.
+func NewDTLSSender(ip string, port int, config dtls.Config) (Sender, error) {
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
 		return nil, errors.New("invalid IP address")
 	}
 
 	s := new(dtlsSender)
-	addr := &net.UDPAddr{IP: parsedIP, Port: port}
-	config := &dtls.Config{
-		PSK: func(hint []byte) ([]byte, error) {
-			// fmt.Printf("Server's hint: %s \n", hint)
-			return []byte{0xAB, 0xC1, 0x23}, nil
-		},
-		PSKIdentityHint:      []byte("Pion DTLS Server"),
-		CipherSuites:         []dtls.CipherSuiteID{dtls.TLS_PSK_WITH_AES_128_CCM_8},
-		ExtendedMasterSecret: dtls.RequireExtendedMasterSecret,
-	}
-
-	var err error
-	s.conn, err = dtls.Dial("udp", addr, config)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Infof("Connected to DTLS server %+v", addr)
+	s.addr = &net.UDPAddr{IP: parsedIP, Port: port}
+	s.config = config
 
 	return s, nil
 }
 
-func (c *dtlsSender) Send(pos Coordinates) error {
+func (s *dtlsSender) Send(ctx context.Context, pos Coordinates) error {
+	if s.conn == nil {
+		ctx, cancel := context.WithTimeout(ctx, connectTimeout)
+		defer cancel()
+
+		var err error
+		s.conn, err = dtls.DialWithContext(ctx, "udp", s.addr, &s.config)
+		if err != nil {
+			return err
+		}
+
+		log.Debugf("Connected to DTLS server %+v", s.addr)
+	}
 	b, err := proto.Marshal(&rpc.Coordinates{
 		Latitude:  float32(pos.Latitude),
 		Longitude: float32(pos.Longitude),
@@ -53,10 +57,15 @@ func (c *dtlsSender) Send(pos Coordinates) error {
 		return err
 	}
 
-	_, err = c.conn.Write(b)
+	_, err = s.conn.Write(b)
 	return err
 }
 
-func (c *dtlsSender) Close() error {
-	return c.conn.Close()
+func (s *dtlsSender) Close() error {
+	if s == nil || s.conn == nil {
+		return nil
+	}
+	conn := s.conn
+	s.conn = nil
+	return conn.Close()
 }

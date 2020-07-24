@@ -4,27 +4,28 @@ import (
 	"context"
 	"fmt"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/ernestrc/blue/logging"
 	"github.com/ernestrc/blue/logging/trace"
 )
 
 type loggingPositioner struct {
-	root  Positioner
-	label string
+	root     Positioner
+	callType string
 }
 
-// WithLogging wraps a Positioner to provide INFO/ERROR level logging.
-func WithLogging(pos Positioner, label string) Positioner {
-	return loggingPositioner{root: pos, label: label}
+// WithLoggingPositioner wraps a Positioner to provide INFO/ERROR level logging.
+func WithLoggingPositioner(pos Positioner, label string) Positioner {
+	return loggingPositioner{root: pos, callType: "Position" + label}
 }
 
 func (p loggingPositioner) Position(ctx context.Context) (Coordinates, error) {
 	traceID, ctx := trace.FromContextOrNew(ctx)
-	attemptAt := logging.LogAttempt(traceID, p.label+"Position")
+	attemptAt := logging.LogAttempt(traceID, p.callType)
 
 	pos, err := p.root.Position(ctx)
-	logging.LogResult(err, attemptAt, traceID,
-		p.label+"Position",
+	logging.LogResult(err, attemptAt, traceID, p.callType,
 		logging.Field{Key: "Latitude", Value: fmt.Sprintf("%.4f", pos.Latitude)},
 		logging.Field{Key: "Longitude", Value: fmt.Sprintf("%.4f", pos.Longitude)},
 		logging.Field{Key: "Altitude", Value: fmt.Sprintf("%.2f", pos.Longitude)},
@@ -34,4 +35,69 @@ func (p loggingPositioner) Position(ctx context.Context) (Coordinates, error) {
 
 func (p loggingPositioner) Close() error {
 	return nil
+}
+
+type loggingSender struct {
+	root     Sender
+	callType string
+}
+
+// WithLoggingSender wraps a Sender to provide INFO/ERROR level logging.
+func WithLoggingSender(s Sender, label string) Sender {
+	return loggingSender{root: s, callType: "Send" + label}
+}
+
+func (s loggingSender) Send(ctx context.Context, pos Coordinates) error {
+	traceID, ctx := trace.FromContextOrNew(ctx)
+	attemptAt := logging.LogAttempt(traceID, s.callType)
+	err := s.root.Send(ctx, pos)
+	logging.LogResult(err, attemptAt, traceID, s.callType)
+	return err
+}
+
+func (s loggingSender) Close() error {
+	return nil
+}
+
+type loggingReceiver struct {
+	onOpenCt    string
+	onCloseCt   string
+	onReceiveCt string
+}
+
+// LoggingReceiver returns a Receiver that just logs calls to OnOpen, OnClose and
+// Receive.
+func LoggingReceiver(label string) Receiver {
+	return loggingReceiver{
+		onOpenCt:    "OnOpen" + label,
+		onCloseCt:   "OnClose" + label,
+		onReceiveCt: "OnReceive" + label,
+	}
+}
+
+func (r loggingReceiver) OnOpen(meta ConnectionMetadata) {
+	log.WithFields(log.Fields{
+		logging.KeyCallType: r.onOpenCt,
+		"RemoteAddr":        meta.RemoteAddr.String(),
+		"LocalAddr":         meta.LocalAddr.String(),
+	}).Info()
+}
+
+func (r loggingReceiver) Receive(meta ConnectionMetadata, pos Coordinates) {
+	log.WithFields(log.Fields{
+		logging.KeyCallType: r.onReceiveCt,
+		"RemoteAddr":        meta.RemoteAddr.String(),
+		"LocalAddr":         meta.LocalAddr.String(),
+		"Latitude":          pos.Latitude,
+		"Longitude":         pos.Longitude,
+		"Altitude":          pos.Altitude,
+	}).Info()
+}
+
+func (r loggingReceiver) OnClose(meta ConnectionMetadata) {
+	log.WithFields(log.Fields{
+		logging.KeyCallType: r.onCloseCt,
+		"RemoteAddr":        meta.RemoteAddr.String(),
+		"LocalAddr":         meta.LocalAddr.String(),
+	}).Info()
 }
