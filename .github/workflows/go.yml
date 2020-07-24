@@ -24,4 +24,9 @@ jobs:
     - name: Build & Test
       run: make test
       env:
-        GOPRIVATE: github.com/hiperio
+        GOPRIVATE: github.com/ernestrc
+
+    - name: Go Release Binary
+      uses: ngs/go-release.action@v1.0.2
+      env:
+        GOPRIVATE: github.com/ernestrc
