@@ -12,12 +12,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const connectTimeout = 5 * time.Second
+const connectTimeout = 10 * time.Second
 
 type dtlsSender struct {
 	conn   net.Conn
 	addr   *net.UDPAddr
 	config dtls.Config
+	ch     chan error
 }
 
 // NewDTLSSender returns a Sender that transmits the GPS location at the GPS
@@ -31,6 +32,7 @@ func NewDTLSSender(ip string, port int, config dtls.Config) (Sender, error) {
 	s := new(dtlsSender)
 	s.addr = &net.UDPAddr{IP: parsedIP, Port: port}
 	s.config = config
+	s.ch = make(chan error)
 
 	return s, nil
 }
@@ -43,6 +45,7 @@ func (s *dtlsSender) Send(ctx context.Context, pos Coordinates) error {
 		var err error
 		s.conn, err = dtls.DialWithContext(ctx, "udp", s.addr, &s.config)
 		if err != nil {
+			s.conn = nil /* on err conn might not be nil */
 			return err
 		}
 
@@ -57,8 +60,18 @@ func (s *dtlsSender) Send(ctx context.Context, pos Coordinates) error {
 		return err
 	}
 
-	_, err = s.conn.Write(b)
-	return err
+	go func(conn net.Conn) {
+		_, err := conn.Write(b)
+		s.ch <- err
+	}(s.conn)
+
+	select {
+	case <-ctx.Done():
+		s.conn.SetWriteDeadline(time.Now())
+		return <-s.ch
+	case err := <-s.ch:
+		return err
+	}
 }
 
 func (s *dtlsSender) Close() error {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/pion/dtls/v2"
 	"github.com/stretchr/testify/assert"
@@ -59,21 +60,20 @@ func TestSimpleDTLS(t *testing.T) {
 
 	t.Run("client/server establish communication", func(t *testing.T) {
 		var meta ConnectionMetadata
-		var onClose int
-		var onOpen int
-		var onReceive int
+		var wg sync.WaitGroup
+		wg.Add(3)
 		mockRx := &testingReceiver{
 			onClose: func(_meta ConnectionMetadata) {
 				assert.Equal(t, meta, _meta)
-				onClose++
+				wg.Done()
 			},
 			onOpen: func(_meta ConnectionMetadata) {
 				meta = _meta
-				onOpen++
+				wg.Done()
 			},
 			onReceive: func(meta ConnectionMetadata, _pos Coordinates) {
 				assert.Equal(t, pos, _pos)
-				onReceive++
+				wg.Done()
 			},
 		}
 
@@ -86,11 +86,18 @@ func TestSimpleDTLS(t *testing.T) {
 		assert.NoError(t, server.Close())
 
 		cancel()
-		mockRx.lock.Lock()
-		defer mockRx.lock.Unlock()
+		wg.Wait()
+	})
 
-		assert.Equal(t, 1, onClose)
-		assert.Equal(t, 1, onOpen)
-		assert.Equal(t, 1, onReceive)
+	t.Run("client respects context deadline", func(t *testing.T) {
+		ctx, cancelTl := context.WithDeadline(context.Background(), time.Now())
+		client, server, cancel := newClientServerPair(t)
+		defer cancelTl()
+		defer cancel()
+		defer server.Close()
+		defer client.Close()
+
+		err := client.Send(ctx, pos)
+		assert.Error(t, err)
 	})
 }

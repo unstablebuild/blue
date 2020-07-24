@@ -66,9 +66,9 @@ func NewDTLSServer(
 func (s *DTLSServer) connectionRemove(meta ConnectionMetadata, conn *dtls.Conn) {
 	s.lock.Lock()
 	delete(s.conns, meta)
+	err := conn.Close()
 	s.lock.Unlock()
 
-	err := conn.Close()
 	if err != nil {
 		log.Warnf("Failed to disconnect %v: %s", conn.RemoteAddr(), err)
 	} else {
@@ -80,10 +80,6 @@ func (s *DTLSServer) connectionRemove(meta ConnectionMetadata, conn *dtls.Conn) 
 }
 
 func (s *DTLSServer) connectionRead(meta ConnectionMetadata, conn *dtls.Conn) {
-	s.lock.Lock()
-	s.conns[meta] = conn
-	s.lock.Unlock()
-
 	log.Debugf("Reading messages from %v", meta)
 
 	b := make([]byte, maxDatagramSize)
@@ -125,6 +121,10 @@ func (s *DTLSServer) serveOne() error {
 	}
 
 	log.Debugf("Accepted new connection: %v", meta)
+
+	s.lock.Lock()
+	s.conns[meta] = conn
+	s.lock.Unlock()
 
 	for _, r := range s.receivers {
 		r.OnOpen(meta)
