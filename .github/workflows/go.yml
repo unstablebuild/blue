@@ -7,10 +7,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.14
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.14
       id: go
 
     - name: Configure git for private modules
@@ -23,10 +23,5 @@ jobs:
 
     - name: Build & Test
       run: make test
-      env:
-        GOPRIVATE: github.com/ernestrc
-
-    - name: Go Release Binary
-      uses: ngs/go-release.action@v1.0.2
       env:
         GOPRIVATE: github.com/ernestrc
