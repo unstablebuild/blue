@@ -2,7 +2,7 @@ package gps
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"net"
 	"time"
 
@@ -22,15 +22,16 @@ type dtlsSender struct {
 }
 
 // NewDTLSSender returns a Sender that transmits the GPS location at the GPS
-// server at ip and port, with the given DTLS configuration.
-func NewDTLSSender(ip string, port int, config dtls.Config) (Sender, error) {
-	parsedIP := net.ParseIP(ip)
-	if parsedIP == nil {
-		return nil, errors.New("invalid IP address")
+// server at host and port, with the given DTLS configuration.
+func NewDTLSSender(host string, port int, config dtls.Config) (Sender, error) {
+	s := new(dtlsSender)
+
+	var err error
+	s.addr, err = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", host, port))
+	if err != nil {
+		return nil, err
 	}
 
-	s := new(dtlsSender)
-	s.addr = &net.UDPAddr{IP: parsedIP, Port: port}
 	s.config = config
 	s.ch = make(chan error)
 

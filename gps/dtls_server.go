@@ -2,7 +2,7 @@ package gps
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -35,16 +35,17 @@ type DTLSServer struct {
 // dtls.Config.ConnectContextMaker is overriden by this constructor to set
 // a connect timeout of 30s. GPS Coordinates received are delegated to receivers.
 func NewDTLSServer(
-	ip string, port int, config dtls.Config, receivers ...Receiver,
+	host string, port int, config dtls.Config, receivers ...Receiver,
 ) (*DTLSServer, error) {
-	parsedIP := net.ParseIP(ip)
-	if parsedIP == nil {
-		return nil, errors.New("invalid IP address")
+	s := new(DTLSServer)
+
+	var err error
+	s.addr, err = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", host, port))
+	if err != nil {
+		return nil, err
 	}
 
-	s := new(DTLSServer)
 	s.conns = make(map[ConnectionMetadata]net.Conn)
-	s.addr = &net.UDPAddr{IP: parsedIP, Port: port}
 	s.receivers = receivers
 
 	s.cancelCtx, s.cancel = context.WithCancel(context.Background())
@@ -53,7 +54,6 @@ func NewDTLSServer(
 		return context.WithTimeout(s.cancelCtx, 30*time.Second)
 	}
 
-	var err error
 	s.listener, err = dtls.Listen("udp", s.addr, &config)
 	if err != nil {
 		s.cancel()
