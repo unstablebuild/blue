@@ -1,6 +1,9 @@
 package main
 
 import (
+	"flag"
+	"io/ioutil"
+
 	"github.com/pion/dtls/v2"
 	log "github.com/sirupsen/logrus"
 
@@ -8,19 +11,34 @@ import (
 	"github.com/ernestrc/blue/logging"
 )
 
-var config = dtls.Config{
-	PSK: func(hint []byte) ([]byte, error) {
-		return []byte{0xAB, 0xC1, 0x23}, nil
-	},
-	PSKIdentityHint:      []byte("Pion DTLS Client"),
-	CipherSuites:         []dtls.CipherSuiteID{dtls.TLS_PSK_WITH_AES_128_CCM_8},
-	ExtendedMasterSecret: dtls.RequireExtendedMasterSecret,
-}
+var (
+	config = dtls.Config{
+		CipherSuites:         []dtls.CipherSuiteID{dtls.TLS_PSK_WITH_AES_128_CCM_8},
+		ExtendedMasterSecret: dtls.RequireExtendedMasterSecret,
+	}
+
+	debug       = flag.Bool("v", false, "Enable verbose logging")
+	psk         = flag.String("k", "", "PSK key file name to use for DTLS handshake")
+	pskIdentity = flag.String("i", "GPS DTLS Server", "PSK identity hint")
+	port        = flag.Int("p", gps.DefaultPort, "Listening port")
+	host        = flag.String("h", "127.0.0.1", "Listening address")
+)
 
 func main() {
-	logging.SetDefaults(true)
+	flag.Parse()
+	logging.SetDefaults(*debug)
 
-	s, err := gps.NewDTLSServer("127.0.0.1", gps.DefaultPort, config,
+	if *psk == "" {
+		log.Fatal("Must pass -k flag")
+	}
+
+	config.PSK = func(hint []byte) ([]byte, error) {
+		log.Debugf("reading PSK file %s for hint %s", *psk, string(hint))
+		return ioutil.ReadFile(*psk)
+	}
+	config.PSKIdentityHint = []byte(*pskIdentity)
+
+	s, err := gps.NewDTLSServer(*host, *port, config,
 		gps.LoggingReceiver("StaticTest"))
 	if err != nil {
 		log.Fatalf("could not start server: %v", err)
