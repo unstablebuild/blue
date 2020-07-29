@@ -1,31 +1,18 @@
 package gps
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 type testingReceiver struct {
 	lock      sync.Mutex
-	onClose   func(ConnectionMetadata)
-	onOpen    func(ConnectionMetadata)
-	onReceive func(ConnectionMetadata, Coordinates)
+	onReceive func(context.Context, Coordinates) error
 }
 
-func (r *testingReceiver) OnOpen(meta ConnectionMetadata) {
+func (r *testingReceiver) Receive(ctx context.Context, pos Coordinates) error {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	r.onOpen(meta)
-}
-
-func (r *testingReceiver) Receive(meta ConnectionMetadata, pos Coordinates) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
-	r.onReceive(meta, pos)
-}
-
-func (r *testingReceiver) OnClose(meta ConnectionMetadata) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
-	r.onClose(meta)
+	return r.onReceive(ctx, pos)
 }

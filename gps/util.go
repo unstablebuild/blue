@@ -7,6 +7,19 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type key int
+
+var metaKey key
+
+func connMetaFromContext(ctx context.Context) (connectionMetadata, bool) {
+	meta, ok := ctx.Value(metaKey).(connectionMetadata)
+	return meta, ok
+}
+
+func withConnectionMeta(ctx context.Context, meta connectionMetadata) context.Context {
+	return context.WithValue(ctx, metaKey, meta)
+}
+
 // SendPositionAtCadence schedules p to retrieve and s to send the retrieved
 // set of Coordinates at cadence. This function never returns.
 func SendPositionAtCadence(p Positioner, s Sender, cadence time.Duration) {

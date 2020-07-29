@@ -65,39 +65,26 @@ type loggingReceiver struct {
 	onReceiveCt string
 }
 
-// LoggingReceiver returns a Receiver that just logs calls to OnOpen, OnClose and
-// Receive.
+// LoggingReceiver returns a Receiver that just logs calls to Receive.
 func LoggingReceiver(label string) Receiver {
 	return loggingReceiver{
-		onOpenCt:    "OnOpen" + label,
-		onCloseCt:   "OnClose" + label,
 		onReceiveCt: "OnReceive" + label,
 	}
 }
 
-func (r loggingReceiver) OnOpen(meta ConnectionMetadata) {
-	log.WithFields(log.Fields{
-		logging.KeyCallType: r.onOpenCt,
-		"RemoteAddr":        meta.RemoteAddr.String(),
-		"LocalAddr":         meta.LocalAddr.String(),
-	}).Info()
-}
-
-func (r loggingReceiver) Receive(meta ConnectionMetadata, pos Coordinates) {
-	log.WithFields(log.Fields{
+func (r loggingReceiver) Receive(ctx context.Context, pos Coordinates) error {
+	fields := log.Fields{
 		logging.KeyCallType: r.onReceiveCt,
-		"RemoteAddr":        meta.RemoteAddr.String(),
-		"LocalAddr":         meta.LocalAddr.String(),
 		"Latitude":          pos.Latitude,
 		"Longitude":         pos.Longitude,
 		"Altitude":          pos.Altitude,
-	}).Info()
-}
+	}
 
-func (r loggingReceiver) OnClose(meta ConnectionMetadata) {
-	log.WithFields(log.Fields{
-		logging.KeyCallType: r.onCloseCt,
-		"RemoteAddr":        meta.RemoteAddr.String(),
-		"LocalAddr":         meta.LocalAddr.String(),
-	}).Info()
+	meta, ok := connMetaFromContext(ctx)
+	if ok {
+		fields["RemoteAddr"] = meta.RemoteAddr.String()
+		fields["LocalAddr"] = meta.LocalAddr.String()
+	}
+	log.WithFields(fields).Info()
+	return nil
 }

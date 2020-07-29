@@ -16,9 +16,18 @@ import (
 )
 
 // DefaultPort is the default port used by GPS servers and clients.
-const DefaultPort = 4677
+const (
+	DefaultPort     = 4677
+	maxDatagramSize = 8192
+	receiveTimeout  = 5 * time.Second
+)
 
-const maxDatagramSize = 8192
+// connectionMetadata represents the connection metadata of a connection-based
+// GPS receiver.
+type connectionMetadata struct {
+	RemoteAddr net.Addr
+	LocalAddr  net.Addr
+}
 
 // DTLSServer is a DTLS GPS server.
 type DTLSServer struct {
@@ -28,7 +37,7 @@ type DTLSServer struct {
 	addr      *net.UDPAddr
 
 	receivers []Receiver
-	conns     map[ConnectionMetadata]net.Conn
+	conns     map[connectionMetadata]net.Conn
 	lock      sync.RWMutex
 }
 
@@ -46,7 +55,7 @@ func NewDTLSServer(
 		return nil, err
 	}
 
-	s.conns = make(map[ConnectionMetadata]net.Conn)
+	s.conns = make(map[connectionMetadata]net.Conn)
 	s.receivers = receivers
 
 	s.cancelCtx, s.cancel = context.WithCancel(context.Background())
@@ -64,7 +73,7 @@ func NewDTLSServer(
 	return s, nil
 }
 
-func (s *DTLSServer) connectionRemove(meta ConnectionMetadata, conn *dtls.Conn) {
+func (s *DTLSServer) connectionRemove(meta connectionMetadata, conn *dtls.Conn) {
 	s.lock.Lock()
 	delete(s.conns, meta)
 	err := conn.Close()
@@ -74,13 +83,26 @@ func (s *DTLSServer) connectionRemove(meta ConnectionMetadata, conn *dtls.Conn) 
 		log.Warnf("Failed to disconnect %v: %s", conn.RemoteAddr(), err)
 	} else {
 		log.Debugf("Disconnected %v", conn.RemoteAddr())
-		for _, r := range s.receivers {
-			r.OnClose(meta)
-		}
 	}
 }
 
-func (s *DTLSServer) connectionRead(meta ConnectionMetadata, conn *dtls.Conn) {
+func (s *DTLSServer) receiveWithTimeout(
+	r Receiver, meta connectionMetadata, in rpc.Coordinates,
+) {
+	ctx := withConnectionMeta(context.Background(), meta)
+	ctx, cancel := context.WithTimeout(ctx, receiveTimeout)
+	defer cancel()
+
+	r.Receive(ctx, Coordinates{
+		DeviceID:  in.GetDeviceID(),
+		Altitude:  in.GetAltitude(),
+		Latitude:  in.GetLatitude(),
+		Longitude: in.GetLongitude(),
+		Time:      datastore.ProtoTimeToStd(in.GetTime()),
+	})
+}
+
+func (s *DTLSServer) connectionRead(meta connectionMetadata, conn *dtls.Conn) {
 	log.Debugf("Reading messages from %v", meta)
 
 	b := make([]byte, maxDatagramSize)
@@ -101,13 +123,7 @@ func (s *DTLSServer) connectionRead(meta ConnectionMetadata, conn *dtls.Conn) {
 		}
 
 		for _, r := range s.receivers {
-			r.Receive(meta, Coordinates{
-				DeviceID:  in.GetDeviceID(),
-				Altitude:  in.GetAltitude(),
-				Latitude:  in.GetLatitude(),
-				Longitude: in.GetLongitude(),
-				Time:      datastore.ProtoTimeToStd(in.GetTime()),
-			})
+			s.receiveWithTimeout(r, meta, in)
 		}
 	}
 }
@@ -118,7 +134,7 @@ func (s *DTLSServer) serveOne() error {
 		return err
 	}
 
-	meta := ConnectionMetadata{
+	meta := connectionMetadata{
 		RemoteAddr: conn.RemoteAddr(),
 		LocalAddr:  conn.LocalAddr(),
 	}
@@ -128,10 +144,6 @@ func (s *DTLSServer) serveOne() error {
 	s.lock.Lock()
 	s.conns[meta] = conn
 	s.lock.Unlock()
-
-	for _, r := range s.receivers {
-		r.OnOpen(meta)
-	}
 
 	go s.connectionRead(meta, conn.(*dtls.Conn))
 
@@ -172,10 +184,7 @@ func (s *DTLSServer) Close() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	for meta, c := range s.conns {
-		for _, r := range s.receivers {
-			r.OnClose(meta)
-		}
+	for _, c := range s.conns {
 		_ = c.Close()
 	}
 	s.conns = nil
