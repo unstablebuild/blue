@@ -12,9 +12,9 @@ import (
 
 func TestTimestampConversion(t *testing.T) {
 	now := time.Now()
-	protoNow := stdTimeToProto(now)
-	now2 := protoTimeToStd(&protoNow)
-	protoNow2 := stdTimeToProto(now2)
+	protoNow := StdTimeToProto(now)
+	now2 := ProtoTimeToStd(&protoNow)
+	protoNow2 := StdTimeToProto(now2)
 
 	assert.Equal(t, now.UnixNano(), now2.UnixNano())
 	assert.Equal(t, protoNow, protoNow2)

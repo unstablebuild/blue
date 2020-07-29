@@ -10,11 +10,13 @@ import (
 	"github.com/golang/protobuf/ptypes/timestamp"
 )
 
-func protoTimeToStd(ts *timestamp.Timestamp) time.Time {
+// ProtoTimeToStd converts timestamp.Timestamp (proto) into time.Time
+func ProtoTimeToStd(ts *timestamp.Timestamp) time.Time {
 	return time.Unix(ts.GetSeconds(), int64(ts.GetNanos()))
 }
 
-func stdTimeToProto(ts time.Time) timestamp.Timestamp {
+// StdTimeToProto converts time.Time into timestamp.Timestamp (proto).
+func StdTimeToProto(ts time.Time) timestamp.Timestamp {
 	seconds := ts.Unix()
 	nanos := ts.Nanosecond()
 	return timestamp.Timestamp{Seconds: seconds, Nanos: int32(nanos)}
