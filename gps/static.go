@@ -1,6 +1,9 @@
 package gps
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type staticPositioner struct {
 	pos Coordinates
@@ -13,7 +16,9 @@ func NewStaticPositioner(pos Coordinates) Positioner {
 }
 
 func (p staticPositioner) Position(ctx context.Context) (Coordinates, error) {
-	return p.pos, nil
+	pos := p.pos
+	pos.Time = time.Now()
+	return pos, nil
 }
 
 func (p staticPositioner) Close() error {

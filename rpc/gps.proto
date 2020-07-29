@@ -9,4 +9,5 @@ message Coordinates {
 	float longitude = 2;
 	float altitude = 3;
     google.protobuf.Timestamp time = 4;
+	string deviceID = 5;
 }

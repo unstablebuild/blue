@@ -24,13 +24,14 @@ var (
 
 	debug       = flag.Bool("v", false, "Enable verbose logging")
 	psk         = flag.String("k", "", "PSK key file name to use for DTLS handshake")
-	pskIdentity = flag.String("i", "GPS DTLS Server", "PSK identity hint")
+	pskIdentity = flag.String("i", "GPS DTLS Client", "PSK identity hint")
 	host        = flag.String("h", "127.0.0.1", "GPS server's hostname")
 	port        = flag.Int("p", gps.DefaultPort, "GPS Server's listening port")
 	cadenceSec  = flag.Int("c", 5,
 		"Cadence as to which to send GPS coordinates to server")
 	static       = flag.Bool("s", false, fmt.Sprintf("Use test static positioner with coordinates: %+v", staticCoordinates))
 	serialDevice = flag.String("d", "ttyS0", "Serial device to use for serial GPS positioner if -s flag is not passed.")
+	deviceID     = flag.String("i", "gps-producer-default", "Device ID used to identify GPS data")
 
 	dtlsConfig = dtls.Config{
 		CipherSuites:         []dtls.CipherSuiteID{dtls.TLS_PSK_WITH_AES_128_CCM_8},
@@ -47,11 +48,12 @@ var (
 
 func getPositioner() (p gps.Positioner, err error) {
 	if *static {
+		staticCoordinates.DeviceID = *deviceID
 		p = gps.NewStaticPositioner(staticCoordinates)
 	} else {
 		serialConfig.PortName = fmt.Sprintf("/dev/%s", *serialDevice)
 		log.Debugf("reading serial GPS data from %s", serialConfig.PortName)
-		p, err = gps.NewSerialDevicePositioner(serialConfig)
+		p, err = gps.NewSerialDevicePositioner(*deviceID, serialConfig)
 	}
 	if err == nil {
 		hostname, err := os.Hostname()

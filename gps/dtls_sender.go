@@ -6,6 +6,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/ernestrc/blue/datastore"
 	"github.com/ernestrc/blue/rpc"
 	"github.com/golang/protobuf/proto"
 	"github.com/pion/dtls/v2"
@@ -38,6 +39,37 @@ func NewDTLSSender(host string, port int, config dtls.Config) (Sender, error) {
 	return s, nil
 }
 
+func (s *dtlsSender) sendBytes(ctx context.Context, b []byte) error {
+	go func(conn net.Conn) {
+		_, err := conn.Write(b)
+		s.ch <- err
+	}(s.conn)
+
+	select {
+	case <-ctx.Done():
+		s.conn.SetWriteDeadline(time.Now())
+		return <-s.ch
+	case err := <-s.ch:
+		return err
+	}
+}
+
+func (s *dtlsSender) sendPosition(ctx context.Context, pos Coordinates) error {
+	ts := datastore.StdTimeToProto(pos.Time)
+	b, err := proto.Marshal(&rpc.Coordinates{
+		DeviceID:  pos.DeviceID,
+		Latitude:  float32(pos.Latitude),
+		Longitude: float32(pos.Longitude),
+		Altitude:  float32(pos.Altitude),
+		Time:      &ts,
+	})
+	if err != nil {
+		return err
+	}
+
+	return s.sendBytes(ctx, b)
+}
+
 func (s *dtlsSender) Send(ctx context.Context, pos Coordinates) error {
 	if s.conn == nil {
 		ctx, cancel := context.WithTimeout(ctx, connectTimeout)
@@ -52,27 +84,7 @@ func (s *dtlsSender) Send(ctx context.Context, pos Coordinates) error {
 
 		log.Debugf("Connected to DTLS server %+v", s.addr)
 	}
-	b, err := proto.Marshal(&rpc.Coordinates{
-		Latitude:  float32(pos.Latitude),
-		Longitude: float32(pos.Longitude),
-		Altitude:  float32(pos.Altitude),
-	})
-	if err != nil {
-		return err
-	}
-
-	go func(conn net.Conn) {
-		_, err := conn.Write(b)
-		s.ch <- err
-	}(s.conn)
-
-	select {
-	case <-ctx.Done():
-		s.conn.SetWriteDeadline(time.Now())
-		return <-s.ch
-	case err := <-s.ch:
-		return err
-	}
+	return s.sendPosition(ctx, pos)
 }
 
 func (s *dtlsSender) Close() error {
