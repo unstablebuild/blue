@@ -3,7 +3,6 @@ package gps
 import (
 	"context"
 	"io"
-	"net"
 	"time"
 )
 
@@ -31,16 +30,7 @@ type Sender interface {
 	io.Closer
 }
 
-// ConnectionMetadata represents the connection metadata of a connection-based
-// GPS receiver.
-type ConnectionMetadata struct {
-	RemoteAddr net.Addr
-	LocalAddr  net.Addr
-}
-
 // Receiver manages the lifecycle of a connection-based GPS receiver.
 type Receiver interface {
-	OnOpen(ConnectionMetadata)
-	Receive(ConnectionMetadata, Coordinates)
-	OnClose(ConnectionMetadata)
+	Receive(context.Context, Coordinates) error
 }

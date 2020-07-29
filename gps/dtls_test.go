@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	config = dtls.Config{
+	dtlsConfig = dtls.Config{
 		PSK: func(hint []byte) ([]byte, error) {
 			return []byte{0xAB, 0xC1, 0x23}, nil
 		},
@@ -24,7 +24,7 @@ var (
 )
 
 func newClientServerPair(t *testing.T, rx ...Receiver) (Sender, *DTLSServer, func()) {
-	server, err := NewDTLSServer(ip, 0, config, rx...)
+	server, err := NewDTLSServer(ip, 0, dtlsConfig, rx...)
 	require.NoError(t, err)
 
 	var wg sync.WaitGroup
@@ -37,7 +37,7 @@ func newClientServerPair(t *testing.T, rx ...Receiver) (Sender, *DTLSServer, fun
 
 	listeningPort := server.Addr().Port
 
-	client, err := NewDTLSSender(ip, listeningPort, config)
+	client, err := NewDTLSSender(ip, listeningPort, dtlsConfig)
 	require.NoError(t, err)
 
 	return client, server, func() {
@@ -57,7 +57,7 @@ func TestSimpleDTLS(t *testing.T) {
 	}
 
 	t.Run("client fails to Send if no server is listening at address", func(t *testing.T) {
-		client, err := NewDTLSSender(ip, 0, config)
+		client, err := NewDTLSSender(ip, 0, dtlsConfig)
 		require.NoError(t, err)
 
 		err = client.Send(ctx, pos)
@@ -65,24 +65,18 @@ func TestSimpleDTLS(t *testing.T) {
 	})
 
 	t.Run("client/server establish communication", func(t *testing.T) {
-		var meta ConnectionMetadata
 		var wg sync.WaitGroup
-		wg.Add(2)
+		wg.Add(1)
 		mockRx := &testingReceiver{
-			onClose: func(_meta ConnectionMetadata) {
-				assert.Equal(t, meta, _meta)
-				wg.Done()
-			},
-			onOpen: func(_meta ConnectionMetadata) {
-				meta = _meta
-				wg.Done()
-			},
-			onReceive: func(meta ConnectionMetadata, _pos Coordinates) {
+			onReceive: func(ctx context.Context, _pos Coordinates) error {
+				_, ok := connMetaFromContext(ctx)
+				assert.True(t, ok)
 				assert.Equal(t, pos.Time.UnixNano(), _pos.Time.UnixNano())
 				pos.Time = time.Time{}
 				_pos.Time = time.Time{}
 				assert.Equal(t, pos, _pos)
 				wg.Done()
+				return nil
 			},
 		}
 
@@ -92,13 +86,11 @@ func TestSimpleDTLS(t *testing.T) {
 		assert.NoError(t, err)
 
 		wg.Wait()
-		wg.Add(1)
 
 		assert.NoError(t, client.Close())
 		assert.NoError(t, server.Close())
 
 		cancel()
-		wg.Wait()
 	})
 
 	t.Run("client respects context deadline", func(t *testing.T) {
