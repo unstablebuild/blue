@@ -4,13 +4,16 @@ import (
 	"context"
 	"io"
 	"net"
+	"time"
 )
 
 // Coordinates represent a set GPS coordinates represented by a latitude and longitude.
 type Coordinates struct {
+	DeviceID  string
 	Latitude  float32
 	Longitude float32
 	Altitude  float32
+	Time      time.Time
 }
 
 // Positioner wraps the basic function Position.

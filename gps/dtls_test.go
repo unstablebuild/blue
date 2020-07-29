@@ -48,7 +48,13 @@ func newClientServerPair(t *testing.T, rx ...Receiver) (Sender, *DTLSServer, fun
 
 func TestSimpleDTLS(t *testing.T) {
 	ctx := context.Background()
-	pos := Coordinates{Latitude: 1, Longitude: 2, Altitude: 3}
+	pos := Coordinates{
+		DeviceID:  "Stinson",
+		Latitude:  1,
+		Longitude: 2,
+		Altitude:  3,
+		Time:      time.Now(),
+	}
 
 	t.Run("client fails to Send if no server is listening at address", func(t *testing.T) {
 		client, err := NewDTLSSender(ip, 0, config)
@@ -72,6 +78,9 @@ func TestSimpleDTLS(t *testing.T) {
 				wg.Done()
 			},
 			onReceive: func(meta ConnectionMetadata, _pos Coordinates) {
+				assert.Equal(t, pos.Time.UnixNano(), _pos.Time.UnixNano())
+				pos.Time = time.Time{}
+				_pos.Time = time.Time{}
 				assert.Equal(t, pos, _pos)
 				wg.Done()
 			},

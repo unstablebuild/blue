@@ -12,13 +12,17 @@ import (
 )
 
 type serialDevicePositioner struct {
+	id         string
 	serialPort io.ReadWriteCloser
 	scanner    *bufio.Scanner
 }
 
 // NewSerialDevicePositioner returns a GPS positioner that reads a GPS position
-// out of NMEA GGA sequences out of a serial device, specified via opts.
-func NewSerialDevicePositioner(opts serial.OpenOptions) (Positioner, error) {
+// out of NMEA GGA sequences out of a serial device, specified via opts. It uses
+// id as Coordinates DeviceID.
+func NewSerialDevicePositioner(id string, opts serial.OpenOptions) (
+	Positioner, error,
+) {
 	serialPort, err := serial.Open(opts)
 	if err != nil {
 		return nil, err
@@ -40,7 +44,9 @@ func NewSerialDevicePositioner(opts serial.OpenOptions) (Positioner, error) {
 		return nil, err
 	}
 
-	return p, err
+	p.id = id
+
+	return p, nil
 }
 
 func (p *serialDevicePositioner) Position(ctx context.Context) (Coordinates, error) {
@@ -60,9 +66,11 @@ func (p *serialDevicePositioner) Position(ctx context.Context) (Coordinates, err
 
 	data := s.(nmea.GGA)
 	return Coordinates{
+		DeviceID:  p.id,
 		Latitude:  float32(data.Latitude),
 		Longitude: float32(data.Longitude),
 		Altitude:  float32(data.Altitude),
+		Time:      time.Now(),
 	}, nil
 }
 

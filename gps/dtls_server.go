@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ernestrc/blue/datastore"
 	"github.com/ernestrc/blue/rpc"
 	"github.com/golang/protobuf/proto"
 	log "github.com/sirupsen/logrus"
@@ -101,9 +102,11 @@ func (s *DTLSServer) connectionRead(meta ConnectionMetadata, conn *dtls.Conn) {
 
 		for _, r := range s.receivers {
 			r.Receive(meta, Coordinates{
+				DeviceID:  in.GetDeviceID(),
 				Altitude:  in.GetAltitude(),
 				Latitude:  in.GetLatitude(),
 				Longitude: in.GetLongitude(),
+				Time:      datastore.ProtoTimeToStd(in.GetTime()),
 			})
 		}
 	}
