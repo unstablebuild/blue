@@ -38,6 +38,18 @@ func (s loggingService) Create(
 	return err
 }
 
+func (s loggingService) Set(
+	ctx context.Context, ID string, data interface{},
+) error {
+	traceID, ctx := trace.FromContextOrNew(ctx)
+	attemptAt := logging.LogAttempt(traceID, s.serviceName+".Set")
+
+	err := s.svc.Set(ctx, ID, data)
+	logging.LogResult(err, attemptAt, traceID, s.serviceName+".Set")
+
+	return err
+}
+
 func (s loggingService) Update(
 	ctx context.Context, ID string, updates []Update,
 ) error {

@@ -43,6 +43,21 @@ func NewFireStore(projectID, collectionID, credsFile string) (
 	return
 }
 
+func (f *fireStore) Set(
+	ctx context.Context, docID string, data interface{},
+) (err error) {
+	if data == nil {
+		panic("invalid nil data argument to Set")
+	}
+	coll := f.client.Collection(f.collID)
+
+	_, err = coll.Doc(docID).Set(ctx, data)
+	if err != nil {
+		err = convertError(err)
+	}
+	return
+}
+
 func (f *fireStore) Create(
 	ctx context.Context, docID string, data interface{},
 ) (err error) {

@@ -155,7 +155,7 @@ func testDatastoreCreate(t *testing.T, serviceFactory fnServiceFactory) {
 		assert.Equal(t, "", myPutxi.internalField)
 	})
 
-	t.Run("Create always creates document with CreatedAt field", func(t *testing.T) {
+	t.Run("Create always creates document with CreatedAt and UpdatedAt fields", func(t *testing.T) {
 		s := serviceFactory(t)
 		defer s.Close()
 		myID := uuid.New().String()
@@ -168,6 +168,74 @@ func testDatastoreCreate(t *testing.T, serviceFactory fnServiceFactory) {
 		require.NoError(t, err)
 
 		assert.True(t, e1.CreatedAt.After(time.Now().Add(-time.Minute)))
+		assert.True(t, e1.UpdatedAt.After(time.Now().Add(-time.Minute)))
+	})
+}
+
+func testDatastoreSet(t *testing.T, serviceFactory fnServiceFactory) {
+	ctx := context.Background()
+
+	t.Run("Set returns error if data is not a struct or a map", func(t *testing.T) {
+		s := serviceFactory(t)
+		defer s.Close()
+
+		assert.Error(t, s.Set(ctx, "my1234", 1234))
+
+		var myReaper Reaper
+		myReaper = &bob
+		assert.Error(t, s.Set(ctx, "my1234", &myReaper))
+	})
+
+	t.Run("Set with data argument with several levels of indirection", func(t *testing.T) {
+		s := serviceFactory(t)
+		defer s.Close()
+
+		bobRef := &bob
+
+		err := s.Set(ctx, "bobID", &bobRef)
+		require.NoError(t, err)
+
+		var myVal segador
+		err = s.Get(ctx, "bobID", &myVal)
+		require.NoError(t, err)
+		assert.Equal(t, bob, myVal)
+	})
+
+	t.Run("Set updates record if document already exists", func(t *testing.T) {
+		s := serviceFactory(t)
+		defer s.Close()
+
+		err := s.Set(ctx, "NighthawkM1", bob)
+		require.NoError(t, err)
+
+		var myVal segador
+		err = s.Get(ctx, "NighthawkM1", &myVal)
+		require.NoError(t, err)
+		assert.Equal(t, bob, myVal)
+	})
+
+	t.Run("Set panics if attempt to create a document from nil", func(t *testing.T) {
+		s := serviceFactory(t)
+		defer s.Close()
+
+		assert.Panics(t, func() {
+			_ = s.Set(ctx, "myNilID", nil)
+		})
+	})
+
+	t.Run("Set updates UpdatedAt field", func(t *testing.T) {
+		s := serviceFactory(t)
+		defer s.Close()
+		myID := uuid.New().String()
+
+		err := s.Set(ctx, myID, myOtherEntity{})
+		require.NoError(t, err)
+
+		var e1 myOtherEntity
+		err = s.Get(ctx, myID, &e1)
+		require.NoError(t, err)
+
+		assert.True(t, e1.UpdatedAt.After(time.Now().Add(-time.Minute)))
 	})
 }
 
@@ -225,6 +293,7 @@ func testDatastoreGet(t *testing.T, serviceFactory fnServiceFactory) {
 		require.NoError(t, err)
 
 		delete(myBob, DefaultCreatedAtField)
+		delete(myBob, DefaultUpdatedAtField)
 		assert.Equal(t, bob.toMap(), myBob)
 	})
 }
@@ -499,6 +568,7 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		require.NoError(t, err)
 
 		delete(myBob, DefaultCreatedAtField)
+		delete(myBob, DefaultUpdatedAtField)
 		assert.Equal(t, bob.toMap(), myBob)
 	})
 
@@ -640,6 +710,7 @@ func nameFilter(value string, op Op) Filter {
 
 func testDatastore(t *testing.T, serviceFactory fnServiceFactory) {
 	testDatastoreCreate(t, serviceFactory)
+	testDatastoreSet(t, serviceFactory)
 	testDatastoreGet(t, serviceFactory)
 	testDatastoreDelete(t, serviceFactory)
 	testDatastoreUpdate(t, serviceFactory)

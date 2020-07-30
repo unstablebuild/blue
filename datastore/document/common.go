@@ -21,6 +21,7 @@ func encode(data interface{}, addCreatedAt bool) []byte {
 
 	if addCreatedAt {
 		ir[DefaultCreatedAtField] = time.Now()
+		ir[DefaultUpdatedAtField] = time.Now()
 	}
 
 	b, err := bson.Marshal(ir)
