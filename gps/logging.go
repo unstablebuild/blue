@@ -29,6 +29,7 @@ func (p loggingPositioner) Position(ctx context.Context) (Coordinates, error) {
 		logging.Field{Key: "Latitude", Value: fmt.Sprintf("%.4f", pos.Latitude)},
 		logging.Field{Key: "Longitude", Value: fmt.Sprintf("%.4f", pos.Longitude)},
 		logging.Field{Key: "Altitude", Value: fmt.Sprintf("%.2f", pos.Longitude)},
+		logging.Field{Key: "DeviceID", Value: pos.DeviceID},
 	)
 	return pos, err
 }
@@ -49,9 +50,10 @@ func WithLoggingSender(s Sender, label string) Sender {
 
 func (s loggingSender) Send(ctx context.Context, pos Coordinates) error {
 	traceID, ctx := trace.FromContextOrNew(ctx)
-	attemptAt := logging.LogAttempt(traceID, s.callType)
+	fields := []logging.Field{logging.Field{Key: "DeviceID", Value: pos.DeviceID}}
+	attemptAt := logging.LogAttempt(traceID, s.callType, fields...)
 	err := s.root.Send(ctx, pos)
-	logging.LogResult(err, attemptAt, traceID, s.callType)
+	logging.LogResult(err, attemptAt, traceID, s.callType, fields...)
 	return err
 }
 
@@ -87,4 +89,11 @@ func (r loggingReceiver) Receive(ctx context.Context, pos Coordinates) error {
 	}
 	log.WithFields(fields).Info()
 	return nil
+}
+
+func makeReceiverLoggingFields(class string, deviceID string) []logging.Field {
+	return []logging.Field{
+		logging.Field{Key: logging.KeyClass, Value: class},
+		logging.Field{Key: "DeviceID", Value: deviceID},
+	}
 }

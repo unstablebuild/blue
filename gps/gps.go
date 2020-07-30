@@ -3,7 +3,6 @@ package gps
 import (
 	"context"
 	"io"
-	"time"
 )
 
 // Coordinates represent a set GPS coordinates represented by a latitude and longitude.
@@ -12,7 +11,7 @@ type Coordinates struct {
 	Latitude  float32
 	Longitude float32
 	Altitude  float32
-	Time      time.Time
+	UnixTime  int64
 }
 
 // Positioner wraps the basic function Position.

@@ -2,12 +2,10 @@ syntax = "proto3";
 
 package rpc;
  
-import "google/protobuf/timestamp.proto";
-
 message Coordinates {
 	float latitude = 1;
 	float longitude = 2;
 	float altitude = 3;
-    google.protobuf.Timestamp time = 4;
+    int64 unix_time = 4;
 	string deviceID = 5;
 }

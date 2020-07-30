@@ -70,7 +70,7 @@ func (p *serialDevicePositioner) Position(ctx context.Context) (Coordinates, err
 		Latitude:  float32(data.Latitude),
 		Longitude: float32(data.Longitude),
 		Altitude:  float32(data.Altitude),
-		Time:      time.Now(),
+		UnixTime:  time.Now().Unix(),
 	}, nil
 }
 
