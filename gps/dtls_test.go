@@ -53,7 +53,7 @@ func TestSimpleDTLS(t *testing.T) {
 		Latitude:  1,
 		Longitude: 2,
 		Altitude:  3,
-		Time:      time.Now(),
+		UnixTime:  time.Now().Unix(),
 	}
 
 	t.Run("client fails to Send if no server is listening at address", func(t *testing.T) {
@@ -71,9 +71,6 @@ func TestSimpleDTLS(t *testing.T) {
 			onReceive: func(ctx context.Context, _pos Coordinates) error {
 				_, ok := connMetaFromContext(ctx)
 				assert.True(t, ok)
-				assert.Equal(t, pos.Time.UnixNano(), _pos.Time.UnixNano())
-				pos.Time = time.Time{}
-				_pos.Time = time.Time{}
 				assert.Equal(t, pos, _pos)
 				wg.Done()
 				return nil

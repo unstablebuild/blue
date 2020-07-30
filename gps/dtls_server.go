@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ernestrc/blue/datastore"
 	"github.com/ernestrc/blue/logging/trace"
 	"github.com/ernestrc/blue/rpc"
 	"github.com/golang/protobuf/proto"
@@ -98,7 +97,7 @@ func (s *DTLSServer) receiveWithTimeout(
 		Altitude:  in.GetAltitude(),
 		Latitude:  in.GetLatitude(),
 		Longitude: in.GetLongitude(),
-		Time:      datastore.ProtoTimeToStd(in.GetTime()),
+		UnixTime:  in.GetUnixTime(),
 	})
 }
 

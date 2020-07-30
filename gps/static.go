@@ -17,7 +17,7 @@ func NewStaticPositioner(pos Coordinates) Positioner {
 
 func (p staticPositioner) Position(ctx context.Context) (Coordinates, error) {
 	pos := p.pos
-	pos.Time = time.Now()
+	pos.UnixTime = time.Now().Unix()
 	return pos, nil
 }
 

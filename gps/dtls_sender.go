@@ -6,7 +6,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/ernestrc/blue/datastore"
 	"github.com/ernestrc/blue/rpc"
 	"github.com/golang/protobuf/proto"
 	"github.com/pion/dtls/v2"
@@ -55,13 +54,12 @@ func (s *dtlsSender) sendBytes(ctx context.Context, b []byte) error {
 }
 
 func (s *dtlsSender) sendPosition(ctx context.Context, pos Coordinates) error {
-	ts := datastore.StdTimeToProto(pos.Time)
 	b, err := proto.Marshal(&rpc.Coordinates{
 		DeviceID:  pos.DeviceID,
 		Latitude:  float32(pos.Latitude),
 		Longitude: float32(pos.Longitude),
 		Altitude:  float32(pos.Altitude),
-		Time:      &ts,
+		UnixTime:  pos.UnixTime,
 	})
 	if err != nil {
 		return err
