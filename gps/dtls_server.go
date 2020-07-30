@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ernestrc/blue/datastore"
+	"github.com/ernestrc/blue/logging/trace"
 	"github.com/ernestrc/blue/rpc"
 	"github.com/golang/protobuf/proto"
 	log "github.com/sirupsen/logrus"
@@ -87,9 +88,8 @@ func (s *DTLSServer) connectionRemove(meta connectionMetadata, conn *dtls.Conn) 
 }
 
 func (s *DTLSServer) receiveWithTimeout(
-	r Receiver, meta connectionMetadata, in rpc.Coordinates,
+	ctx context.Context, r Receiver, in rpc.Coordinates,
 ) {
-	ctx := withConnectionMeta(context.Background(), meta)
 	ctx, cancel := context.WithTimeout(ctx, receiveTimeout)
 	defer cancel()
 
@@ -109,7 +109,7 @@ func (s *DTLSServer) connectionRead(meta connectionMetadata, conn *dtls.Conn) {
 	for {
 		n, err := conn.Read(b)
 		if err != nil {
-			log.Errorf("failed to read: %v", err)
+			log.Errorf("failed to read %v: %v", meta, err)
 			s.connectionRemove(meta, conn)
 			return
 		}
@@ -117,13 +117,15 @@ func (s *DTLSServer) connectionRead(meta connectionMetadata, conn *dtls.Conn) {
 		in := rpc.Coordinates{}
 		err = proto.Unmarshal(b[:n], &in)
 		if err != nil {
-			log.Errorf("failed to unmarshal coordinates: %v", err)
+			log.Errorf("failed to unmarshal coordinates %+v: %v", meta, err)
 			s.connectionRemove(meta, conn)
 			return
 		}
 
+		ctx := trace.NewContext(context.Background(), trace.New())
+		ctx = withConnectionMeta(ctx, meta)
 		for _, r := range s.receivers {
-			s.receiveWithTimeout(r, meta, in)
+			s.receiveWithTimeout(ctx, r, in)
 		}
 	}
 }
