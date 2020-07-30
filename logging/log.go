@@ -49,6 +49,17 @@ func LogAttempt(traceID trace.ID, callType string, extra ...Field) time.Time {
 	return time.Now()
 }
 
+// LogResultInfo logs a info-level log with KeyStep set to Success, if error
+// is nil or logs an error-level log with KeyStep set to Failure if error
+// is not nil. It uses attemptAt to calculate the duration between attempt
+// and resolution.
+func LogResultInfo(
+	err error, attemptAt time.Time,
+	traceID trace.ID, callType string, extra ...Field,
+) {
+	logResultLevel(log.InfoLevel, err, attemptAt, traceID, callType, extra...)
+}
+
 // LogResult logs a debug-level log with KeyStep set to Success, if error
 // is nil or logs an error-level log with KeyStep set to Failure if error
 // is not nil. It uses attemptAt to calculate the duration between attempt
@@ -57,21 +68,28 @@ func LogResult(
 	err error, attemptAt time.Time,
 	traceID trace.ID, callType string, extra ...Field,
 ) {
+	logResultLevel(log.DebugLevel, err, attemptAt, traceID, callType, extra...)
+}
+
+func logResultLevel(
+	level log.Level, err error, attemptAt time.Time,
+	traceID trace.ID, callType string, extra ...Field,
+) {
 	fields := log.Fields{
 		KeyCallType:   callType,
 		KeyTraceID:    string(traceID),
 		"duration_us": MicrosecondsSince(attemptAt),
 	}
+	for _, f := range extra {
+		fields[f.Key] = f.Value
+	}
 	if err == nil {
 		fields[KeyStep] = ValueStepSuccess
-		log.WithFields(fields).Debug()
+		log.WithFields(fields).Log(level)
 	} else {
 		fields[KeyStep] = ValueStepFailure
 		fields[KeyError] = err.Error()
 		log.WithFields(fields).Error()
-	}
-	for _, f := range extra {
-		fields[f.Key] = f.Value
 	}
 }
 
