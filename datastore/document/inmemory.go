@@ -19,8 +19,21 @@ func NewInMemoryCache() Service {
 	}
 }
 
+func (c *inMemoryCache) Set(
+	ctx context.Context, ID string, data interface{},
+) error {
+	return c.set(ctx, ID, data, false)
+}
+
 func (c *inMemoryCache) Create(
 	ctx context.Context, ID string, data interface{},
+) error {
+	return c.set(ctx, ID, data, true)
+}
+
+func (c *inMemoryCache) set(
+	ctx context.Context, ID string, data interface{},
+	errAlreadyExists bool,
 ) (err error) {
 	if data == nil {
 		panic("invalid nil data argument to Create")
@@ -33,8 +46,11 @@ func (c *inMemoryCache) Create(
 	c.m.Lock()
 	defer c.m.Unlock()
 
-	if _, ok := c.storage[ID]; ok {
-		return ErrAlreadyExists
+	if errAlreadyExists {
+		_, ok := c.storage[ID]
+		if ok {
+			return ErrAlreadyExists
+		}
 	}
 	c.storage[ID] = encode(data, true)
 	return

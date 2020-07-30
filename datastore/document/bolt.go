@@ -60,8 +60,21 @@ func (s *boltStore) getData(ID string, doc interface{}) (
 	})
 }
 
+func (s *boltStore) Set(
+	ctx context.Context, ID string, doc interface{},
+) error {
+	return s.set(ctx, ID, doc, false)
+}
+
 func (s *boltStore) Create(
 	ctx context.Context, ID string, doc interface{},
+) error {
+	return s.set(ctx, ID, doc, true)
+}
+
+func (s *boltStore) set(
+	ctx context.Context, ID string, doc interface{},
+	errAlreadyExists bool,
 ) error {
 	if doc == nil {
 		panic("invalid nil data argument to Create")
@@ -87,7 +100,7 @@ func (s *boltStore) Create(
 	b := tx.Bucket(s.collID)
 	key := []byte(ID)
 
-	if len(b.Get(key)) != 0 {
+	if errAlreadyExists && len(b.Get(key)) != 0 {
 		_ = tx.Rollback()
 		return ErrAlreadyExists
 	}

@@ -40,6 +40,14 @@ type Service interface {
 	// Note that certain implementations might require special field tags.
 	Create(ctx context.Context, ID string, doc interface{}) error
 
+	// Set creates a document with the given data or updates it if it already exists.
+	//
+	// DefaultUpdatedAtField is automatically updated and clients can consume it
+	// by adding the corresponding property in the document structure.
+	//
+	// See Create for more details.
+	Set(ctx context.Context, ID string, doc interface{}) error
+
 	// Update updates the document. The values at the given
 	// field paths are replaced, but other fields of the stored document
 	// are untouched.
