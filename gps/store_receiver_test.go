@@ -149,3 +149,16 @@ func TestStoreReceiverFixedSize(t *testing.T) {
 		assert.ElementsMatch(t, res, []Coordinates{c4, c5})
 	})
 }
+
+func TestStoreReceiverThrottling(t *testing.T) {
+	ctx := context.Background()
+	s := newTestingStore(t, WithRateLimiting(1*time.Minute),
+		WithDownSampling(time.Minute))
+
+	t.Run("List returns last records for all devices", func(t *testing.T) {
+		it, err := s.List(ctx, time.Time{}, time.Now())
+		require.NoError(t, err)
+		res := assertIterCount(t, it, 2)
+		assert.ElementsMatch(t, res, []Coordinates{c1, c3})
+	})
+}

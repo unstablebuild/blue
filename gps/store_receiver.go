@@ -14,6 +14,7 @@ import (
 type config struct {
 	resolution time.Duration
 	fixedSize  int64
+	limit      time.Duration
 }
 
 // Option enables a Store to implement
@@ -36,13 +37,22 @@ func WithDownSampling(resolution time.Duration) Option {
 	}
 }
 
+// WithRateLimiting returns an option that throttles writes of
+// gps Coordinates to at most 1 every period.
+func WithRateLimiting(limit time.Duration) Option {
+	return func(cfg *config) {
+		cfg.limit = limit
+	}
+}
+
 // Store store satisfies Receiver interface to persist a time series
 // of a device's GPS position.
 type Store struct {
 	// not the best storage for GPS data, but since we don't
 	// need to run geo queries for now, we should be fine.
-	backend document.Service
-	config  config
+	backend   document.Service
+	config    config
+	cooldowns map[string]time.Time
 }
 
 // NewStore allocates storage for a new Store and
@@ -53,6 +63,7 @@ func NewStore(backend document.Service, opts ...Option) *Store {
 		opt(&r.config)
 	}
 	r.backend = backend
+	r.cooldowns = make(map[string]time.Time)
 	return r
 }
 
@@ -64,6 +75,20 @@ func (s *Store) makeUniqueID(pos Coordinates) string {
 	return fmt.Sprintf("%s:%d", pos.DeviceID, ts)
 }
 
+func (s *Store) throttle(deviceID string) (time.Duration, bool) {
+	if s.config.limit == 0 {
+		return 0, false
+	}
+	now := time.Now()
+	c, ok := s.cooldowns[deviceID]
+	if !ok || c.Before(now) {
+		s.cooldowns[deviceID] = now.Add(s.config.limit)
+		return 0, false
+	}
+
+	return now.Sub(c), true
+}
+
 // Receive satisfies Receiver.
 func (s *Store) Receive(ctx context.Context, pos Coordinates) error {
 	id := s.makeUniqueID(pos)
@@ -72,6 +97,15 @@ func (s *Store) Receive(ctx context.Context, pos Coordinates) error {
 	fields := makeReceiverLoggingFields("Store", pos.DeviceID)
 	fields = append(fields, logging.Field{Key: "GeneratedID", Value: id})
 	attemptAt := logging.LogAttempt(traceID, "Receive", fields...)
+
+	if wait, throttled := s.throttle(pos.DeviceID); throttled {
+		fields = append(fields,
+			logging.Field{Key: "Throttled", Value: "true"},
+			logging.Field{Key: "Wait", Value: wait.String()},
+		)
+		logging.LogResult(nil, attemptAt, traceID, "Receive", fields...)
+		return nil
+	}
 
 	err := s.backend.Set(ctx, id, pos)
 	logging.LogResult(err, attemptAt, traceID, "Receive", fields...)
