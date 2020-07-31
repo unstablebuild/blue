@@ -40,3 +40,22 @@ func (s *Cache) Get(ctx context.Context, deviceID string) (pos Coordinates, err 
 	err = s.backend.Get(ctx, deviceID, &pos)
 	return
 }
+
+// GetAll retrieves the last stored Coordinates of all known devices.
+func (s *Cache) GetAll(ctx context.Context) ([]Coordinates, error) {
+	it, err := s.backend.List(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var pos Coordinates
+	var ret []Coordinates
+	for it.HasNext() {
+		err := it.NextTo(&pos)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, pos)
+	}
+	return ret, nil
+}
