@@ -531,6 +531,7 @@ func assertListResults(
 		i++
 	}
 	assert.Equal(t, expectedLen, i)
+	assert.NoError(t, it.Close())
 }
 
 func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
@@ -554,6 +555,7 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		it, err := s.List(ctx, nil)
 		require.NoError(t, err)
 		assert.Error(t, it.NextTo(myVal))
+		assert.NoError(t, it.Close())
 	})
 
 	t.Run("NextTo with map receiver", func(t *testing.T) {
@@ -570,6 +572,7 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		delete(myBob, DefaultCreatedAtField)
 		delete(myBob, DefaultUpdatedAtField)
 		assert.Equal(t, bob.toMap(), myBob)
+		assert.NoError(t, it.Close())
 	})
 
 	t.Run("List zero-value filter panics", func(t *testing.T) {
