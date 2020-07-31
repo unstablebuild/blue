@@ -93,6 +93,7 @@ type Service interface {
 type Iterator interface {
 	HasNext() bool
 	NextTo(doc interface{}) error
+	io.Closer
 }
 
 // Field represents a document field.

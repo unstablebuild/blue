@@ -161,6 +161,11 @@ func (f *fireStoreIterator) NextTo(doc interface{}) error {
 	return err
 }
 
+func (f *fireStoreIterator) Close() error {
+	f.it.Stop()
+	return nil
+}
+
 func (f *fireStore) List(ctx context.Context, filters []Filter) (
 	Iterator, error,
 ) {

@@ -134,6 +134,10 @@ func (l *listIterator) NextTo(doc interface{}) error {
 	return nil
 }
 
+func (l *listIterator) Close() error {
+	return nil
+}
+
 func (l *listIterator) maybeExtend(filters []Filter, v []byte) {
 	var proto map[string]interface{}
 	decode(&proto, v)
