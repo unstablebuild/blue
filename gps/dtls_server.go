@@ -101,6 +101,8 @@ func (s *DTLSServer) receiveWithTimeout(
 	})
 }
 
+// TODO implement ack mechanism from server so clients can re-connect.
+
 func (s *DTLSServer) connectionRead(meta connectionMetadata, conn *dtls.Conn) {
 	log.Debugf("Reading messages from %v", meta)
 
@@ -153,7 +155,7 @@ func (s *DTLSServer) serveOne() error {
 
 // Serve starts accepting new connections and reading GPS coordinates.
 func (s *DTLSServer) Serve() error {
-	log.Debugf("GPS DTLSServer listening on udp addr %v", s.addr)
+	log.Infof("GPS DTLSServer listening on udp addr %v", s.addr)
 
 	for {
 		err := s.serveOne()

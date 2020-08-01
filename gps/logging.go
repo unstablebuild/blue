@@ -93,7 +93,7 @@ func (r loggingReceiver) Receive(ctx context.Context, pos Coordinates) error {
 
 func makeReceiverLoggingFields(class string, deviceID string) []logging.Field {
 	return []logging.Field{
-		logging.Field{Key: logging.KeyClass, Value: class},
+		logging.Field{Key: "Receiver", Value: class},
 		logging.Field{Key: "DeviceID", Value: deviceID},
 	}
 }

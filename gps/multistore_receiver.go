@@ -45,6 +45,17 @@ type MultiStoreConfig struct {
 	}
 }
 
+// DefaultMultiStoreConfig returns a MultiStoreConfig with the
+// default collection names.
+func DefaultMultiStoreConfig() MultiStoreConfig {
+	return MultiStoreConfig{
+		CacheCollection:  "gps-cache",
+		MinuteCollection: "gps-minute",
+		DayCollection:    "gps-day",
+		HourCollection:   "gps-hour",
+	}
+}
+
 // MultiStore provides satisfies Receiver by persisting the data
 // with different downsampling, throttling and fixed-size database
 // policies to minimize costs and maximize data retention.
@@ -74,14 +85,14 @@ func NewMultiStore(config MultiStoreConfig) (m *MultiStore, err error) {
 	m.minuteStore = NewStore(backend, minuteStoreOpts...)
 
 	backend, err = document.NewFireStore(config.Firestore.ProjectID,
-		config.Firestore.CredsFile, config.DayCollection)
+		config.DayCollection, config.Firestore.CredsFile)
 	if err != nil {
 		return
 	}
 	m.dayStore = NewStore(backend, dayStoreOpts...)
 
 	backend, err = document.NewFireStore(config.Firestore.ProjectID,
-		config.Firestore.CredsFile, config.HourCollection)
+		config.HourCollection, config.Firestore.CredsFile)
 	if err != nil {
 		return
 	}
