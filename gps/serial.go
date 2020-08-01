@@ -3,12 +3,18 @@ package gps
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"io"
 	"time"
 
 	"github.com/adrianmo/go-nmea"
+	"github.com/ernestrc/blue/logging"
 	"github.com/jacobsa/go-serial/serial"
+	log "github.com/sirupsen/logrus"
+)
+
+const (
+	constructorTimeout = 5 * time.Second
+	gptxSeq            = "$GPTXT"
 )
 
 type serialDevicePositioner struct {
@@ -31,12 +37,13 @@ func NewSerialDevicePositioner(id string, opts serial.OpenOptions) (
 	scanner := bufio.NewScanner(reader)
 
 	p := &serialDevicePositioner{
+		id:         id,
 		scanner:    scanner,
 		serialPort: serialPort,
 	}
 
 	// test positioner
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), constructorTimeout)
 	defer cancel()
 
 	_, err = p.Position(ctx)
@@ -44,34 +51,48 @@ func NewSerialDevicePositioner(id string, opts serial.OpenOptions) (
 		return nil, err
 	}
 
-	p.id = id
-
 	return p, nil
 }
 
 func (p *serialDevicePositioner) Position(ctx context.Context) (Coordinates, error) {
-	ok := p.scanner.Scan()
-	if !ok {
-		return Coordinates{}, io.EOF
-	}
+	for {
+		ok := p.scanner.Scan()
+		if !ok {
+			return Coordinates{}, io.EOF
+		}
 
-	s, err := nmea.Parse(p.scanner.Text())
-	if err != nil {
-		return Coordinates{}, err
-	}
+		msg := p.scanner.Text()
+		if msg[:len(gptxSeq)] == gptxSeq {
+			continue
+		}
 
-	if s.DataType() != nmea.TypeGGA {
-		return Coordinates{}, fmt.Errorf("invalid NMEA type: %s", s.DataType())
-	}
+		logFields := log.Fields{"Raw": msg, logging.KeyCallType: "ParseNMEA"}
 
-	data := s.(nmea.GGA)
-	return Coordinates{
-		DeviceID:  p.id,
-		Latitude:  float32(data.Latitude),
-		Longitude: float32(data.Longitude),
-		Altitude:  float32(data.Altitude),
-		UnixTime:  time.Now().Unix(),
-	}, nil
+		s, err := nmea.Parse(msg)
+		if err != nil {
+			logFields[logging.KeyStep] = logging.ValueStepFailure
+			logFields[logging.KeyError] = err.Error()
+			log.WithFields(logFields).Error()
+			return Coordinates{}, err
+		}
+
+		if s.DataType() != nmea.TypeGGA {
+			continue
+		}
+
+		data := s.(nmea.GGA)
+		logFields[logging.KeyStep] = logging.ValueStepSuccess
+		logFields["Data"] = data.String()
+		log.WithFields(logFields).Trace()
+
+		return Coordinates{
+			DeviceID:  p.id,
+			Latitude:  float32(data.Latitude),
+			Longitude: float32(data.Longitude),
+			Altitude:  float32(data.Altitude),
+			UnixTime:  time.Now().Unix(),
+		}, nil
+	}
 }
 
 func (p *serialDevicePositioner) Close() error {
