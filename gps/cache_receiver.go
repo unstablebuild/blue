@@ -27,7 +27,7 @@ func (s *Cache) Receive(ctx context.Context, pos Coordinates) error {
 	fields := makeReceiverLoggingFields("Cache", pos.DeviceID)
 	attemptAt := logging.LogAttempt(traceID, "Receive", fields...)
 
-	err := s.backend.Create(ctx, pos.DeviceID, pos)
+	err := s.backend.Set(ctx, pos.DeviceID, pos)
 	logging.LogResultInfo(err, attemptAt, traceID, "Receive", fields...)
 	if err != nil {
 		return err
