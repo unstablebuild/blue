@@ -9,6 +9,16 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+const (
+	defaultBoltTimeout = 10 * time.Second
+)
+
+var (
+	// only one instance of db per path can be instantiated
+	dbs     = make(map[string]*bolt.DB)
+	options = bolt.Options{Timeout: defaultBoltTimeout}
+)
+
 type boltStore struct {
 	db     *bolt.DB
 	collID []byte
@@ -16,15 +26,19 @@ type boltStore struct {
 
 // NewBolt returns an instance of Service backed by a local, embedded bolt DB.
 func NewBolt(dbPath string, collectionID string) (Service, error) {
-	options := bolt.Options{Timeout: 4 * time.Second}
-
-	db, err := bolt.Open(dbPath, 0600, &options)
-	if err != nil {
-		return nil, err
+	if dbs[dbPath] == nil {
+		db, err := bolt.Open(dbPath, 0600, &options)
+		if err != nil {
+			err = fmt.Errorf("Could not open DB at path %s: %v", dbPath, err)
+			return nil, err
+		}
+		dbs[dbPath] = db
 	}
 
+	db := dbs[dbPath]
+
 	collID := []byte(collectionID)
-	err = db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(collID)
 		if err != nil {
 			return fmt.Errorf("create collection: %s", err)
