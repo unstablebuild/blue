@@ -10,27 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	c1     = fixtureCoords
-	c2     = fixtureCoords
-	c3     = fixtureCoords
-	second = time.Unix(c1.UnixTime, 0).Add(-time.Minute)
-	first  = time.Unix(c1.UnixTime, 0).Add(-5 * time.Minute)
-	c4     = Coordinates{}
-)
-
-func init() {
-	c1.UnixTime = first.Unix()
-
-	c2.UnixTime = second.Unix()
-
-	c3.DeviceID = "2"
-	c3.UnixTime = second.Unix()
-
-	dayBefore := time.Unix(fixtureCoords.UnixTime, 0).Add(-24 * time.Hour).Unix()
-	c4 = Coordinates{DeviceID: deviceID, UnixTime: dayBefore}
-}
-
 func assertIterCount(t *testing.T, it document.Iterator, expected int) []Coordinates {
 	var i int
 	var ret []Coordinates
