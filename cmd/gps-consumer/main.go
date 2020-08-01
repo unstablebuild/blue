@@ -12,34 +12,56 @@ import (
 )
 
 var (
-	config = dtls.Config{
+	dtlsConfig = dtls.Config{
 		CipherSuites:         []dtls.CipherSuiteID{dtls.TLS_PSK_WITH_AES_128_CCM_8},
 		ExtendedMasterSecret: dtls.RequireExtendedMasterSecret,
 	}
 
+	storeConfig = gps.DefaultMultiStoreConfig()
+
 	debug       = flag.Bool("v", false, "Enable verbose logging")
 	psk         = flag.String("k", "", "PSK key file name to use for DTLS handshake")
 	pskIdentity = flag.String("i", "GPS DTLS Server", "PSK identity hint")
-	port        = flag.Int("p", gps.DefaultPort, "Listening port")
-	host        = flag.String("h", "127.0.0.1", "Listening address")
+	port        = flag.Int("P", gps.DefaultPort, "Listening DTLS port")
+	host        = flag.String("h", "127.0.0.1", "Listening DTLS address")
+	boltDbPath  = flag.String("b", ".gps-boltdb", "Path to mount the Bolt DB for GPS store")
+	gcCredsFile = flag.String("c", "", "Google Cloud credentials file fore GPS store")
+	gcProjectID = flag.String("p", "", "Google Cloud project ID fore GPS store")
 )
 
-func main() {
+func parseFlags() {
 	flag.Parse()
+
 	logging.SetDefaults(*debug)
 
 	if *psk == "" {
 		log.Fatal("Must pass -k flag")
 	}
 
-	config.PSK = func(hint []byte) ([]byte, error) {
+	if *gcProjectID == "" {
+		log.Fatal("Must pass -p flag")
+	}
+
+	dtlsConfig.PSK = func(hint []byte) ([]byte, error) {
 		log.Debugf("reading PSK file %s for hint %s", *psk, string(hint))
 		return ioutil.ReadFile(*psk)
 	}
-	config.PSKIdentityHint = []byte(*pskIdentity)
+	dtlsConfig.PSKIdentityHint = []byte(*pskIdentity)
 
-	s, err := gps.NewDTLSServer(*host, *port, config,
-		gps.LoggingReceiver("StaticTest"))
+	storeConfig.Bolt.DBPath = *boltDbPath
+	storeConfig.Firestore.CredsFile = *gcCredsFile
+	storeConfig.Firestore.ProjectID = *gcProjectID
+}
+
+func main() {
+	parseFlags()
+
+	store, err := gps.NewMultiStore(storeConfig)
+	if err != nil {
+		log.Fatalf("could not create store: %v", err)
+	}
+
+	s, err := gps.NewDTLSServer(*host, *port, dtlsConfig, store)
 	if err != nil {
 		log.Fatalf("could not start server: %v", err)
 	}
