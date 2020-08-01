@@ -108,7 +108,7 @@ func (s *Store) Receive(ctx context.Context, pos Coordinates) error {
 	}
 
 	err := s.backend.Set(ctx, id, pos)
-	logging.LogResult(err, attemptAt, traceID, "Receive", fields...)
+	logging.LogResultInfo(err, attemptAt, traceID, "Receive", fields...)
 	return err
 }
 
