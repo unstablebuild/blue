@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"time"
 
 	"github.com/jacobsa/go-serial/serial"
@@ -30,8 +29,8 @@ var (
 	cadenceSec  = flag.Int("c", 5,
 		"Cadence as to which to send GPS coordinates to server")
 	static       = flag.Bool("s", false, fmt.Sprintf("Use test static positioner with coordinates: %+v", staticCoordinates))
-	serialDevice = flag.String("d", "ttyS0", "Serial device to use for serial GPS positioner if -s flag is not passed.")
-	deviceID     = flag.String("I", "gps-producer-default", "Device ID used to identify GPS data")
+	serialDevice = flag.String("d", "/dev/ttyS0", "Serial device to use for serial GPS positioner if -s flag is not passed.")
+	deviceID     = flag.String("I", "UnknownDevice", "Device ID used to identify GPS data")
 
 	dtlsConfig = dtls.Config{
 		CipherSuites:         []dtls.CipherSuiteID{dtls.TLS_PSK_WITH_AES_128_CCM_8},
@@ -51,16 +50,12 @@ func getPositioner() (p gps.Positioner, err error) {
 		staticCoordinates.DeviceID = *deviceID
 		p = gps.NewStaticPositioner(staticCoordinates)
 	} else {
-		serialConfig.PortName = fmt.Sprintf("/dev/%s", *serialDevice)
+		serialConfig.PortName = *serialDevice
 		log.Debugf("reading serial GPS data from %s", serialConfig.PortName)
 		p, err = gps.NewSerialDevicePositioner(*deviceID, serialConfig)
 	}
 	if err == nil {
-		hostname, err := os.Hostname()
-		if err != nil {
-			log.Fatalf("could not read hostname: %s", err)
-		}
-		p = gps.WithLoggingPositioner(p, hostname)
+		p = gps.WithLoggingPositioner(p, *deviceID)
 	}
 	return p, err
 }
