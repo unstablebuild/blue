@@ -32,14 +32,15 @@ func TestCacheReceiver(t *testing.T) {
 		assert.Len(t, allPos, 1)
 		assert.Equal(t, pos, allPos[0])
 
-		pos.DeviceID = "jfkewkjl"
-		err = c.Receive(ctx, pos)
+		pos2 := pos
+		pos2.DeviceID = "jfkewkjl"
+		err = c.Receive(ctx, pos2)
 		require.NoError(t, err)
 
 		allPos, err = c.GetAll(ctx)
 		require.NoError(t, err)
 		assert.Len(t, allPos, 2)
-		assert.Equal(t, pos, allPos[1])
+		assert.ElementsMatch(t, []Coordinates{pos, pos2}, allPos)
 	})
 
 	t.Run("Receive multiple times", func(t *testing.T) {
