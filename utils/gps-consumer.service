@@ -3,7 +3,7 @@ Description=DTLS GPS Consumer Server
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/gps-consumer -p 4677 -k /etc/gps/psk.key -h 0.0.0.0
+ExecStart=/usr/local/bin/gps-consumer -P 4677 -k /etc/gps/psk.key -h 0.0.0.0
 Restart=always
 RestartSec=10s
 
