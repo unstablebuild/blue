@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/pion/dtls/v2"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -40,5 +42,49 @@ func SendPositionAtCadence(p Positioner, s Sender, cadence time.Duration) {
 			log.Warnf("failed to send GPS position to server: %v", err)
 		}
 		cancel()
+	}
+}
+
+func sendBytesConn(ctx context.Context, b []byte, conn *dtls.Conn, ch chan error) error {
+	go func() {
+		_, err := conn.Write(b)
+		ch <- err
+	}()
+
+	select {
+	case <-ctx.Done():
+		conn.SetWriteDeadline(time.Now())
+		return <-ch
+	case err := <-ch:
+		return err
+	}
+}
+
+func readBytesConn(
+	ctx context.Context, readTimeout time.Duration,
+	b []byte, conn *dtls.Conn,
+	in proto.Message, ch chan error,
+) error {
+	ctx, cancel := context.WithTimeout(ctx, readTimeout)
+	defer cancel()
+
+	go func() {
+		n, err := conn.Read(b)
+		if err != nil {
+			ch <- err
+		}
+		err = proto.Unmarshal(b[:n], in)
+		if err != nil {
+			ch <- err
+		}
+		ch <- nil
+	}()
+
+	select {
+	case <-ctx.Done():
+		conn.SetReadDeadline(time.Now())
+		return <-ch
+	case err := <-ch:
+		return err
 	}
 }

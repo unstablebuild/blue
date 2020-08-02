@@ -9,3 +9,7 @@ message Coordinates {
     int64 unix_time = 4;
 	string deviceID = 5;
 }
+
+message Ack {
+	int64 unix_time = 1;
+}

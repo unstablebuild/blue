@@ -23,8 +23,10 @@ var (
 	ip = "127.0.0.1"
 )
 
-func newClientServerPair(t *testing.T, rx ...Receiver) (Sender, *DTLSServer, func()) {
-	server, err := NewDTLSServer(ip, 0, dtlsConfig, rx...)
+func newClientServerPair(t *testing.T, port int, rx ...Receiver) (
+	Sender, *DTLSServer, int, func(),
+) {
+	server, err := NewDTLSServer(ip, port, dtlsConfig, rx...)
 	require.NoError(t, err)
 
 	var wg sync.WaitGroup
@@ -40,7 +42,7 @@ func newClientServerPair(t *testing.T, rx ...Receiver) (Sender, *DTLSServer, fun
 	client, err := NewDTLSSender(ip, listeningPort, dtlsConfig)
 	require.NoError(t, err)
 
-	return client, server, func() {
+	return client, server, listeningPort, func() {
 		// wait for ListenAndServe to return
 		wg.Wait()
 	}
@@ -77,7 +79,7 @@ func TestSimpleDTLS(t *testing.T) {
 			},
 		}
 
-		client, server, cancel := newClientServerPair(t, mockRx)
+		client, server, _, cancel := newClientServerPair(t, 0, mockRx)
 
 		err := client.Send(ctx, pos)
 		assert.NoError(t, err)
@@ -92,7 +94,7 @@ func TestSimpleDTLS(t *testing.T) {
 
 	t.Run("client respects context deadline", func(t *testing.T) {
 		ctx, cancelTl := context.WithDeadline(context.Background(), time.Now())
-		client, server, cancel := newClientServerPair(t)
+		client, server, _, cancel := newClientServerPair(t, 0)
 		defer cancelTl()
 		defer cancel()
 		defer server.Close()
