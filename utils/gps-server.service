@@ -3,7 +3,7 @@ Description=GPS Server
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/gps-server -P 4677 -k /etc/gps/psk.key -m /etc/gps/gmaps.key -c /etc/gps/google_credentials.json -p unstable-build-eurimede-prod -b /var/run/gps/bolt.db -X 4678 -h 0.0.0.0
+ExecStart=/usr/local/bin/gps-server -P 4677 -k /etc/gps/psk.key -m /etc/gps/gmaps.key -c /etc/gps/google_credentials.json -p unstable-build-blue-dev -b /var/run/gps/bolt.db -X 4678 -h 0.0.0.0
 Restart=always
 RestartSec=10s
 
