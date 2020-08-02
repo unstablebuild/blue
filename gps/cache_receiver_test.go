@@ -15,6 +15,12 @@ func TestCacheReceiver(t *testing.T) {
 	c := NewCache(b)
 
 	ctx := context.Background()
+	t.Run("GetAll returns an empty slice, rather than nil when there are no devices stored", func(t *testing.T) {
+		allPos, err := c.GetAll(ctx)
+		require.NoError(t, err)
+		assert.Len(t, allPos, 0)
+		assert.Equal(t, []Coordinates{}, allPos)
+	})
 
 	err := c.Receive(ctx, coords)
 	require.NoError(t, err)
@@ -25,7 +31,7 @@ func TestCacheReceiver(t *testing.T) {
 		assert.Equal(t, coords, pos)
 	})
 
-	t.Run("GetAll", func(t *testing.T) {
+	t.Run("GetAll returns one dp for each known device", func(t *testing.T) {
 		pos := fixtureCoords
 		allPos, err := c.GetAll(ctx)
 		require.NoError(t, err)

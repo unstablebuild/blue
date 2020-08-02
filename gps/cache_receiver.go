@@ -49,7 +49,7 @@ func (s *Cache) GetAll(ctx context.Context) ([]Coordinates, error) {
 	}
 
 	var pos Coordinates
-	var ret []Coordinates
+	ret := make([]Coordinates, 0)
 	for it.HasNext() {
 		err := it.NextTo(&pos)
 		if err != nil {
