@@ -62,7 +62,7 @@ func (p *serialDevicePositioner) Position(ctx context.Context) (Coordinates, err
 		}
 
 		msg := p.scanner.Text()
-		if msg[:len(gptxSeq)] == gptxSeq {
+		if len(msg) < len(gptxSeq) || msg[:len(gptxSeq)] == gptxSeq {
 			continue
 		}
 
