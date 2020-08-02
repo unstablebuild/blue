@@ -20,6 +20,8 @@ const (
 	DefaultPort     = 4677
 	maxDatagramSize = 8192
 	receiveTimeout  = 5 * time.Second
+	sendAckTimeout  = 3 * time.Second
+	ackCadence      = 30 * time.Second
 )
 
 // connectionMetadata represents the connection metadata of a connection-based
@@ -61,7 +63,7 @@ func NewDTLSServer(
 	s.cancelCtx, s.cancel = context.WithCancel(context.Background())
 
 	config.ConnectContextMaker = func() (context.Context, func()) {
-		return context.WithTimeout(s.cancelCtx, 30*time.Second)
+		return context.WithTimeout(s.cancelCtx, connectTimeout)
 	}
 
 	s.listener, err = dtls.Listen("udp", s.addr, &config)
@@ -101,30 +103,50 @@ func (s *DTLSServer) receiveWithTimeout(
 	})
 }
 
-// TODO implement ack mechanism from server so clients can re-connect.
+func (s *DTLSServer) sendAck(conn *dtls.Conn, ackErrChan chan error) error {
+	ctx, cancel := context.WithTimeout(context.Background(), sendAckTimeout)
+	defer cancel()
+
+	b, err := proto.Marshal(&rpc.Ack{
+		UnixTime: time.Now().Unix(),
+	})
+	if err != nil {
+		return err
+	}
+	return sendBytesConn(ctx, b, conn, ackErrChan)
+}
 
 func (s *DTLSServer) connectionRead(meta connectionMetadata, conn *dtls.Conn) {
 	log.Debugf("Reading messages from %v", meta)
 
+	ackTimer := time.NewTimer(ackCadence)
+	ackErrChan := make(chan error)
+	errCh := make(chan error)
 	b := make([]byte, maxDatagramSize)
+
 	for {
-		n, err := conn.Read(b)
+		select {
+		case <-ackTimer.C:
+			err := s.sendAck(conn, ackErrChan)
+			if err != nil {
+				log.Errorf("failed to send ack to client %v: %v", meta, err)
+				s.connectionRemove(meta, conn)
+				return
+			}
+			ackTimer.Reset(ackCadence)
+		default:
+		}
+
+		ctx := trace.NewContext(context.Background(), trace.New())
+		ctx = withConnectionMeta(ctx, meta)
+		in := rpc.Coordinates{}
+		err := readBytesConn(ctx, readTimeout, b, conn, &in, errCh)
 		if err != nil {
 			log.Errorf("failed to read %v: %v", meta, err)
 			s.connectionRemove(meta, conn)
 			return
 		}
 
-		in := rpc.Coordinates{}
-		err = proto.Unmarshal(b[:n], &in)
-		if err != nil {
-			log.Errorf("failed to unmarshal coordinates %+v: %v", meta, err)
-			s.connectionRemove(meta, conn)
-			return
-		}
-
-		ctx := trace.NewContext(context.Background(), trace.New())
-		ctx = withConnectionMeta(ctx, meta)
 		for _, r := range s.receivers {
 			s.receiveWithTimeout(ctx, r, in)
 		}
