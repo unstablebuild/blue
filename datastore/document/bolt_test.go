@@ -22,7 +22,7 @@ func TestBolt(t *testing.T) {
 		return store
 	})
 
-	t.Run("is safe to use two instances of the service with same database file", func(t *testing.T) {
+	t.Run("with two concurrent instances", func(t *testing.T) {
 		ctx := context.Background()
 		f, err := ioutil.TempFile("", "what_is_barnack_test")
 		require.NoError(t, err)
@@ -39,50 +39,65 @@ func TestBolt(t *testing.T) {
 		e1 := alice
 		e2 := bob
 
-		var wg sync.WaitGroup
-		var m sync.Mutex
-		for i := 0; i < 20; i++ {
+		t.Run("is safe to use two instances of the service with same database file", func(t *testing.T) {
+			var wg sync.WaitGroup
+			var m sync.Mutex
+			for i := 0; i < 20; i++ {
+				wg.Add(2)
+				go func() {
+					defer wg.Done()
+					err := store1.Set(ctx, one, &e1)
+					m.Lock()
+					defer m.Unlock()
+					assert.NoError(t, err)
+				}()
+				go func() {
+					defer wg.Done()
+					err := store2.Set(ctx, two, &e2)
+					m.Lock()
+					defer m.Unlock()
+					assert.NoError(t, err)
+				}()
+			}
+
+			wg.Wait()
+
+			var r1 segador
+			var r2 segador
+
 			wg.Add(2)
 			go func() {
 				defer wg.Done()
-				err := store1.Set(ctx, one, &e1)
+				err := store1.Get(ctx, one, &r1)
 				m.Lock()
 				defer m.Unlock()
 				assert.NoError(t, err)
 			}()
 			go func() {
 				defer wg.Done()
-				err := store2.Set(ctx, two, &e2)
+				err := store2.Get(ctx, two, &r2)
 				m.Lock()
 				defer m.Unlock()
 				assert.NoError(t, err)
 			}()
-		}
 
-		wg.Wait()
+			wg.Wait()
 
-		var r1 segador
-		var r2 segador
+			assert.EqualValues(t, e1, r1)
+			assert.EqualValues(t, e2, r2)
+		})
 
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			err := store1.Get(ctx, one, &r1)
-			m.Lock()
-			defer m.Unlock()
-			assert.NoError(t, err)
-		}()
-		go func() {
-			defer wg.Done()
-			err := store2.Get(ctx, two, &r2)
-			m.Lock()
-			defer m.Unlock()
-			assert.NoError(t, err)
-		}()
+		t.Run("List returns data of its corresponding instance", func(t *testing.T) {
+			for _, store := range []Service{store1, store2} {
+				it, err := store.List(ctx, nil)
+				require.NoError(t, err)
 
-		wg.Wait()
-
-		assert.EqualValues(t, e1, r1)
-		assert.EqualValues(t, e2, r2)
+				var r1 segador
+				require.True(t, it.HasNext())
+				assert.NoError(t, it.NextTo(&r1))
+				assert.False(t, it.HasNext())
+			}
+		})
 	})
+
 }
