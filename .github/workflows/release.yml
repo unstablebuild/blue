@@ -11,7 +11,7 @@ jobs:
       matrix:
         goos: [linux]
         goarch: [arm64, amd64]
-        binary: [gps-consumer, gps-producer]
+        binary: [gps-server, gps-producer]
     steps:
     - uses: actions/checkout@v2
     - uses: wangyoucao577/go-release-action@master
