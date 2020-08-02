@@ -173,11 +173,10 @@ func (s *boltStore) List(ctx context.Context, filters []Filter) (
 		// We should paginate results by creating a cursor
 		// every time NextTo exhausts a certain number of buffered
 		// documents.
-		return tx.ForEach(func(_ []byte, b *bolt.Bucket) error {
-			return b.ForEach(func(key []byte, value []byte) error {
-				iter.maybeExtend(filters, value)
-				return nil
-			})
+		b := tx.Bucket(s.collID)
+		return b.ForEach(func(key []byte, value []byte) error {
+			iter.maybeExtend(filters, value)
+			return nil
 		})
 	})
 	if err != nil {
