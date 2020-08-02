@@ -33,10 +33,11 @@ const template = `
 	    	  	return [o.Latitude, o.Longitude, makeLabel(o)];
 	    	  });
 	    	  rawData = ([['Lat', 'Long', 'Name']]).concat(rawData);
-	    	  console.log(rawData)
+	    	  console.log(rawData);
               var data = google.visualization.arrayToDataTable(rawData);
               var map = new google.visualization.Map(document.getElementById('map_div'));
               map.draw(data, options);
+              console.log('loaded map!');
 	      }
 	    });
       }
