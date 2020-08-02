@@ -9,6 +9,7 @@ require (
 	github.com/golang/protobuf v1.3.5
 	github.com/google/uuid v1.1.1
 	github.com/jacobsa/go-serial v0.0.0-20180131005756-15cf729a72d4
+	github.com/julienschmidt/httprouter v1.3.0
 	github.com/mitchellh/mapstructure v1.3.2
 	github.com/pion/dtls v1.5.4
 	github.com/pion/dtls/v2 v2.0.2

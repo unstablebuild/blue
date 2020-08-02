@@ -17,11 +17,12 @@ import (
 
 // DefaultPort is the default port used by GPS servers and clients.
 const (
-	DefaultPort     = 4677
-	maxDatagramSize = 8192
-	receiveTimeout  = 5 * time.Second
-	sendAckTimeout  = 3 * time.Second
-	ackCadence      = 30 * time.Second
+	DefaultPort       = 4677
+	maxDatagramSize   = 8192
+	receiveTimeout    = 3 * time.Second
+	sendAckTimeout    = 500 * time.Millisecond
+	ackCadence        = 30 * time.Second
+	serverReadTimeout = 2 * time.Minute
 )
 
 // connectionMetadata represents the connection metadata of a connection-based
@@ -113,7 +114,7 @@ func (s *DTLSServer) sendAck(conn *dtls.Conn, ackErrChan chan error) error {
 	if err != nil {
 		return err
 	}
-	return sendBytesConn(ctx, b, conn, ackErrChan)
+	return sendBytesConnWait(ctx, b, conn, ackErrChan)
 }
 
 func (s *DTLSServer) connectionRead(meta connectionMetadata, conn *dtls.Conn) {
@@ -125,24 +126,33 @@ func (s *DTLSServer) connectionRead(meta connectionMetadata, conn *dtls.Conn) {
 	b := make([]byte, maxDatagramSize)
 
 	for {
-		select {
-		case <-ackTimer.C:
-			err := s.sendAck(conn, ackErrChan)
-			if err != nil {
-				log.Errorf("failed to send ack to client %v: %v", meta, err)
-				s.connectionRemove(meta, conn)
-				return
-			}
-			ackTimer.Reset(ackCadence)
-		default:
-		}
-
+		in := rpc.Coordinates{}
 		ctx := trace.NewContext(context.Background(), trace.New())
 		ctx = withConnectionMeta(ctx, meta)
-		in := rpc.Coordinates{}
-		err := readBytesConn(ctx, readTimeout, b, conn, &in, errCh)
+		ctx, cancel := context.WithTimeout(ctx, serverReadTimeout)
+		readBytesConn(ctx, b, conn, &in, errCh)
+
+		var err error
+		select {
+		case err = <-errCh:
+		case <-ctx.Done():
+			err = <-errCh
+		case <-ackTimer.C:
+			err = s.sendAck(conn, ackErrChan)
+			ackTimer.Reset(ackCadence)
+			if err == nil {
+				// wait until read is drained
+				select {
+				case <-ctx.Done():
+					err = <-errCh
+				case err = <-errCh:
+				}
+			}
+		}
+		cancel()
 		if err != nil {
 			log.Errorf("failed to read %v: %v", meta, err)
+			conn.SetReadDeadline(time.Now())
 			s.connectionRemove(meta, conn)
 			return
 		}

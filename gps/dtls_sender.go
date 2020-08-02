@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	connectTimeout = 5 * time.Second
-	readTimeout    = ackCadence
+	connectTimeout    = 5 * time.Second
+	clientReadTimeout = 3 * ackCadence
 )
 
 type dtlsSender struct {
@@ -59,7 +59,7 @@ func sendPosition(
 		return err
 	}
 
-	return sendBytesConn(ctx, b, conn, ch)
+	return sendBytesConnWait(ctx, b, conn, ch)
 }
 
 func (s *dtlsSender) makeConn(ctx context.Context) (*dtls.Conn, error) {
@@ -105,16 +105,13 @@ func (s *dtlsSender) rmConn() *dtls.Conn {
 func (s *dtlsSender) monitorConn(quitChan chan struct{}) {
 	// if we don't hear from server in N ack periods,
 	// close and rm connection to force re-connection
-	ticker := time.NewTicker(ackCadence * 3)
-	defer ticker.Stop()
-
 	b := make([]byte, maxDatagramSize)
 	errCh := make(chan error)
 	for {
 		select {
-		case <-ticker.C:
 		case <-quitChan:
 			return
+		default:
 		}
 
 		s.lock.Lock()
@@ -126,7 +123,7 @@ func (s *dtlsSender) monitorConn(quitChan chan struct{}) {
 
 		in := rpc.Ack{}
 		ctx := context.Background()
-		err := readBytesConn(ctx, readTimeout, b, conn, &in, errCh)
+		err := readBytesConnWait(ctx, clientReadTimeout, b, conn, &in, errCh)
 		if err != nil {
 			log.Warningf("monitor dtls conn: failed to read from conn: %v", err)
 			s.rmConn()

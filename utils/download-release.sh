@@ -23,7 +23,7 @@ readonly arch="$2"
 readonly github_repo_owner="ernestrc"
 readonly github_repo_name="blue"
 readonly release_asset_filenames=(\
-	"gps-consumer-$git_tag-linux-$arch.tar.gz" \
+	"gps-server-$git_tag-linux-$arch.tar.gz" \
 	"gps-producer-$git_tag-linux-$arch.tar.gz" \
 )
 

@@ -45,7 +45,9 @@ func SendPositionAtCadence(p Positioner, s Sender, cadence time.Duration) {
 	}
 }
 
-func sendBytesConn(ctx context.Context, b []byte, conn *dtls.Conn, ch chan error) error {
+func sendBytesConnWait(
+	ctx context.Context, b []byte, conn *dtls.Conn, ch chan error,
+) error {
 	go func() {
 		_, err := conn.Write(b)
 		ch <- err
@@ -61,6 +63,25 @@ func sendBytesConn(ctx context.Context, b []byte, conn *dtls.Conn, ch chan error
 }
 
 func readBytesConn(
+	ctx context.Context, b []byte, conn *dtls.Conn,
+	in proto.Message, ch chan error,
+) {
+	go func() {
+		n, err := conn.Read(b)
+		if err != nil {
+			ch <- err
+			return
+		}
+		err = proto.Unmarshal(b[:n], in)
+		if err != nil {
+			ch <- err
+			return
+		}
+		ch <- nil
+	}()
+}
+
+func readBytesConnWait(
 	ctx context.Context, readTimeout time.Duration,
 	b []byte, conn *dtls.Conn,
 	in proto.Message, ch chan error,
@@ -68,18 +89,7 @@ func readBytesConn(
 	ctx, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
 
-	go func() {
-		n, err := conn.Read(b)
-		if err != nil {
-			ch <- err
-		}
-		err = proto.Unmarshal(b[:n], in)
-		if err != nil {
-			ch <- err
-		}
-		ch <- nil
-	}()
-
+	readBytesConn(ctx, b, conn, in, ch)
 	select {
 	case <-ctx.Done():
 		conn.SetReadDeadline(time.Now())
