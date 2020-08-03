@@ -97,7 +97,7 @@ func (m *Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fields["status"] = status
-	fields["duration"] = MicrosecondsSince(start)
+	fields["duration_us"] = MicrosecondsSince(start)
 	fields["size"] = writer.resSize
 
 	if status >= 500 {
