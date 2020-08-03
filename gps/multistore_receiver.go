@@ -13,17 +13,24 @@ var (
 	dayStoreOpts = []Option{
 		WithRateLimiting(4 * time.Hour),
 		WithDownSampling(24 * time.Hour),
+		WithLoggingLabel("DayStore"),
 	}
 
 	hourStoreOpts = []Option{
 		WithRateLimiting(30 * time.Minute),
 		WithDownSampling(time.Hour),
 		WithFixedSize(31 * 24),
+		WithLoggingLabel("HourStore"),
 	}
 
 	minuteStoreOpts = []Option{
 		WithDownSampling(time.Minute),
 		WithFixedSize(24 * 60),
+		WithLoggingLabel("MinuteStore"),
+	}
+
+	cacheOpts = []Option{
+		WithLoggingLabel("BoltCache"),
 	}
 )
 
@@ -76,7 +83,7 @@ func NewMultiStore(config MultiStoreConfig) (m *MultiStore, err error) {
 	if err != nil {
 		return
 	}
-	m.cache = NewCache(backend)
+	m.cache = NewCache(backend, cacheOpts...)
 
 	backend, err = document.NewBolt(config.Bolt.DBPath, config.MinuteCollection)
 	if err != nil {
