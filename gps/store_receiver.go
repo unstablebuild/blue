@@ -15,6 +15,7 @@ type config struct {
 	resolution time.Duration
 	fixedSize  int64
 	limit      time.Duration
+	label      string
 }
 
 // Option enables a Store to implement
@@ -42,6 +43,14 @@ func WithDownSampling(resolution time.Duration) Option {
 func WithRateLimiting(limit time.Duration) Option {
 	return func(cfg *config) {
 		cfg.limit = limit
+	}
+}
+
+// WithLoggingLabel returns an option that sets the "class"
+// key in the logs as label, instead of the default "Store".
+func WithLoggingLabel(label string) Option {
+	return func(cfg *config) {
+		cfg.label = label
 	}
 }
 
@@ -89,26 +98,34 @@ func (s *Store) throttle(deviceID string) (time.Duration, bool) {
 	return now.Sub(c), true
 }
 
+func (s *Store) getLoggingLabel() string {
+	if s.config.label == "" {
+		return "Store"
+	}
+
+	return s.config.label
+}
+
 // Receive satisfies Receiver.
 func (s *Store) Receive(ctx context.Context, pos Coordinates) error {
 	id := s.makeUniqueID(pos)
 
 	traceID, ctx := trace.FromContextOrNew(ctx)
-	fields := makeReceiverLoggingFields("Store", pos.DeviceID)
+	fields := makeReceiverLoggingFields(s.getLoggingLabel(), pos.DeviceID)
 	fields = append(fields, logging.Field{Key: "GeneratedID", Value: id})
-	attemptAt := logging.LogAttempt(traceID, "Receive", fields...)
+	attemptAt := logging.LogAttempt(traceID, receiveCallType, fields...)
 
 	if wait, throttled := s.throttle(pos.DeviceID); throttled {
 		fields = append(fields,
 			logging.Field{Key: "Throttled", Value: "true"},
 			logging.Field{Key: "Wait", Value: wait.String()},
 		)
-		logging.LogResult(nil, attemptAt, traceID, "Receive", fields...)
+		logging.LogResult(nil, attemptAt, traceID, receiveCallType, fields...)
 		return nil
 	}
 
 	err := s.backend.Set(ctx, id, pos)
-	logging.LogResultInfo(err, attemptAt, traceID, "Receive", fields...)
+	logging.LogResultInfo(err, attemptAt, traceID, receiveCallType, fields...)
 	return err
 }
 
@@ -132,7 +149,7 @@ func (s *Store) ListDevice(
 	ctx context.Context, deviceID string, from, to time.Time,
 ) (document.Iterator, error) {
 	traceID, ctx := trace.FromContextOrNew(ctx)
-	fields := makeReceiverLoggingFields("Store", deviceID)
+	fields := makeReceiverLoggingFields(s.getLoggingLabel(), deviceID)
 	fields = append(fields, []logging.Field{
 		logging.Field{Key: "From", Value: from.String()},
 		logging.Field{Key: "To", Value: to.String()}}...)
@@ -152,7 +169,7 @@ func (s *Store) List(ctx context.Context, from, to time.Time) (
 ) {
 	traceID, ctx := trace.FromContextOrNew(ctx)
 	fields := []logging.Field{
-		logging.Field{Key: logging.KeyClass, Value: "Store"},
+		logging.Field{Key: logging.KeyClass, Value: s.getLoggingLabel()},
 		logging.Field{Key: "From", Value: from.String()},
 		logging.Field{Key: "To", Value: to.String()},
 	}
