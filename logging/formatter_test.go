@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	log1 = "2017-09-07 14:54:39.474	DEBUG	[pool-5-thread-6]	shouldBeOverwritten.go	flow: Publish, step: Attempt, operation: CreatePublisher\n"
+	log1 = "2017-09-07 14:54:39.474	DEBUG	[pool-5-thread-6]	control.RaptorHandler	flow: Publish, step: Attempt, operation: CreatePublisher\n"
 	log2 = "2017-09-07 14:54:39.474	DEBUG	[2223]	myFile.go	flow: <nil>\n"
 	log3 = "2017-09-07 14:54:39.474	DEBUG	[9999999]	myFile.go	func: myFunc.223, flow: <nil>, FORMATTER_WARNING_TYPE: inefficient use of logrus formatter with key 'flow', FORMATTER_WARNING_COLLISION: following keys are being overwritten by logging formatter [thread]\n"
 	log4 = "2017-09-07 14:54:39.474	DEBUG	[-]	-	myCallType: hello: yeah\n"
@@ -109,7 +109,7 @@ func TestFormatter(t *testing.T) {
 		line   int
 		output string
 	}{
-		{false, expected1, "shouldBeOverwritten.go", "", 123, log1},
+		{false, expected1, "shouldNotOverwrite.go", "", 123, log1},
 		{false, expected2, "myFile.go", "", 223, log2},
 		{true, expected3, "myFile.go", "myFunc", 223, log3},
 		{true, expected4, "", "", 0, log4},
