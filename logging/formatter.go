@@ -86,7 +86,7 @@ func (f *LogrusFormatter) setHeader(log *logd.Log, entry *logrus.Entry) {
 	log.Set(KeyTime, entry.Time.Format(timeFormat))
 	log.Set(KeyMessage, entry.Message)
 	log.Set(KeyLevel, strings.ToUpper(entry.Level.String()))
-	if entry.HasCaller() {
+	if _, ok := entry.Data[KeyClass]; !ok && entry.HasCaller() {
 		log.Set(KeyClass, entry.Caller.File)
 	}
 }
@@ -95,7 +95,7 @@ func detectCollisions(log *logd.Log, entry *logrus.Entry) {
 	var collisionKeys []string
 	for k := range entry.Data {
 		switch k {
-		case KeyThread, KeyDate, KeyTime, KeyMessage, KeyLevel, KeyFunc, KeyClass:
+		case KeyThread, KeyDate, KeyTime, KeyMessage, KeyLevel, KeyFunc:
 			collisionKeys = append(collisionKeys, k)
 		}
 	}
