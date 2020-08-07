@@ -52,6 +52,6 @@ func TestMiddleware(t *testing.T) {
 	assert.Equal(t, len(fixData), entry.Data["size"])
 	assert.Equal(t, fixTraceID, entry.Data["traceID"])
 
-	duration := time.Duration(entry.Data["duration"].(int64)) * time.Microsecond
+	duration := time.Duration(entry.Data["duration_us"].(int64)) * time.Microsecond
 	assert.Equal(t, int64(fixLatency.Seconds()), int64(duration.Seconds()))
 }
