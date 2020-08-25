@@ -4,8 +4,8 @@ on:
     types: [created]
 
 jobs:
-  releases-matrix:
-    name: Release Go Binaries
+  release-github:
+    name: Release binaries to Github
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -21,3 +21,26 @@ jobs:
         goarch: ${{ matrix.goarch }}
         project_path: ./cmd/${{ matrix.binary }}
         binary_name: ${{ matrix.binary }}
+
+
+  release-bluectl:
+    name: Release binaries via bluectl release
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Checkout git
+      uses: actions/checkout@v2
+
+    - name: Make release tarball
+      run: make release
+
+    - name: Extract tag name
+      id: tag
+      uses: actions/github-script@0.2.0
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          return context.payload.ref.replace(/\/refs\/tags\//, '');
+
+    - name: Upload release tarball
+      run: bin/bluectl release create ${{ steps.tag.outputs.result }} target/blue-release.tar.gz
