@@ -31,12 +31,12 @@ func (s *segador) reapChains() error {
 
 func (s *segador) toMap() map[string]interface{} {
 	res := make(map[string]interface{})
-	res["Name"] = s.Name
+	res["name"] = s.Name
 	traitsMap := make(map[string]interface{})
 	for k, v := range s.Traits {
 		traitsMap[k] = v
 	}
-	res["Traits"] = traitsMap
+	res["traits"] = traitsMap
 	return res
 }
 
@@ -450,7 +450,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory fnServiceFactory) {
 		defer s.Close()
 
 		err := s.Update(ctx, myID, []Update{
-			updateTrait("NewTrait", "WOW"),
+			updateTrait("dob", "2020-02-21"),
 			updateName("Alice"),
 		})
 		require.NoError(t, err)
@@ -459,7 +459,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory fnServiceFactory) {
 		err = s.Get(ctx, myID, &myNewAlice)
 		require.NoError(t, err)
 		assert.Equal(t, "Alice", myNewAlice.Name)
-		assert.Equal(t, "WOW", myNewAlice.Traits["NewTrait"])
+		assert.Equal(t, "2020-02-21", myNewAlice.Traits["dob"])
 	})
 
 	t.Run("Update overrides client UpdatedAt field", func(t *testing.T) {
