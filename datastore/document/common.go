@@ -3,28 +3,44 @@ package document
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"time"
 
-	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/mgo.v2/bson"
 )
 
+func reflectSetTimeField(s reflect.Value, k string, v time.Time) {
+	f := s.Elem().FieldByName(k)
+	if !f.IsValid() || !f.CanSet() || f.Kind() != reflect.Struct ||
+		reflect.TypeOf(f) == reflect.TypeOf((*time.Time)(nil)).Elem() {
+		return
+	}
+	f.Set(reflect.ValueOf(v))
+}
+
+func clone(data interface{}) reflect.Value {
+	typ := reflect.TypeOf(data)
+	src := reflect.ValueOf(data)
+	dst := reflect.New(typ)
+	for i := 0; i < src.NumField(); i++ {
+		dstField := dst.Elem().Field(i)
+		if dstField.CanSet() {
+			dstField.Set(src.Field(i))
+		}
+	}
+	return dst
+}
+
 func encode(data interface{}, addCreatedAt bool) []byte {
-	var ir map[string]interface{}
-	err := mapstructure.Decode(data, &ir)
-	if err != nil {
-		// errors are returned only when input and output types are unexpected
-		// or have unexpected fields: panic so we catch early
-		panic(err)
-	}
-
 	if addCreatedAt {
-		ir[DefaultCreatedAtField] = time.Now()
-		ir[DefaultUpdatedAtField] = time.Now()
+		dst := clone(data)
+		reflectSetTimeField(dst, DefaultCreatedAtField, time.Now())
+		reflectSetTimeField(dst, DefaultUpdatedAtField, time.Now())
+		data = dst.Elem().Interface()
 	}
 
-	b, err := bson.Marshal(ir)
+	b, err := bson.Marshal(data)
 	if err != nil {
 		panic(err)
 	}
@@ -45,13 +61,7 @@ func safeDecode(rcv interface{}, raw []byte) error {
 }
 
 func decode(rcv interface{}, raw []byte) {
-	var ir map[string]interface{}
-	err := bson.Unmarshal(raw, &ir)
-	if err != nil {
-		panic(err)
-	}
-
-	err = mapstructure.Decode(ir, rcv)
+	err := bson.Unmarshal(raw, rcv)
 	if err != nil {
 		panic(err)
 	}
@@ -66,11 +76,18 @@ func updateProto(updates []Update, proto map[string]interface{}) {
 		if update.FieldPath[0] == DefaultUpdatedAtField {
 			continue
 		}
-		updateField(proto, update)
+
+		// bson decodes struct fields into a map as lower case
+		lower := make([]string, len(update.FieldPath))
+		for i, comp := range update.FieldPath {
+			lower[i] = strings.ToLower(comp)
+		}
+
+		updateField(proto, Update{FieldPath: lower, Value: update.Value})
 	}
 
 	updateField(proto, Update{
-		FieldPath: []string{DefaultUpdatedAtField},
+		FieldPath: []string{strings.ToLower(DefaultUpdatedAtField)},
 		Value:     time.Now(),
 	})
 }
@@ -210,6 +227,13 @@ func matchFilter(proto map[string]interface{}, f Filter) bool {
 
 func matchesAllFilters(proto map[string]interface{}, filters []Filter) bool {
 	for _, f := range filters {
+		// bson decodes struct fields into a map as lower case
+		lower := make([]string, len(f.FieldPath))
+		for i, comp := range f.FieldPath {
+			lower[i] = strings.ToLower(comp)
+		}
+		f.FieldPath = lower
+
 		if !matchFilter(proto, f) {
 			return false
 		}
