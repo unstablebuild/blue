@@ -27,13 +27,13 @@ type releaseCreate struct {
 func getDefaultAuthor() string {
 	u, err := user.Current()
 	if err != nil {
-		return "Unknown"
+		u = &user.User{Username: "unknown"}
 	}
 	h, err := os.Hostname()
 	if err != nil {
-		return fmt.Sprintf("%s@unknown-host", u.Name)
+		h = "unknown-host"
 	}
-	return fmt.Sprintf("%s@%s", u.Name, h)
+	return fmt.Sprintf("%s@%s", u.Username, h)
 }
 
 func newReleaseCreateCLI(m release.Manager) cli.CLI {
