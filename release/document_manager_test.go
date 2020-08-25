@@ -3,6 +3,7 @@ package release
 import (
 	"bytes"
 	"context"
+	"io/ioutil"
 	"testing"
 
 	"github.com/ernestrc/blue/datastore/document"
@@ -69,4 +70,35 @@ func TestDocumentManager(t *testing.T) {
 		assert.Equal(t, fixtureRelease, manifest)
 		assert.Equal(t, fixtureLargeData, b.Bytes())
 	})
+}
+
+func BenchmarkDocumentManagerCreate(b *testing.B) {
+	m, _ := newTestingDocumentManager()
+	ctx := context.Background()
+
+	for i := 0; i < b.N; i++ {
+		_ = m.Create(ctx, fixtureRelease, bytes.NewBuffer(fixtureLargeData))
+	}
+}
+
+func BenchmarkDocumentManagerCreateDelete(b *testing.B) {
+	m, _ := newTestingDocumentManager()
+	ctx := context.Background()
+
+	for i := 0; i < b.N; i++ {
+		_ = m.Create(ctx, fixtureRelease, bytes.NewBuffer(fixtureLargeData))
+		_ = m.Delete(ctx, fixtureRelease.ID)
+	}
+}
+
+func BenchmarkDocumentManagerGet(b *testing.B) {
+	m, _ := newTestingDocumentManager()
+	ctx := context.Background()
+	_ = m.Create(ctx, fixtureRelease, bytes.NewBuffer(fixtureLargeData))
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, _ = m.Get(ctx, fixtureRelease.ID, ioutil.Discard)
+	}
 }
