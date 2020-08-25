@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/ernestrc/blue/datastore/document"
+	"github.com/sirupsen/logrus"
 )
 
 type documentType int32
@@ -40,10 +41,25 @@ func NewDocumentManager(db document.Service) Manager {
 	return ret
 }
 
-func (d *documentManager) forceRemoveChunks(err error, ids []string) error {
+func makeLeakError(releaseID string, err, rerr error) error {
+	return fmt.Errorf("db.Delete error when trying to handle error; leaking release %s in db: %v: %v",
+		releaseID, err, rerr)
+}
+
+func (d *documentManager) forceDelete(err error, id string) error {
+	rerr := d.db.Delete(context.Background(), id)
+	if rerr != nil {
+		err = makeLeakError(id, err, rerr)
+		logrus.WithFields(logrus.Fields{"release": id}).Error(err)
+	}
+	return err
+}
+
+func (d *documentManager) forceRemoveChunks(err error, releaseID string, ids []string) error {
 	rerr := d.removeChunks(context.Background(), ids)
 	if rerr != nil {
-		err = fmt.Errorf("Error when trying to handle error: %v: %v", err, rerr)
+		err = makeLeakError(releaseID, err, rerr)
+		logrus.WithFields(logrus.Fields{"release": releaseID}).Error(err)
 	}
 	return err
 }
@@ -58,7 +74,7 @@ func (d *documentManager) createDataChunks(
 		read, rerr := r.Read(buffer)
 		if rerr != nil && rerr != io.EOF {
 			rerr = fmt.Errorf("failed to read release data: %v", rerr)
-			return nil, d.forceRemoveChunks(rerr, ids)
+			return nil, d.forceRemoveChunks(rerr, m.ID, ids)
 		}
 
 		if read == 0 {
@@ -72,7 +88,7 @@ func (d *documentManager) createDataChunks(
 		}
 		err := d.db.Create(ctx, chunkID, chunk)
 		if err != nil {
-			return nil, d.forceRemoveChunks(err, ids)
+			return nil, d.forceRemoveChunks(err, m.ID, ids)
 		}
 		ids = append(ids, chunkID)
 
@@ -104,21 +120,28 @@ func (d *documentManager) Create(
 	ctx context.Context, m Manifest, r io.Reader,
 ) error {
 	id := m.ID
-	ids, err := d.createDataChunks(ctx, m, r)
+	doc := releaseDocument{
+		Type:       documentTypeManifest,
+		Manifest:   m,
+		DataChunks: nil,
+	}
+	err := d.db.Create(ctx, id, &doc)
 	if err != nil {
 		return err
 	}
 
-	doc := releaseDocument{
-		Type:       documentTypeManifest,
-		Manifest:   m,
-		DataChunks: ids,
-	}
-	err = d.db.Create(ctx, id, &doc)
+	ids, err := d.createDataChunks(ctx, m, r)
 	if err != nil {
-		err = d.forceRemoveChunks(err, ids)
-		return err
+		return d.forceDelete(err, id)
 	}
+
+	doc.DataChunks = ids
+	err = d.db.Set(ctx, id, &doc)
+	if err != nil {
+		err = d.forceDelete(err, id)
+		return d.forceRemoveChunks(err, id, ids)
+	}
+
 	return nil
 }
 
