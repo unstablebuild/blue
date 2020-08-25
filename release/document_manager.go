@@ -12,7 +12,7 @@ type documentType int32
 
 const (
 	// https://firebase.google.com/docs/firestore/quotas#limits
-	maxDocSizeBytes = 1024 * 1024 * 1024
+	maxDocSizeBytes = 1048487 - 64
 
 	documentTypeData documentType = iota
 	documentTypeManifest
@@ -66,7 +66,10 @@ func (d *documentManager) createDataChunks(
 		}
 
 		chunkID := fmt.Sprintf("%s:chunk:%d", m.ID, i)
-		chunk := releaseData{Data: buffer[:read]}
+		chunk := releaseData{
+			Type: documentTypeData,
+			Data: buffer[:read],
+		}
 		err := d.db.Create(ctx, chunkID, chunk)
 		if err != nil {
 			return nil, d.forceRemoveChunks(err, ids)
@@ -107,6 +110,7 @@ func (d *documentManager) Create(
 	}
 
 	doc := releaseDocument{
+		Type:       documentTypeManifest,
 		Manifest:   m,
 		DataChunks: ids,
 	}
