@@ -9,8 +9,6 @@ import (
 	"github.com/ernestrc/blue/cli"
 )
 
-const configDirectory = "~/.blue"
-
 func exitWithError(err error) {
 	fmt.Fprint(os.Stderr, err)
 	os.Exit(1)
@@ -22,7 +20,7 @@ func main() {
 		exitWithError(err)
 	}
 
-	ctl, err := newBlueCtl(path.Join(homeDir, ".blue"))
+	ctl, err := newBlueCtl(path.Join(homeDir, ".bluectl"))
 	if err != nil {
 		exitWithError(err)
 	}
