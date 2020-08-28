@@ -34,19 +34,11 @@ jobs:
     - name: Make release tarball
       run: make release
 
-    - name: Extract tag name
-      id: tag
-      uses: actions/github-script@0.2.0
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        script: |
-          return context.payload.ref.replace(/\/refs\/tags\//, '');
-
     - name: Create bluectl config
-      run: echo "auth:\n  project-id: unstable-build-blue-dev\n  credentials-file: \"/home/`whoami`/gcloud.json\"\nrelease:\n  collection: blue-release\n" > ~/.bluectl/config
+      run: "echo \"auth:\n  project-id: unstable-build-blue-dev\n  credentials-file: \\\"/home/`whoami`/gcloud.json\\\"\nrelease:\n  collection: blue-release\n\" > ~/.bluectl/config"
 
     - name: Create gcloud creds
       run: echo ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }} | base64 -d > /home/`whoami`/gcloud.json
 
     - name: Upload release tarball
-      run: bin/bluectl release create ${{ steps.tag.outputs.result }} target/blue-release.tar.gz
+      run: bin/bluectl release create ${GITHUB_REF/refs\/tags\//} target/blue-release.tar.gz
