@@ -73,6 +73,8 @@ func (s releaseCreate) Run(ctx context.Context, args []string) error {
 
 	var m release.Manifest
 	m.ID = args[0]
+	m.Author = *s.flagAuthor
+	m.Notes = *s.flagNotes
 
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
