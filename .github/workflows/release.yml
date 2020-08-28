@@ -35,10 +35,10 @@ jobs:
       run: make release
 
     - name: Create bluectl config
-      run: "echo \"auth:\n  project-id: unstable-build-blue-dev\n  credentials-file: \\\"/home/`whoami`/gcloud.json\\\"\nrelease:\n  collection: blue-release\n\" > ~/.bluectl/config"
+      run: "mkdir -p /tmp/.bluectl && echo \"auth:\n  project-id: unstable-build-blue-dev\n  credentials-file: \\\"/tmp/.bluectl/gcloud.json\\\"\nrelease:\n  collection: blue-release\n\" > /tmp/.bluectl/config"
 
     - name: Create gcloud creds
-      run: echo ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }} | base64 -d > /home/`whoami`/gcloud.json
+      run: echo ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }} | base64 -d > /tmp/.bluectl/gcloud.json
 
     - name: Upload release tarball
-      run: bin/bluectl release create ${GITHUB_REF/refs\/tags\//} target/blue-release.tar.gz
+      run: bin/bluectl -c /tmp/.bluectl release create ${GITHUB_REF/refs\/tags\//} target/blue-release.tar.gz
