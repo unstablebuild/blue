@@ -19,13 +19,17 @@ var (
 	options = bolt.Options{Timeout: defaultBoltTimeout}
 )
 
-type boltStore struct {
+// BoltStore implements a document.Service backed by a local, embedded bolt DB.
+// It additionally provides a method to efficiently delete all
+// contents of a collection: DeleteAll.
+type BoltStore struct {
 	db     *bolt.DB
 	collID []byte
 }
 
-// NewBolt returns an instance of Service backed by a local, embedded bolt DB.
-func NewBolt(dbPath string, collectionID string) (Service, error) {
+// NewBolt allocates store for a new BoltStore and initializes it with the given
+// dbPath and collectionID.
+func NewBolt(dbPath string, collectionID string) (*BoltStore, error) {
 	if dbs[dbPath] == nil {
 		db, err := bolt.Open(dbPath, 0600, &options)
 		if err != nil {
@@ -38,28 +42,34 @@ func NewBolt(dbPath string, collectionID string) (Service, error) {
 	db := dbs[dbPath]
 
 	collID := []byte(collectionID)
-	err := db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists(collID)
+	s := &BoltStore{
+		db:     db,
+		collID: collID,
+	}
+	err := s.createBucketIfNotExists()
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+func (s *BoltStore) createBucketIfNotExists() error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists(s.collID)
 		if err != nil {
 			return fmt.Errorf("create collection: %s", err)
 		}
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &boltStore{
-		db:     db,
-		collID: collID,
-	}, nil
 }
 
-func (s *boltStore) Close() error {
+// Close closes all resources associated with this BoltStore.
+func (s *BoltStore) Close() error {
 	return s.db.Close()
 }
 
-func (s *boltStore) getData(ID string, doc interface{}) (
+func (s *BoltStore) getData(ID string, doc interface{}) (
 	err error,
 ) {
 	return s.db.View(func(tx *bolt.Tx) error {
@@ -74,19 +84,21 @@ func (s *boltStore) getData(ID string, doc interface{}) (
 	})
 }
 
-func (s *boltStore) Set(
+// Set satisfies document.Service.
+func (s *BoltStore) Set(
 	ctx context.Context, ID string, doc interface{},
 ) error {
 	return s.set(ctx, ID, doc, false)
 }
 
-func (s *boltStore) Create(
+// Create satisfies document.Service.
+func (s *BoltStore) Create(
 	ctx context.Context, ID string, doc interface{},
 ) error {
 	return s.set(ctx, ID, doc, true)
 }
 
-func (s *boltStore) set(
+func (s *BoltStore) set(
 	ctx context.Context, ID string, doc interface{},
 	errAlreadyExists bool,
 ) error {
@@ -128,7 +140,8 @@ func (s *boltStore) set(
 	return tx.Commit()
 }
 
-func (s *boltStore) Update(
+// Update satisfies document.Service.
+func (s *BoltStore) Update(
 	ctx context.Context, ID string, updates []Update,
 ) error {
 	if len(updates) == 0 {
@@ -144,27 +157,30 @@ func (s *boltStore) Update(
 	updateProto(updates, doc)
 
 	return s.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(s.collID))
+		b := tx.Bucket(s.collID)
 		return b.Put([]byte(ID), encode(doc, false))
 	})
 }
 
-func (s *boltStore) Get(
+// Get satisfies document.Service.
+func (s *BoltStore) Get(
 	ctx context.Context, ID string, doc interface{},
 ) error {
 	return s.getData(ID, doc)
 }
 
-func (s *boltStore) Delete(
+// Delete satisfies document.Service.
+func (s *BoltStore) Delete(
 	ctx context.Context, ID string,
 ) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(s.collID))
+		b := tx.Bucket(s.collID)
 		return b.Delete([]byte(ID))
 	})
 }
 
-func (s *boltStore) List(ctx context.Context, filters []Filter) (
+// List satisfies document.Service.
+func (s *BoltStore) List(ctx context.Context, filters []Filter) (
 	Iterator, error,
 ) {
 	iter := &listIterator{docs: make([][]byte, 0)}
@@ -184,4 +200,22 @@ func (s *boltStore) List(ctx context.Context, filters []Filter) (
 	}
 
 	return iter, nil
+}
+
+// DeleteAll efficiently deletes all documents in the collection.
+func (s *BoltStore) DeleteAll(ctx context.Context) error {
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		return tx.DeleteBucket(s.collID)
+	})
+	if err != nil {
+		return err
+	}
+
+	// if this fails we're screwed because the rest of operations will panic..
+	err = s.createBucketIfNotExists()
+	if err != nil {
+		panic(fmt.Sprintf("critical error: failed to recreate collection: %v", err))
+	}
+
+	return nil
 }
