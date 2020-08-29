@@ -1,11 +1,11 @@
+name: Create Release
 on:
   push:
     tags:
-      - '*' # Push events to matching v*, i.e. v1.0, v20.15.10
+      - '*'
 
-name: Create Release
 jobs:
-  build:
+  create-github-release:
     name: Create Release
     runs-on: ubuntu-latest
     steps:
@@ -23,3 +23,42 @@ jobs:
           release_name: Release ${{ github.ref }}
           draft: false
           prerelease: false
+
+  release-artifacts-github:
+    name: Release binaries to Github
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux]
+        goarch: [arm64, amd64]
+        binary: [gps-server, gps-producer]
+    steps:
+    - uses: actions/checkout@v2
+    - uses: wangyoucao577/go-release-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        goos: ${{ matrix.goos }}
+        goarch: ${{ matrix.goarch }}
+        project_path: ./cmd/${{ matrix.binary }}
+        binary_name: ${{ matrix.binary }}
+
+
+  release-artifacts-bluectl:
+    name: Release binaries via bluectl release
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Checkout git
+      uses: actions/checkout@v2
+
+    - name: Make release tarball
+      run: make release
+
+    - name: Create bluectl config
+      run: "mkdir -p /tmp/.bluectl && echo \"auth:\n  project-id: unstable-build-blue-dev\n  credentials-file: \\\"/tmp/.bluectl/gcloud.json\\\"\nrelease:\n  collection: blue-release\n\" > /tmp/.bluectl/config"
+
+    - name: Create gcloud creds
+      run: echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}' | base64 -d > /tmp/.bluectl/gcloud.json
+
+    - name: Upload release tarball
+      run: bin/bluectl -c /tmp/.bluectl release create ${GITHUB_REF/refs\/tags\//} target/blue-release.tar.gz
