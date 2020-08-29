@@ -41,14 +41,14 @@ $(BIN):
 $(BIN)/%: $(EXECSRC) $(LIBRPC) $(LIBSRC) $(BIN)
 	@cd $(patsubst bin/%,cmd/%,$@) && go build $(CFLAGS) -o ../../$@
 
-ARM=arm64
+ARM=arm
 AMD=amd64
 GOOS=linux
 release: default
 	@ rm -rf $(TARGET)
 	@ mkdir -p $(TARGET)/$(AMD) $(TARGET)/$(ARM)
 	@ GOARCH=$(AMD) GOOS=$(GOOS) go build -o `pwd`/$(TARGET)/$(AMD) ./... 
-	@ GOARCH=$(ARM) GOOS=$(GOOS) go build -o `pwd`/$(TARGET)/$(ARM) ./... 
+	@ GOARCH=$(ARM) GOARM=7 GOOS=$(GOOS) go build -o `pwd`/$(TARGET)/$(ARM) ./... 
 	@ cp -R deploy $(TARGET)/$(ARM)
 	@ cp -R deploy $(TARGET)/$(AMD)
 	@ cd $(TARGET) && tar -czvf blue-release.tar.gz $(ARM) $(AMD)
