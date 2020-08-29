@@ -2,7 +2,7 @@ Description=GPS producer
 After=network.target
 
 [Service]
-ExecStart=gps-producer -k /etc/gps/psk.key -I closca -P 4677 -c 1 -d /dev/ttyACM0 -h unstable.build
+ExecStart=gps-producer -k /etc/gps/psk.key -I closca -P 4677 -c 5 -d /dev/ttyACM0 -h unstable.build
 Restart=always
 RestartSec=10s
 
