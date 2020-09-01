@@ -33,7 +33,7 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Make release tarball
-      run: make release
+      run: make test release
 
     - name: Create bluectl config
       run: "mkdir -p /tmp/.bluectl && echo \"auth:\n  project-id: unstable-build-blue-dev\n  credentials-file: \\\"/tmp/.bluectl/gcloud.json\\\"\nrelease:\n  collection: blue-release\n\" > /tmp/.bluectl/config"
