@@ -129,13 +129,13 @@ func (s *DTLSServer) connectionRead(meta connectionMetadata, conn *dtls.Conn) {
 		in := rpc.Coordinates{}
 		ctx := trace.NewContext(context.Background(), trace.New())
 		ctx = withConnectionMeta(ctx, meta)
-		ctx, cancel := context.WithTimeout(ctx, serverReadTimeout)
-		readBytesConn(ctx, b, conn, &in, errCh)
+		readCtx, cancel := context.WithTimeout(ctx, serverReadTimeout)
+		readBytesConn(readCtx, b, conn, &in, errCh)
 
 		var err error
 		select {
 		case err = <-errCh:
-		case <-ctx.Done():
+		case <-readCtx.Done():
 			err = <-errCh
 		case <-ackTimer.C:
 			err = s.sendAck(conn, ackErrChan)
@@ -143,7 +143,7 @@ func (s *DTLSServer) connectionRead(meta connectionMetadata, conn *dtls.Conn) {
 			if err == nil {
 				// wait until read is drained
 				select {
-				case <-ctx.Done():
+				case <-readCtx.Done():
 					err = <-errCh
 				case err = <-errCh:
 				}
