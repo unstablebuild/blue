@@ -10,6 +10,7 @@ import (
 	"github.com/pion/dtls/v2"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/ernestrc/blue/datastore/document"
 	"github.com/ernestrc/blue/gps"
 	"github.com/ernestrc/blue/logging"
 )
@@ -31,6 +32,7 @@ var (
 	static       = flag.Bool("s", false, fmt.Sprintf("Use test static positioner with coordinates: %+v", staticCoordinates))
 	serialDevice = flag.String("d", "/dev/ttyS0", "Serial device to use for serial GPS positioner if -s flag is not passed.")
 	deviceID     = flag.String("I", "UnknownDevice", "Device ID used to identify GPS data")
+	boltDbPath   = flag.String("b", "/tmp/gps-buffer-boltdb", "Path to mount the Bolt DB for GPS store")
 
 	dtlsConfig = dtls.Config{
 		CipherSuites:         []dtls.CipherSuiteID{dtls.TLS_PSK_WITH_AES_128_CCM_8},
@@ -82,5 +84,11 @@ func main() {
 	}
 	defer s.Close()
 
+	db, err := document.NewBolt(*boltDbPath, "gps-producer-buffer")
+	if err != nil {
+		log.Fatalf("failed to create bolt db: %v", err)
+	}
+
+	s = gps.WithBufferFallback(s, db)
 	gps.SendPositionAtCadence(p, s, time.Duration(*cadenceSec)*time.Second)
 }
