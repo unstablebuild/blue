@@ -59,6 +59,7 @@ func (s *bufferSender) sendBuffered(ctx context.Context) (err error) {
 		return nil
 	}
 
+	var buffered int
 	var pos Coordinates
 	for it.HasNext() {
 		err = it.NextTo(&pos)
@@ -69,6 +70,7 @@ func (s *bufferSender) sendBuffered(ctx context.Context) (err error) {
 		if err != nil {
 			break
 		}
+		buffered++
 	}
 
 	if err != nil {
@@ -81,6 +83,7 @@ func (s *bufferSender) sendBuffered(ctx context.Context) (err error) {
 	}
 
 	log.WithFields(log.Fields{
+		"Buffered":          buffered,
 		logging.KeyCallType: logBufferingCallType,
 		logging.KeyStep:     logging.ValueStepSuccess,
 	}).Info()
