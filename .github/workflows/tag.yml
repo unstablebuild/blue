@@ -24,25 +24,6 @@ jobs:
           draft: false
           prerelease: false
 
-  release-artifacts-github:
-    name: Release binaries to Github
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        goos: [linux]
-        goarch: [arm64, amd64]
-        binary: [gps-server, gps-producer]
-    steps:
-    - uses: actions/checkout@v2
-    - uses: wangyoucao577/go-release-action@master
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        goos: ${{ matrix.goos }}
-        goarch: ${{ matrix.goarch }}
-        project_path: ./cmd/${{ matrix.binary }}
-        binary_name: ${{ matrix.binary }}
-
-
   release-artifacts-bluectl:
     name: Release binaries via bluectl release
     runs-on: ubuntu-latest
