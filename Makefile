@@ -49,6 +49,9 @@ release: default
 	@ mkdir -p $(TARGET)/$(AMD) $(TARGET)/$(ARM)
 	@ GOARCH=$(AMD) GOOS=$(GOOS) go build -o `pwd`/$(TARGET)/$(AMD) ./... 
 	@ GOARCH=$(ARM) GOARM=7 GOOS=$(GOOS) go build -o `pwd`/$(TARGET)/$(ARM) ./... 
-	@ cp -R deploy $(TARGET)/$(ARM)
-	@ cp -R deploy $(TARGET)/$(AMD)
-	@ cd $(TARGET) && tar -czvf blue-release.tar.gz $(ARM) $(AMD)
+	@ cp -R deploy $(TARGET)
+	@ cp deploy/Makefile $(TARGET)/$(ARM)
+	@ cp deploy/Makefile $(TARGET)/$(AMD)
+	@ rm $(TARGET)/deploy/Makefile
+	@ rm -rf $(TARGET)/deploy/logd/deps
+	@ cd $(TARGET) && tar -czvf blue-release.tar.gz $(ARM) $(AMD) deploy
