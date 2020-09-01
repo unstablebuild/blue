@@ -202,8 +202,8 @@ func (s *BoltStore) List(ctx context.Context, filters []Filter) (
 	return iter, nil
 }
 
-// DeleteAll efficiently deletes all documents in the collection.
-func (s *BoltStore) DeleteAll(ctx context.Context) error {
+// Drop satisfies document.DroppableService.
+func (s *BoltStore) Drop(ctx context.Context) error {
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		return tx.DeleteBucket(s.collID)
 	})
