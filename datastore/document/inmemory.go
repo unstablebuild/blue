@@ -13,7 +13,7 @@ type inMemoryCache struct {
 
 // NewInMemoryCache returns an instance of Service backed
 // by an in-memory map.
-func NewInMemoryCache() Service {
+func NewInMemoryCache() DroppableService {
 	return &inMemoryCache{
 		storage: make(map[string][]byte),
 	}
@@ -132,4 +132,12 @@ func (c *inMemoryCache) List(ctx context.Context, filters []Filter) (
 	}
 
 	return &iter, nil
+}
+
+func (c *inMemoryCache) Drop(ctx context.Context) error {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.storage = make(map[string][]byte)
+	return nil
 }

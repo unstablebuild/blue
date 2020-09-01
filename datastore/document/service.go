@@ -83,6 +83,17 @@ type Service interface {
 	io.Closer
 }
 
+// DroppableService wraps a Service and provides a method to delete all records
+// efficiently.
+type DroppableService interface {
+	Service
+
+	// Drop deletes all records in a document.Service. Implementors must guarantee
+	// that (1) this is done efficiently and (2) the service remains functional
+	// after this operation succeeds.
+	Drop(context.Context) error
+}
+
 // Iterator is used to collect the the results obtained by List.
 //
 // HasNext is used to check how many results are left in the iterator.

@@ -22,7 +22,7 @@ func TestBolt(t *testing.T) {
 		return store
 	})
 
-	t.Run("DeleteAll deletes all documents in a collection", func(t *testing.T) {
+	t.Run("Drop deletes all documents in a collection", func(t *testing.T) {
 		ctx := context.Background()
 		f, err := ioutil.TempFile("", "blue_is_gold")
 		require.NoError(t, err)
@@ -34,7 +34,7 @@ func TestBolt(t *testing.T) {
 		require.NoError(t, store.Set(ctx, "1", alice))
 		require.NoError(t, store.Set(ctx, "2", alice))
 
-		require.NoError(t, store.DeleteAll(ctx))
+		require.NoError(t, store.Drop(ctx))
 
 		it, err := store.List(ctx, nil)
 		require.NoError(t, err)
