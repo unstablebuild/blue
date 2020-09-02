@@ -22,13 +22,13 @@ type getAllCLI struct {
 func newGetAllCLI(gpsServerHostname *string) cli.CLI {
 	return getAllCLI{
 		gpsServerHostname: gpsServerHostname,
-		fs:                cli.NewFlagSet("get-all"),
+		fs:                cli.NewFlagSet("list"),
 	}
 }
 
 func (c getAllCLI) Man() cli.Manual {
 	return cli.Manual{
-		Name:     "get-all",
+		Name:     "list",
 		Summary:  "Get all devices positions",
 		Synopsis: "",
 		Options:  *c.fs,
