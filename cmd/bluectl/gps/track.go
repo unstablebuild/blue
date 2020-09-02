@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -86,6 +87,11 @@ func (c trackCLI) Run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	sort.Slice(poss, func(i, j int) bool {
+		return poss[i].UnixTime > poss[j].UnixTime
+	})
+
 	renderTable(poss)
 	return nil
 }
