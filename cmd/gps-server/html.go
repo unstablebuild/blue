@@ -24,29 +24,76 @@ const template = `
 		  return o.DeviceID + " " + lastSeen;
 	  }
 
-	  function loadData() {
+	  function parseDrawResults(result) {
+
+		$('#historical').prop('disabled', true);
+
+	    var obj = JSON.parse(result);
+	    var rawData = obj.map(o => {
+	    	return [o.Latitude, o.Longitude, makeLabel(o)];
+	    });
+	    rawData = ([['Lat', 'Long', 'Name']]).concat(rawData);
+        var data = google.visualization.arrayToDataTable(rawData);
+        var map = new google.visualization.Map(document.getElementById('map_div'));
+        map.draw(data, options);
+
+		google.visualization.events.addListener(map, 'select', function() {
+			$('#historical').prop('disabled', function(i, v) { return !v; });
+		});
+
+        window.google_map = map;
+        window.raw_data = obj;
+	  }
+
+	  function loadDevicesData() {
 	    $.ajax({
 	      url: "/location/devices",
-	      success: function(result) {
-	    	  var obj = JSON.parse(result);
-	    	  var rawData = obj.map(o => {
-	    	  	return [o.Latitude, o.Longitude, makeLabel(o)];
-	    	  });
-	    	  rawData = ([['Lat', 'Long', 'Name']]).concat(rawData);
-	    	  console.log(rawData);
-              var data = google.visualization.arrayToDataTable(rawData);
-              var map = new google.visualization.Map(document.getElementById('map_div'));
-              map.draw(data, options);
-              console.log('loaded map!');
-	      }
+	      success: parseDrawResults,
+		  failure: alert,
 	    });
-      }
+	  }
 
-      google.charts.setOnLoadCallback(loadData);
+	  function getSelectedLocation() {
+		  if (!window.google_map) {
+		  	  return "";
+		  }
+
+		  var selection = window.google_map.getSelection();
+		  if (selection.length === 0) {
+		  	  return "";
+		  }
+		  var idx = selection[0].row;
+
+		  if (!window.raw_data || window.raw_data.length < idx+1) {
+		  	  console.error("raw_data is shorter than selected row?");
+		  	  return "";
+		  }
+
+		  var position = window.raw_data[idx];
+
+		  return position.DeviceID;
+	  }
+
+	  function loadHistoricalData() {
+	  	var deviceID = getSelectedLocation()
+	  	if (deviceID === "") {
+			alert("select a device first");
+			return;
+		}
+	    $.ajax({
+	      url: "/track/devices/" + deviceID,
+	      success: parseDrawResults,
+		  failure: alert,
+	    });
+	  }
+
+      google.charts.setOnLoadCallback(loadDevicesData);
     </script>
   </head>
 
   <body>
+    <button onClick=loadDevicesData()> Load All Devices </button>
+    <button disabled id="historical" onClick=loadHistoricalData()> Track Device</button>
     <div id="map_div" style="width: 100%%; height: 100%%"></div>
   </body>
 </html>
