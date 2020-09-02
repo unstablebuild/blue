@@ -157,6 +157,11 @@ func (s *DTLSServer) connectionRead(meta connectionMetadata, conn *dtls.Conn) {
 			return
 		}
 
+		// skip receive if zero-valued
+		if in.GetLatitude() == 0 || in.GetLongitude() == 0 {
+			continue
+		}
+
 		for _, r := range s.receivers {
 			s.receiveWithTimeout(ctx, r, in)
 		}
