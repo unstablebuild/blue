@@ -12,55 +12,57 @@ import (
 	"github.com/ernestrc/blue/gps"
 )
 
-var defaultGetAllTimeout = 10 * time.Second
+var defaultGetTimeout = 10 * time.Second
 
-type getAllCLI struct {
+type getCLI struct {
 	gpsServerHostname *string
 	fs                *cli.FlagSet
 }
 
-func newGetAllCLI(gpsServerHostname *string) cli.CLI {
-	return getAllCLI{
+func newGetCLI(gpsServerHostname *string) cli.CLI {
+	return getCLI{
 		gpsServerHostname: gpsServerHostname,
-		fs:                cli.NewFlagSet("get-all"),
+		fs:                cli.NewFlagSet("get"),
 	}
 }
 
-func (c getAllCLI) Man() cli.Manual {
+func (c getCLI) Man() cli.Manual {
 	return cli.Manual{
-		Name:     "get-all",
-		Summary:  "Get all devices positions",
+		Name:     "get",
+		Summary:  "Get a device's position",
 		Synopsis: "",
 		Options:  *c.fs,
 	}
 }
 
-func (c getAllCLI) getAll(ctx context.Context) (pos []gps.Coordinates, err error) {
+func (c getCLI) get(ctx context.Context, deviceID string) (gps.Coordinates, error) {
 	hostname := strings.TrimSuffix(*c.gpsServerHostname, "/")
-	url := fmt.Sprintf("%s/location/devices", hostname)
+	url := fmt.Sprintf("%s/location/devices/%s", hostname, deviceID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, err
+		return gps.Coordinates{}, err
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return gps.Coordinates{}, err
 	}
 	defer res.Body.Close()
 
 	d := json.NewDecoder(res.Body)
+
+	var pos gps.Coordinates
 	err = d.Decode(&pos)
 	if err != nil {
-		return nil, err
+		return gps.Coordinates{}, err
 	}
 
 	return pos, nil
 }
 
-func (c getAllCLI) Run(ctx context.Context, args []string) error {
-	_, _, err := cli.Parse(c.fs, 0, args)
+func (c getCLI) Run(ctx context.Context, args []string) error {
+	parsed, _, err := cli.Parse(c.fs, 1, args)
 	if err != nil {
 		if err == cli.ErrHelp || err == cli.ErrInvalidArgs {
 			cli.Usage(c)
@@ -69,13 +71,14 @@ func (c getAllCLI) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, defaultGetAllTimeout)
+	ctx, cancel := context.WithTimeout(ctx, defaultGetTimeout)
 	defer cancel()
 
-	poss, err := c.getAll(ctx)
+	pos, err := c.get(ctx, parsed[0])
 	if err != nil {
 		return err
 	}
-	renderTable(poss)
+
+	renderTable([]gps.Coordinates{pos})
 	return nil
 }
