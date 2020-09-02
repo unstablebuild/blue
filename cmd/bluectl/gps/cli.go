@@ -27,8 +27,8 @@ func NewCLI() cli.CLI {
 	}
 	c.cmds = map[string]cli.CLI{
 		// actionDelete: newGPSDeleteCLI(serverHostname),
-		// actionGet:    newGPSGetCLI(serverHostname),
 		// actionList:   newGPSListCLI(serverHostname),
+		actionGet: newGetCLI(&c.gpsServerHostname),
 		"get-all": newGetAllCLI(&c.gpsServerHostname),
 	}
 
