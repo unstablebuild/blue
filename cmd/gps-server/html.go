@@ -3,98 +3,129 @@ package main
 const template = `
 <html>
   <head>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.6.0/leaflet.js" integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew==" crossorigin="anonymous"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.js" integrity="sha512-FW2A4pYfHjQKc2ATccIPeCaQpgSQE1pMrEsZqfHNohWKqooGsMYCo3WOJ9ZtZRzikxtMAJft+Kz0Lybli0cbxQ==" crossorigin="anonymous"></script>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.css" integrity="sha512-eD3SR/R7bcJ9YJeaUe7KX8u8naADgalpY/oNJ6AHvp1ODHF3iR8V9W4UgU611SD/jI0GsFbijyDBAzSOg+n+iQ==" crossorigin="anonymous" />
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.6.0/leaflet.css" integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ==" crossorigin="anonymous" />
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.27.0/moment.min.js" integrity="sha512-rmZcZsyhe0/MAjquhTgiUcb4d9knaFc7b5xAfju483gbEXTkeJRUMIPk6s3ySZMYUHEcjKbjLjyddGWMrNEvZg==" crossorigin="anonymous"></script>
-    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script type="text/javascript">
-      google.charts.load("current", {
-        "packages":["map"],
-		'mapsApiKey': '%s'
-      });
-
-      var options = {
-        showTooltip: true,
-        showInfoWindow: true,
-        useMapTypeControl: true,
-		enableScrollWheel: true,
-	  }
 
 	  function makeLabel(o) {
 		  var lastSeen = moment.unix(o.UnixTime).fromNow();
-		  return o.DeviceID + " " + lastSeen;
+		  return o.DeviceID + " " + lastSeen +
+			  "<br /> Longitude: " + o.Longitude +
+			  "<br /> Latitude: " + o.Latitude +
+			  "<br /> Altitude: " + o.Altitude + " meters";
 	  }
 
-	  function parseDrawResults(result) {
+	  function makeMap() {
+		var map = L.map('map');
 
-		$('#historical').prop('disabled', true);
+		map.setView([0, 0], 2);
 
+        window.map = map;
+	  }
+
+	  function cleanMap(map) {
+		map.eachLayer(function (layer) {
+			map.removeLayer(layer);
+		});
+		if (window.routing) {
+			map.removeControl(window.routing);
+			window.routing = null;
+		}
+		L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+			attribution: '© OpenStreetMap contributors'
+		}).addTo(map);
+	  }
+	  function drawDevices(result) {
+		var map = window.map;
 	    var obj = JSON.parse(result);
-	    var rawData = obj.map(o => {
-	    	return [o.Latitude, o.Longitude, makeLabel(o)];
-	    });
-	    rawData = ([['Lat', 'Long', 'Name']]).concat(rawData);
-        var data = google.visualization.arrayToDataTable(rawData);
-        var map = new google.visualization.Map(document.getElementById('map_div'));
-        map.draw(data, options);
+	    cleanMap(map);
+	    drawMarkers(map, obj);
+	  }
 
-		google.visualization.events.addListener(map, 'select', function() {
-			$('#historical').prop('disabled', function(i, v) { return !v; });
+	  function drawMarkers(map, obj) {
+		var markers = obj.map(o => {
+			var latLng = [o.Latitude, o.Longitude];
+			var marker = L.marker(latLng, {
+				title: o.DeviceID,
+			});
+			marker.addTo(map);
+
+			marker.on('click', function() {
+				window.device_id = o.DeviceID;
+				$('#historical').prop('disabled', false);
+			    L.popup()
+				  .setLatLng(latLng)
+				  .setContent(makeLabel(o))
+				  .openOn(map);
+				$('#historical').text('Track ' + o.DeviceID);
+			});
+			return marker;
 		});
 
-        window.google_map = map;
-        window.raw_data = obj;
+		var group = new L.featureGroup(markers);
+		map.fitBounds(group.getBounds());
 	  }
 
-	  function loadDevicesData() {
+	  function drawRoute(result) {
+		var map = window.map;
+	    var obj = JSON.parse(result);
+
+	    cleanMap(map);
+
+	    var rawData = obj.map(o => {
+	    	return L.latLng(o.Latitude, o.Longitude);
+	    });
+
+		window.routing = L.Routing.control({
+			waypoints: rawData,
+			show: false,
+		}).addTo(map);
+
+		drawMarkers(map, obj);
+	  }
+
+	  function loadDevices() {
 	    $.ajax({
 	      url: "/location/devices",
-	      success: parseDrawResults,
+	      success: drawDevices,
 		  failure: alert,
 	    });
 	  }
 
 	  function getSelectedLocation() {
-		  if (!window.google_map) {
-		  	  return "";
-		  }
-
-		  var selection = window.google_map.getSelection();
-		  if (selection.length === 0) {
-		  	  return "";
-		  }
-		  var idx = selection[0].row;
-
-		  if (!window.raw_data || window.raw_data.length < idx+1) {
-		  	  console.error("raw_data is shorter than selected row?");
-		  	  return "";
-		  }
-
-		  var position = window.raw_data[idx];
-
-		  return position.DeviceID;
+	  	if (window.device_id === "") {
+			alert("select a device first");
+			return;
+		}
+		return window.device_id;
 	  }
 
 	  function loadHistoricalData() {
 	  	var deviceID = getSelectedLocation()
-	  	if (deviceID === "") {
-			alert("select a device first");
-			return;
-		}
 	    $.ajax({
 	      url: "/track/devices/" + deviceID,
-	      success: parseDrawResults,
+	      success: drawRoute,
 		  failure: alert,
 	    });
 	  }
 
-      google.charts.setOnLoadCallback(loadDevicesData);
+	$(document).ready(function() {
+		$('#historical').prop('disabled', true);
+		makeMap();
+		loadDevices();
+	});
+
     </script>
   </head>
 
   <body>
-    <button onClick=loadDevicesData()> Load All Devices </button>
+    <button onClick=loadDevices()> Load All Devices </button>
     <button disabled id="historical" onClick=loadHistoricalData()> Track Device</button>
-    <div id="map_div" style="width: 100%%; height: 100%%"></div>
+    <div id="map" class="map" style="width: 100%; height: 95%"></div>
   </body>
 </html>
 `
