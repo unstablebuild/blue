@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -22,6 +21,10 @@ func (a *api) serveMap(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 	w.Write(a.mapHTML)
 }
 
+func addAccessControlOriginHeader(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+}
+
 func (a *api) serveAllDevicesLocation(
 	w http.ResponseWriter, r *http.Request, ps httprouter.Params,
 ) {
@@ -38,6 +41,7 @@ func (a *api) serveAllDevicesLocation(
 		return
 	}
 
+	addAccessControlOriginHeader(w)
 	w.Write(b)
 }
 
@@ -67,6 +71,7 @@ func (a *api) serveDeviceLocation(
 		return
 	}
 
+	addAccessControlOriginHeader(w)
 	w.Write(b)
 }
 
@@ -110,18 +115,18 @@ func (a *api) serveDeviceTracks(
 		}
 		w.Write(b)
 	}
+	addAccessControlOriginHeader(w)
 	w.Write([]byte("]"))
 
 }
 
-func newAPI(store *gps.MultiStore, gmapsAPIKey string) *api {
+func newAPI(store *gps.MultiStore) *api {
 	router := httprouter.New()
 
-	mapHTML := fmt.Sprintf(template, gmapsAPIKey)
 	a := &api{
 		router:  router,
 		store:   store,
-		mapHTML: []byte(mapHTML),
+		mapHTML: []byte(template),
 	}
 
 	router.GET("/map", a.serveMap)
