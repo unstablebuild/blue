@@ -85,6 +85,11 @@ func (p *serialDevicePositioner) Position(ctx context.Context) (Coordinates, err
 		logFields["Data"] = data.String()
 		log.WithFields(logFields).Trace()
 
+		if data.Latitude == 0 || data.Longitude == 0 {
+			/* not acquired position yet */
+			continue
+		}
+
 		return Coordinates{
 			DeviceID:  p.id,
 			Latitude:  float32(data.Latitude),
