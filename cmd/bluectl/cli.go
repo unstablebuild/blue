@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/ernestrc/blue/cli"
+	"github.com/ernestrc/blue/cmd/bluectl/gps"
 	releaseCLI "github.com/ernestrc/blue/cmd/bluectl/release"
 	"github.com/ernestrc/blue/datastore/document"
 	"github.com/ernestrc/blue/logging"
@@ -92,6 +93,7 @@ func (c *blueCtl) initializeCli() error {
 	c.cmds = map[string]cli.CLI{
 		"init":    init,
 		"release": releaseCLI.NewCLI(releaseManager),
+		"gps":     gps.NewCLI(),
 	}
 	c.db = db
 
@@ -121,5 +123,8 @@ func (c *blueCtl) Run(ctx context.Context, args []string) error {
 }
 
 func (c *blueCtl) Close() error {
-	return c.db.Close()
+	if c.db != nil {
+		return c.db.Close()
+	}
+	return nil
 }

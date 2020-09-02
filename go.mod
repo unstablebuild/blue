@@ -11,6 +11,7 @@ require (
 	github.com/google/uuid v1.1.1
 	github.com/jacobsa/go-serial v0.0.0-20180131005756-15cf729a72d4
 	github.com/julienschmidt/httprouter v1.3.0
+	github.com/olekukonko/tablewriter v0.0.4
 	github.com/pion/dtls/v2 v2.0.2
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.6.1
