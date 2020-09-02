@@ -29,7 +29,7 @@ func NewCLI() cli.CLI {
 		// actionDelete: newGPSDeleteCLI(serverHostname),
 		"track":   newTrackCLI(&c.gpsServerHostname),
 		actionGet: newGetCLI(&c.gpsServerHostname),
-		"get-all": newGetAllCLI(&c.gpsServerHostname),
+		"list":    newGetAllCLI(&c.gpsServerHostname),
 	}
 
 	fs.StringVar(&c.gpsServerHostname, "H", "http://127.0.0.1:8080", "GPS server hostname. Must contain uri scheme")
