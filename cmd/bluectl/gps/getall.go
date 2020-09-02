@@ -39,16 +39,15 @@ func (c getAllCLI) getAll(ctx context.Context) (pos []gps.Coordinates, err error
 	hostname := strings.TrimSuffix(*c.gpsServerHostname, "/")
 	url := fmt.Sprintf("%s/location/devices", hostname)
 
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := http.DefaultClient.Do(req)
+	res, err := http.DefaultClient.Get(url)
 	if err != nil {
 		return nil, err
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("non-ok http status code: %v", res.Status)
+	}
 
 	d := json.NewDecoder(res.Body)
 	err = d.Decode(&pos)

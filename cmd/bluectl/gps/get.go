@@ -3,6 +3,7 @@ package gps
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -39,16 +40,20 @@ func (c getCLI) get(ctx context.Context, deviceID string) (gps.Coordinates, erro
 	hostname := strings.TrimSuffix(*c.gpsServerHostname, "/")
 	url := fmt.Sprintf("%s/location/devices/%s", hostname, deviceID)
 
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return gps.Coordinates{}, err
-	}
-
-	res, err := http.DefaultClient.Do(req)
+	res, err := http.DefaultClient.Get(url)
 	if err != nil {
 		return gps.Coordinates{}, err
 	}
 	defer res.Body.Close()
+
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		return gps.Coordinates{}, errors.New("device not found")
+	default:
+		return gps.Coordinates{},
+			fmt.Errorf("non-ok http status code: %v", res.Status)
+	}
 
 	d := json.NewDecoder(res.Body)
 
