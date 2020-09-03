@@ -27,6 +27,12 @@ const template = `
         window.map = map;
 	  }
 
+	  function parseData(result) {
+	    var obj = JSON.parse(result);
+		obj.sort((a, b) => a.UnixTime - b.UnixTime);
+		return obj;
+	  }
+
 	  function cleanMap(map) {
 		map.eachLayer(function (layer) {
 			map.removeLayer(layer);
@@ -41,16 +47,23 @@ const template = `
 	  }
 	  function drawDevices(result) {
 		var map = window.map;
-	    var obj = JSON.parse(result);
+		var obj = parseData(result);
 	    cleanMap(map);
 	    drawMarkers(map, obj);
 	  }
 
+	  function calculateOpacity(o, i, count) {
+		  var weight = (i + 1) / count;
+		  return Math.max(0.2, weight);
+	  }
+
 	  function drawMarkers(map, obj) {
-		var markers = obj.map(o => {
+	  	var count = obj.length;
+		var markers = obj.map((o, i) => {
 			var latLng = [o.Latitude, o.Longitude];
 			var marker = L.marker(latLng, {
 				title: o.DeviceID,
+				opacity: calculateOpacity(o, i, count),
 			});
 			marker.addTo(map);
 
@@ -72,9 +85,10 @@ const template = `
 
 	  function drawRoute(result) {
 		var map = window.map;
-	    var obj = JSON.parse(result);
+		var obj = parseData(result);
 
 	    cleanMap(map);
+
 
 	    var rawData = obj.map(o => {
 	    	return L.latLng(o.Latitude, o.Longitude);
