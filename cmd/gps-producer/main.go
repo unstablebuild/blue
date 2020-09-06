@@ -17,9 +17,9 @@ import (
 
 var (
 	staticCoordinates = gps.Coordinates{
-		Latitude:  3.4,
-		Longitude: 4.5,
-		Altitude:  11.0,
+		Latitude:  39.932794,
+		Longitude: -120.17963,
+		Altitude:  15,
 	}
 
 	debug       = flag.Bool("v", false, "Enable verbose logging")
