@@ -12,11 +12,14 @@ const template = `
     <script type="text/javascript">
 
 	  function makeLabel(o) {
-		  var lastSeen = moment.unix(o.UnixTime).fromNow();
+		  var t = moment.unix(o.UnixTime)
+		  var lastSeen = t.fromNow();
+		  var timePretty = t.format("YYYY-MM-DD HH:mm:ss Z");
 		  return o.DeviceID + " " + lastSeen +
 			  "<br /> Longitude: " + o.Longitude +
 			  "<br /> Latitude: " + o.Latitude +
-			  "<br /> Altitude: " + o.Altitude + " meters";
+			  "<br /> Altitude: " + o.Altitude + " meters" +
+			  "<br /> Time: " + timePretty;
 	  }
 
 	  function makeMap() {
