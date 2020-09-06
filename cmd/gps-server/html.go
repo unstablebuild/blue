@@ -94,12 +94,26 @@ const template = `
 	    	return L.latLng(o.Latitude, o.Longitude);
 	    });
 
+		var plan = L.Routing.plan(rawData, {
+			addWaypoints: false,
+			draggableWaypoints: false,
+			createMarker: () => false,
+		});
+
 		window.routing = L.Routing.control({
-			waypoints: rawData,
 			show: false,
+			plan: plan,
+			lineOptions: {
+				styles: [
+					{color: 'black', opacity: 0.2, weight: 9},
+					{color: 'blue', opacity: 0.8, weight: 6},
+					{color: 'blue', opacity: 1, weight: 2},
+				],
+				addWaypoints: false,
+			},
 		}).addTo(map);
 
-		drawMarkers(map, obj);
+	    drawMarkers(map, obj);
 	  }
 
 	  function loadDevices() {
