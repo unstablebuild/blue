@@ -8,14 +8,7 @@ local common = require('common')
 local prometheus_prefix = 'gps_server_'
 
 -- init prometheus module
-local prometheus = require('prometheus').init(prometheus_prefix, {
-	log = function(level, msg)
-		logd.print({
-			level = level,
-			msg = "Prometheus error: " .. msg
-		})
-	end
-})
+local prometheus = common.init_prometheus(require('prometheus'), prometheus_prefix)
 
 local logs = prometheus:counter('logs', 'Total logs processed counter', {'status'})
 local errors = prometheus:counter('errors', 'Total errors either as ERROR level or failure step', {'class', "callType"})
@@ -27,19 +20,6 @@ local http_lat = prometheus:histogram('http_latency_ns',
 	'HTTP serving latency',
 	{"status", "uri"},
 	common.latency_buckets)
-
--- collect metrics and satisfy request
-local function on_metrics_request(req, res)
-	local body = prometheus:collect()
-	res:setHeader("Content-Type", "text/plain")
-	res:setHeader("Content-Length", #body)
-	res:finish(body)
-end
-
-local function setup_metrics_server(port)
-	http.createServer(on_metrics_request):listen(port)
-	logd.print("Prometheus exporter listening at http://localhost:8080/")
-end
 
 local function record_receive(logptr, duration)
 	local k = logd.log_get(logptr, "class")
@@ -75,7 +55,7 @@ function logd.on_log(logptr)
 		return
 	end
 
-	local duration = parse_duration(logptr)
+	local duration = common.parse_duration(logptr)
 	if duration == nil then
 		return
 	end
@@ -87,15 +67,17 @@ function logd.on_log(logptr)
 	end
 end
 
-function logd.on_error(msg, logptr, at)
-	logs:inc(1, {'failure'})
+-- collect metrics and satisfy request
+local function on_metrics_request(req, res)
+	local body = prometheus:collect()
+	res:setHeader("Content-Type", "text/plain")
+	res:setHeader("Content-Length", #body)
+	res:finish(body)
+end
 
-	logd.print({
-		level = 'ERROR',
-		err = msg,
-		at = at,
-		partial = logd.to_str(logptr),
-	})
+local function setup_metrics_server(port)
+	http.createServer(on_metrics_request):listen(port)
+	logd.print("Prometheus exporter listening at http://localhost:8080/")
 end
 
 setup_metrics_server(8080)

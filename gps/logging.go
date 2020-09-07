@@ -32,7 +32,7 @@ func (p loggingPositioner) Position(ctx context.Context) (Coordinates, error) {
 		logging.Field{Key: "Label", Value: p.label})
 
 	pos, err := p.root.Position(ctx)
-	logging.LogResult(err, attemptAt, traceID, positionCallType,
+	logging.LogResultInfo(err, attemptAt, traceID, positionCallType,
 		logging.Field{Key: logging.KeyClass, Value: p.label},
 		logging.Field{Key: "Latitude", Value: fmt.Sprintf("%.4f", pos.Latitude)},
 		logging.Field{Key: "Longitude", Value: fmt.Sprintf("%.4f", pos.Longitude)},
