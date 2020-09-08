@@ -21,17 +21,17 @@ local position_lat = prometheus:histogram('position_latency_ns',
 local function record_position(logptr)
 	local alt_raw = logd.log_get(logptr, 'Altitude')
 	if alt_raw ~= nil then
-		position_data:inc(tonumber(alt_raw), {'Altitude'})
+		position_data:set(tonumber(alt_raw), {'Altitude'})
 	end
 
 	local lat_raw = logd.log_get(logptr, 'Latitude')
 	if lat_raw ~= nil then
-		position_data:inc(tonumber(lat_raw), {'Latitude'})
+		position_data:set(tonumber(lat_raw), {'Latitude'})
 	end
 
 	local lng_raw = logd.log_get(logptr, 'Longitude')
 	if lng_raw ~= nil then
-		position_data:inc(tonumber(lng_raw), {'Longitude'})
+		position_data:set(tonumber(lng_raw), {'Longitude'})
 	end
 end
 
