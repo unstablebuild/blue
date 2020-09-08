@@ -8,11 +8,13 @@ release-gps-server:
 	@ cp bluectl gps-server /usr/local/bin
 	@ cp ../deploy/systemd/gps-server.service /etc/systemd/system
 	@ systemctl daemon-reload
-	@ systemctl start gps-server
+	@ systemctl restart gps-server
 	bluectl --help
 
 release-logd-gps-server: cp-logd-files
-	@ systemctl kill -s SIGUSR1 logd-gps-server
+	@ cp ../deploy/systemd/logd-gps-server.service /etc/systemd/system
+	@ systemctl daemon-reload
+	@ systemctl restart logd-gps-server
 
 
 release-gps-producer:
@@ -20,8 +22,10 @@ release-gps-producer:
 	@ cp bluectl gps-producer /usr/local/bin
 	@ cp ../deploy/systemd/gps-producer.service /etc/systemd/system
 	@ systemctl daemon-reload
-	@ systemctl start gps-producer
+	@ systemctl restart gps-producer
 	bluectl --help
 
 release-logd-gps-producer: cp-logd-files
-	@ systemctl kill -s SIGUSR1 logd-gps-producer
+	@ cp ../deploy/systemd/logd-gps-producer.service /etc/systemd/system
+	@ systemctl daemon-reload
+	@ systemctl restart logd-gps-producer
