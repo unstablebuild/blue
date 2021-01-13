@@ -60,6 +60,8 @@ github.com/envoyproxy/go-control-plane v0.9.4/go.mod h1:6rpuAdCZL397s3pYoYcLgu1m
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/ernestrc/logd-go v0.0.0-20180509171507-65871c1d5504 h1:+v3dfsJghDlJelEJwUE3LeUKkw/EosxDwZ7AT0yNDLI=
 github.com/ernestrc/logd-go v0.0.0-20180509171507-65871c1d5504/go.mod h1:T9+4zGzWs0JFtwPMJWg9ww68XpBzRi4R8X/3Iz3ZXDw=
+github.com/ernestrc/sensible v0.0.0-20170704153812-102a955adfdf h1:GkfzboQaNzGIyvuwwGZL8AiFdpKk1huWg5r3tvo2pH8=
+github.com/ernestrc/sensible v0.0.0-20170704153812-102a955adfdf/go.mod h1:8URznYhzYlQLd3VKEJvgyHCgjV7/S2nOC1QH8Yx7C/o=
 github.com/go-gl/glfw v0.0.0-20190409004039-e6da0acd62b1/go.mod h1:vR7hzQXu2zJy9AVAgeJqvqgH9Q5CA+iKCZ2gyEVpxRU=
 github.com/go-gl/glfw/v3.3/glfw v0.0.0-20191125211704-12ad95a8df72/go.mod h1:tQ2UAYgL5IevRw8kRxooKSPJfGvJ9fJQFa0TUsXzTg8=
 github.com/go-gl/glfw/v3.3/glfw v0.0.0-20200222043503-6f7a984d4dc4/go.mod h1:tQ2UAYgL5IevRw8kRxooKSPJfGvJ9fJQFa0TUsXzTg8=
