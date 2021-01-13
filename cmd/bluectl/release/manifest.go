@@ -13,22 +13,25 @@ import (
 // manifest represents the structure that the author of the release
 // completes before pushing it.
 type manifest struct {
-	ID     string
-	Author string
-	Notes  string
+	ID       string
+	Author   string
+	Notes    string
+	Metadata map[string]string
 }
 
 func (m *manifest) fromModel(man release.Manifest) {
 	m.ID = man.ID
 	m.Author = man.Author
 	m.Notes = man.Notes
+	m.Metadata = man.Metadata
 }
 
 func (m manifest) toModel() release.Manifest {
 	return release.Manifest{
-		ID:     m.ID,
-		Author: m.Author,
-		Notes:  m.Notes,
+		ID:       m.ID,
+		Author:   m.Author,
+		Notes:    m.Notes,
+		Metadata: m.Metadata,
 	}
 }
 func (m manifest) toYAML() (string, error) {

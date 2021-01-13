@@ -16,13 +16,9 @@ const (
 	createTimeout = 10 * time.Minute
 )
 
-// TODO add checksums
 type releaseCreate struct {
 	m  release.Manager
 	fs *cli.FlagSet
-
-	flagNotes  *string
-	flagAuthor *string
 }
 
 func getDefaultAuthor() string {

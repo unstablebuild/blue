@@ -10,6 +10,7 @@ type Manifest struct {
 	ID        string
 	Author    string
 	Notes     string
+	Metadata  map[string]string
 	CreatedAt time.Time `firestore:",serverTimestamp"`
 }
 
