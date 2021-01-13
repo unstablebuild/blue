@@ -16,6 +16,9 @@ var (
 		ID:     "1.0.0",
 		Author: "Theranos",
 		Notes:  "It worked in my computer!",
+		Metadata: map[string]string{
+			"NeverUnderstood": "NoBueno",
+		},
 	}
 	fixtureSmallData = []byte("ground baking!")
 	fixtureLargeData = []byte{}
