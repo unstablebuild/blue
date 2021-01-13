@@ -86,7 +86,7 @@ func (d *documentManager) createDataChunks(
 			Type: documentTypeData,
 			Data: buffer[:read],
 		}
-		err := d.db.Create(ctx, chunkID, chunk)
+		err := d.db.Set(ctx, chunkID, chunk)
 		if err != nil {
 			return nil, d.forceRemoveChunks(err, m.ID, ids)
 		}
