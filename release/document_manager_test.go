@@ -94,6 +94,24 @@ func TestDocumentManager(t *testing.T) {
 		assert.Len(t, items, 1)
 		assert.Equal(t, fixtureRelease2.ID, items[0].ID)
 	})
+
+	t.Run("get fails if data has been altered since point of manifest creation", func(t *testing.T) {
+		m, svc := newTestingDocumentManager()
+		err := m.Create(ctx, fixtureRelease, bytes.NewBuffer(fixtureSmallData))
+		assert.NoError(t, err)
+
+		tamperedData := releaseData{
+			Type: documentTypeData,
+			Data: []byte("\x00"),
+		}
+		err = svc.Set(ctx, makeChunkID(fixtureRelease.ID, 0), tamperedData)
+		require.NoError(t, err)
+
+		var b bytes.Buffer
+		manifest, err := m.Get(ctx, fixtureRelease.ID, &b)
+		require.Equal(t, ErrDataIntegrity, err)
+		require.Zero(t, manifest)
+	})
 }
 
 func BenchmarkDocumentManagerCreate(b *testing.B) {

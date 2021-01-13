@@ -2,6 +2,9 @@ package release
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -9,6 +12,10 @@ import (
 	"github.com/ernestrc/blue/datastore/document"
 	"github.com/sirupsen/logrus"
 )
+
+// ErrDataIntegrity is returned when downloaded release data is compromised.
+var ErrDataIntegrity = errors.New("data integrity check failed: artifact " +
+	"is corrupted or communication channel is compromised")
 
 type documentType int32
 
@@ -28,6 +35,7 @@ type releaseDocument struct {
 	Type       documentType
 	Manifest   Manifest
 	DataChunks []string
+	Checksum   string
 }
 
 type releaseData struct {
@@ -65,31 +73,39 @@ func (d *documentManager) forceRemoveChunks(err error, releaseID string, ids []s
 	return err
 }
 
+func makeChunkID(id string, i int) string {
+	return fmt.Sprintf("%s:chunk:%d", id, i)
+}
+
 func (d *documentManager) createDataChunks(
 	ctx context.Context, m Manifest, r io.Reader,
-) ([]string, error) {
+) ([]string, string, error) {
 	ids := make([]string, 0)
 	buffer := make([]byte, maxDocSizeBytes)
 
+	hasher := sha256.New()
 	for i := 0; ; i++ {
 		read, rerr := r.Read(buffer)
 		if rerr != nil && rerr != io.EOF {
 			rerr = fmt.Errorf("failed to read release data: %v", rerr)
-			return nil, d.forceRemoveChunks(rerr, m.ID, ids)
+			return nil, "", d.forceRemoveChunks(rerr, m.ID, ids)
 		}
 
 		if read == 0 {
 			break
 		}
 
-		chunkID := fmt.Sprintf("%s:chunk:%d", m.ID, i)
+		// hash.Hash impls never return an error
+		_, _ = hasher.Write(buffer[:read])
+
+		chunkID := makeChunkID(m.ID, i)
 		chunk := releaseData{
 			Type: documentTypeData,
 			Data: buffer[:read],
 		}
 		err := d.db.Set(ctx, chunkID, chunk)
 		if err != nil {
-			return nil, d.forceRemoveChunks(err, m.ID, ids)
+			return nil, "", d.forceRemoveChunks(err, m.ID, ids)
 		}
 		ids = append(ids, chunkID)
 
@@ -98,7 +114,8 @@ func (d *documentManager) createDataChunks(
 		}
 	}
 
-	return ids, nil
+	checksum := hex.EncodeToString(hasher.Sum(nil))
+	return ids, checksum, nil
 }
 
 func (d *documentManager) removeChunks(ctx context.Context, ids []string) error {
@@ -131,12 +148,13 @@ func (d *documentManager) Create(
 		return err
 	}
 
-	ids, err := d.createDataChunks(ctx, m, r)
+	ids, checksum, err := d.createDataChunks(ctx, m, r)
 	if err != nil {
 		return d.forceDelete(err, id)
 	}
 
 	doc.DataChunks = ids
+	doc.Checksum = checksum
 	err = d.db.Set(ctx, id, &doc)
 	if err != nil {
 		err = d.forceDelete(err, id)
@@ -150,6 +168,8 @@ func (d *documentManager) writeChunks(
 	ctx context.Context, doc releaseDocument, out io.Writer,
 ) error {
 	var dataDoc releaseData
+	hasher := sha256.New()
+
 	for _, chunkID := range doc.DataChunks {
 		err := d.db.Get(ctx, chunkID, &dataDoc)
 		if err != nil {
@@ -159,6 +179,12 @@ func (d *documentManager) writeChunks(
 		if err != nil {
 			return fmt.Errorf("failed to write release data: %v", err)
 		}
+		_, _ = hasher.Write(dataDoc.Data)
+	}
+
+	checksum := hex.EncodeToString(hasher.Sum(nil))
+	if checksum != doc.Checksum {
+		return ErrDataIntegrity
 	}
 	return nil
 }
