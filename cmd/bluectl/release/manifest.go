@@ -10,18 +10,18 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+const authorKey = "author"
+
 // manifest represents the structure that the author of the release
 // completes before pushing it.
 type manifest struct {
 	ID       string
-	Author   string
 	Notes    string
 	Metadata map[string]string
 }
 
 func (m *manifest) fromModel(man release.Manifest) {
 	m.ID = man.ID
-	m.Author = man.Author
 	m.Notes = man.Notes
 	m.Metadata = man.Metadata
 }
@@ -29,7 +29,6 @@ func (m *manifest) fromModel(man release.Manifest) {
 func (m manifest) toModel() release.Manifest {
 	return release.Manifest{
 		ID:       m.ID,
-		Author:   m.Author,
 		Notes:    m.Notes,
 		Metadata: m.Metadata,
 	}
@@ -43,14 +42,16 @@ func (m manifest) toYAML() (string, error) {
 	return string(data), nil
 }
 
-func tempManifest(ID string) (ret release.Manifest, err error) {
+func tempManifest(ID string, author string) (ret release.Manifest, err error) {
 	f, err := ioutil.TempFile("", "blue-release")
 	if err != nil {
 		err = fmt.Errorf("failed create temp file: %v", err)
 		return release.Manifest{}, err
 	}
 
-	m := manifest{ID: ID}
+	m := manifest{ID: ID, Metadata: map[string]string{
+		authorKey: author,
+	}}
 	dataIn, err := yaml.Marshal(&m)
 	if err != nil {
 		panic(err)

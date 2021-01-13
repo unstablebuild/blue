@@ -66,7 +66,7 @@ func (s releaseCreate) Run(ctx context.Context, args []string) error {
 	}
 	defer file.Close()
 
-	m, err := tempManifest(args[0])
+	m, err := tempManifest(args[0], getDefaultAuthor())
 	if err != nil {
 		return err
 	}
