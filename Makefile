@@ -41,17 +41,20 @@ $(BIN):
 $(BIN)/%: $(EXECSRC) $(LIBRPC) $(LIBSRC) $(BIN)
 	@cd $(patsubst bin/%,cmd/%,$@) && go build $(CFLAGS) -o ../../$@
 
+make_release:
+	@ mkdir -p $(TARGET)/$(TARGET_OS)_$(TARGET_ARCH)
+	@ GOARCH=$(TARGET_ARCH) $(TARGET_ARCH_FLAGS) GOOS=$(TARGET_OS) go build -o `pwd`/$(TARGET)/$(TARGET_OS)_$(TARGET_ARCH) ./... 
+	@ cp -R deploy $(TARGET)/$(TARGET_OS)_$(TARGET_ARCH)
+	@ cp deploy/Makefile $(TARGET)/$(TARGET_OS)_$(TARGET_ARCH)
+	@ rm $(TARGET)/$(TARGET_OS)_$(TARGET_ARCH)/deploy/Makefile
+	@ rm -rf $(TARGET)/$(TARGET_OS)_$(TARGET_ARCH)/deploy/logd/deps
+
 ARM=arm
 AMD=amd64
 GOOS=linux
 release: default
 	@ rm -rf $(TARGET)
-	@ mkdir -p $(TARGET)/$(AMD) $(TARGET)/$(ARM)
-	@ GOARCH=$(AMD) GOOS=$(GOOS) go build -o `pwd`/$(TARGET)/$(AMD) ./... 
-	@ GOARCH=$(ARM) GOARM=7 GOOS=$(GOOS) go build -o `pwd`/$(TARGET)/$(ARM) ./... 
-	@ cp -R deploy $(TARGET)
-	@ cp deploy/Makefile $(TARGET)/$(ARM)
-	@ cp deploy/Makefile $(TARGET)/$(AMD)
-	@ rm $(TARGET)/deploy/Makefile
-	@ rm -rf $(TARGET)/deploy/logd/deps
-	@ cd $(TARGET) && tar -czvf blue-release.tar.gz $(ARM) $(AMD) deploy
+	@ TARGET_OS=linux TARGET_ARCH=arm TARGET_ARCH_FLAGS=GOARM=7 $(MAKE) make_release
+	@ TARGET_OS=linux TARGET_ARCH=amd64 $(MAKE) make_release
+	@ TARGET_OS=darwin TARGET_ARCH=amd64 $(MAKE) make_release
+	@ cd $(TARGET) && tar -czvf blue-release-`git describe --tags`.tar.gz *
