@@ -13,12 +13,14 @@ CODEGEN=rpc/*.pb.go
 default: $(EXEC)
 
 test:
-	go test ./.../... -race -coverprofile=$(COVERPROF)
+	go test ./.../... -race
 
 coverage: $(COVERPROF)
+	go test ./.../... -coverprofile=$(COVERPROF)
 	go tool cover -func=$(COVERPROF)
 
 coverage-html: $(COVERPROF)
+	go test ./.../... -coverprofile=$(COVERPROF)
 	go tool cover -html=$(COVERPROF)
 
 format:
