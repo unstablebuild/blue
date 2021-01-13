@@ -13,11 +13,17 @@ import (
 
 var (
 	fixtureRelease = Manifest{
-		ID:     "1.0.0",
-		Author: "Theranos",
-		Notes:  "It worked in my computer!",
+		ID:    "1.0.0",
+		Notes: "It worked in my computer!",
 		Metadata: map[string]string{
 			"NeverUnderstood": "NoBueno",
+			"author":          "Theranos",
+		},
+	}
+	fixtureRelease2 = Manifest{
+		ID: "1.0.1",
+		Metadata: map[string]string{
+			"repository": "blue",
 		},
 	}
 	fixtureSmallData = []byte("ground baking!")
@@ -72,6 +78,21 @@ func TestDocumentManager(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, fixtureRelease, manifest)
 		assert.Equal(t, fixtureLargeData, b.Bytes())
+	})
+
+	t.Run("list filters out by metadata", func(t *testing.T) {
+		m, _ := newTestingDocumentManager()
+		err := m.Create(ctx, fixtureRelease, bytes.NewBuffer(fixtureSmallData))
+		require.NoError(t, err)
+		err = m.Create(ctx, fixtureRelease2, bytes.NewBuffer(fixtureLargeData))
+		require.NoError(t, err)
+
+		filters := map[string]string{"repository": "blue"}
+		items, err := m.List(ctx, filters)
+		require.NoError(t, err)
+
+		assert.Len(t, items, 1)
+		assert.Equal(t, fixtureRelease2.ID, items[0].ID)
 	})
 }
 

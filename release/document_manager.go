@@ -201,8 +201,8 @@ func (d *documentManager) Delete(ctx context.Context, id string) error {
 	return d.db.Delete(ctx, id)
 }
 
-func makeDocumentManifestFilter() []document.Filter {
-	return []document.Filter{
+func makeDocumentManifestFilter(userFilters map[string]string) []document.Filter {
+	ret := []document.Filter{
 		document.Filter{
 			Field: document.Field{
 				FieldPath: []string{"Type"},
@@ -210,13 +210,26 @@ func makeDocumentManifestFilter() []document.Filter {
 			},
 			Op: document.OpEqual,
 		}}
+	for k, v := range userFilters {
+		ret = append(ret,
+			document.Filter{
+				Field: document.Field{
+					FieldPath: []string{"Manifest", "Metadata", k},
+					Value:     v,
+				},
+				Op: document.OpEqual,
+			})
+	}
+	return ret
 }
 
-func (d *documentManager) List(ctx context.Context) (ret []Manifest, err error) {
+func (d *documentManager) List(
+	ctx context.Context, filters map[string]string,
+) (ret []Manifest, err error) {
 	var it document.Iterator
 	ret = make([]Manifest, 0)
 
-	it, err = d.db.List(ctx, makeDocumentManifestFilter())
+	it, err = d.db.List(ctx, makeDocumentManifestFilter(filters))
 	if err != nil {
 		return
 	}
