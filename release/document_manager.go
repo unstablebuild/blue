@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 
 	"github.com/ernestrc/blue/datastore/document"
 	"github.com/sirupsen/logrus"
@@ -170,6 +171,10 @@ func (d *documentManager) Get(
 	err := d.db.Get(ctx, id, &doc)
 	if err != nil {
 		return Manifest{}, err
+	}
+
+	if out == ioutil.Discard {
+		return doc.Manifest, nil
 	}
 
 	err = d.writeChunks(ctx, doc, out)

@@ -1,0 +1,67 @@
+package release
+
+import (
+	"context"
+	"fmt"
+	"io/ioutil"
+	"time"
+
+	"github.com/ernestrc/blue/cli"
+	"github.com/ernestrc/blue/release"
+)
+
+const (
+	defaultDescribeTimeout = 10 * time.Minute
+)
+
+type releaseDescribe struct {
+	m  release.Manager
+	fs *cli.FlagSet
+}
+
+func newReleaseDescribeCLI(m release.Manager) cli.CLI {
+	return releaseDescribe{
+		m:  m,
+		fs: cli.NewFlagSet("describe"),
+	}
+}
+
+func (s releaseDescribe) Man() cli.Manual {
+	return cli.Manual{
+		Name:     "describe",
+		Summary:  "Describe a release manifest",
+		Synopsis: "<tag>",
+		Options:  *s.fs,
+	}
+}
+
+func (s releaseDescribe) Run(ctx context.Context, args []string) error {
+	args, _, err := cli.Parse(s.fs, 1, args)
+	if err != nil {
+		if err == cli.ErrHelp || err == cli.ErrInvalidArgs {
+			cli.Usage(s)
+			err = nil
+		}
+		return err
+	}
+
+	id := args[0]
+
+	ctx, cancel := context.WithTimeout(ctx, defaultDescribeTimeout)
+	defer cancel()
+
+	man, err := s.m.Get(ctx, id, ioutil.Discard)
+	if err != nil {
+		return err
+	}
+
+	var m manifest
+	m.fromModel(man)
+	data, err := m.toYAML()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\n---\n%+v\n", data)
+
+	return nil
+}

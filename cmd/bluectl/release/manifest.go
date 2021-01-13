@@ -18,12 +18,26 @@ type manifest struct {
 	Notes  string
 }
 
+func (m *manifest) fromModel(man release.Manifest) {
+	m.ID = man.ID
+	m.Author = man.Author
+	m.Notes = man.Notes
+}
+
 func (m manifest) toModel() release.Manifest {
 	return release.Manifest{
 		ID:     m.ID,
 		Author: m.Author,
 		Notes:  m.Notes,
 	}
+}
+func (m manifest) toYAML() (string, error) {
+	data, err := yaml.Marshal(m)
+	if err != nil {
+		err = fmt.Errorf("failed to encode stored manifest to yaml: %v", err)
+		return "", err
+	}
+	return string(data), nil
 }
 
 func tempManifest(ID string) (ret release.Manifest, err error) {

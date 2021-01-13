@@ -8,10 +8,11 @@ import (
 )
 
 var (
-	actionCreate string = "create"
-	actionDelete string = "delete"
-	actionGet    string = "get"
-	actionList   string = "list"
+	actionCreate   string = "create"
+	actionDelete   string = "delete"
+	actionGet      string = "get"
+	actionDescribe string = "describe"
+	actionList     string = "list"
 )
 
 type releaseCLI struct {
@@ -24,10 +25,11 @@ type releaseCLI struct {
 func NewCLI(m release.Manager) cli.CLI {
 	return &releaseCLI{
 		cmds: map[string]cli.CLI{
-			actionCreate: newReleaseCreateCLI(m),
-			actionDelete: newReleaseDeleteCLI(m),
-			actionGet:    newReleaseGetCLI(m),
-			actionList:   newReleaseListCLI(m),
+			actionCreate:   newReleaseCreateCLI(m),
+			actionDelete:   newReleaseDeleteCLI(m),
+			actionGet:      newReleaseGetCLI(m),
+			actionDescribe: newReleaseDescribeCLI(m),
+			actionList:     newReleaseListCLI(m),
 		},
 		fs: cli.NewFlagSet("release"),
 	}
