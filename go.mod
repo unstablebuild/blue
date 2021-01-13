@@ -7,6 +7,7 @@ require (
 	cloud.google.com/go/firestore v1.2.0
 	github.com/adrianmo/go-nmea v1.2.0
 	github.com/ernestrc/logd-go v0.0.0-20180509171507-65871c1d5504
+	github.com/ernestrc/sensible v0.0.0-20170704153812-102a955adfdf
 	github.com/golang/protobuf v1.4.2
 	github.com/google/uuid v1.1.1
 	github.com/jacobsa/go-serial v0.0.0-20180131005756-15cf729a72d4

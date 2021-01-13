@@ -16,6 +16,7 @@ const (
 	createTimeout = 10 * time.Minute
 )
 
+// TODO add checksums
 type releaseCreate struct {
 	m  release.Manager
 	fs *cli.FlagSet
@@ -41,8 +42,6 @@ func newReleaseCreateCLI(m release.Manager) cli.CLI {
 		m: m,
 	}
 	c.fs = cli.NewFlagSet("create")
-	c.flagNotes = c.fs.String("n", "", "Add release notes.")
-	c.flagAuthor = c.fs.String("a", getDefaultAuthor(), "Override release author.")
 	return c
 }
 
@@ -71,10 +70,10 @@ func (s releaseCreate) Run(ctx context.Context, args []string) error {
 	}
 	defer file.Close()
 
-	var m release.Manifest
-	m.ID = args[0]
-	m.Author = *s.flagAuthor
-	m.Notes = *s.flagNotes
+	m, err := tempManifest(args[0])
+	if err != nil {
+		return err
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
