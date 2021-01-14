@@ -54,9 +54,10 @@ func decodeSignature(in io.Reader) (*packet.Signature, error) {
 	return sig, nil
 }
 
-// FindKeyInKeyRing finds the key with ID in keyringFile. If passphrase is not an empty string
+// FindKeysInKeyRing finds the key with ID in keyringFile. If passphrase is not an empty string
 // and a private key that needs decrypting is founds, the passphrase will be used to decrypt it.
-func FindKeyInKeyRing(keyringFile, ID, passphrase string) (e Key, err error) {
+// It returns an error if no keys are found in keyring.
+func FindKeysInKeyRing(keyringFile, ID, passphrase string) (e []Key, err error) {
 	keyringFileBuffer, _ := os.Open(keyringFile)
 	defer keyringFileBuffer.Close()
 	entityList, err := openpgp.ReadKeyRing(keyringFileBuffer)
@@ -79,6 +80,8 @@ func FindKeyInKeyRing(keyringFile, ID, passphrase string) (e Key, err error) {
 
 	// decrypt private key if available.
 	for _, k := range keys {
+		e = append(e, Key(k))
+
 		if k.PrivateKey == nil {
 			continue
 		}
@@ -89,11 +92,9 @@ func FindKeyInKeyRing(keyringFile, ID, passphrase string) (e Key, err error) {
 				return
 			}
 		}
-		e = (Key)(k)
-		return
 	}
 
-	return (Key)(keys[0]), nil
+	return e, nil
 }
 
 // ArmoredSign signs message with the private key and writes an armored signature to out.
@@ -119,7 +120,7 @@ func Verify(in, sig io.Reader, key Key) error {
 	h := signature.Hash.New()
 	_, _ = io.Copy(h, in)
 
-	err = key.PublicKey.VerifySignature(h, signature)
+	err = key.Entity.PrimaryKey.VerifySignature(h, signature)
 	if err != nil {
 		return fmt.Errorf("Error signing input: %s", err)
 	}

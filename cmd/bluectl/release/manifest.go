@@ -26,6 +26,11 @@ func (m *manifest) fromModel(man release.Manifest) {
 	m.Metadata = man.Metadata
 }
 
+func (m manifest) validate() error {
+	// TODO do input validation + mandatory fields
+	return nil
+}
+
 func (m manifest) toModel() release.Manifest {
 	return release.Manifest{
 		ID:       m.ID,
@@ -92,5 +97,5 @@ func tempManifest(ID string, author string) (ret release.Manifest, err error) {
 
 	log.Debugf("decoded release %s manifest from temp file: %#v", ID, m)
 
-	return m.toModel(), nil
+	return m.toModel(), m.validate()
 }
