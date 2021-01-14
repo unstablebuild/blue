@@ -51,7 +51,7 @@ func newReleaseCreateCLI(m release.Manager) cli.CLI {
 	c.fs = cli.NewFlagSet("create")
 	c.fs.StringVar(&c.privKeyID, "k", "", "Sign release with PGP private key. "+
 		"This forces clients to provide a public key upon downloading release.")
-	c.fs.StringVar(&c.keyRingFile, "r", "secring.gpg", "Keyring file to use to find private key.")
+	c.fs.StringVar(&c.keyRingFile, "r", "secring.gpg", "Armored keyring file to use to find private key.")
 	return c
 }
 
