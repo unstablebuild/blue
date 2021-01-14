@@ -32,7 +32,7 @@ func newReleaseGetCLI(m release.Manager) cli.CLI {
 	g.fs.StringVar(&g.pubKeyID, "k", "", "Verify release with PGP public key. "+
 		"Default is to use the key ID in the release manifest.")
 	g.fs.StringVar(&g.keyring, "r", "pubring.gpg",
-		"Public keyring to searc fo PGP key used to sign release artifact.")
+		"Armored keyring to search fo PGP key used to sign release artifact.")
 	return g
 }
 
