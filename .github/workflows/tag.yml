@@ -23,4 +23,4 @@ jobs:
       run: echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}' | base64 -d > /tmp/.bluectl/gcloud.json
 
     - name: Upload release tarball
-      run: bin/bluectl -c /tmp/.bluectl release create ${GITHUB_REF/refs\/tags\//} target/blue-release.tar.gz
+      run: bin/bluectl -c /tmp/.bluectl release create ${GITHUB_REF/refs\/tags\//} target/blue-release-${GITHUB_REF/refs\/tags\//}.tar.gz
