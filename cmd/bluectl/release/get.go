@@ -50,7 +50,7 @@ func (s *releaseGet) verifySignature(in *os.File, keyID, signature string) error
 		keyID = s.pubKeyID
 	}
 
-	keys, err := crypto.FindKeysInKeyRing(s.keyring, keyID, "")
+	keys, err := crypto.FindKeysInArmoredKeyRing(s.keyring, keyID, "")
 	if err != nil {
 		return err
 	}

@@ -65,7 +65,7 @@ func (s *releaseCreate) Man() cli.Manual {
 }
 
 func findPrivateKeyInKeyRing(keyRingFile, privKeyID, passphrase string) (crypto.Key, error) {
-	keys, err := crypto.FindKeysInKeyRing(keyRingFile, privKeyID, passphrase)
+	keys, err := crypto.FindKeysInArmoredKeyRing(keyRingFile, privKeyID, passphrase)
 	if err != nil {
 		return crypto.Key{}, err
 	}

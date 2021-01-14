@@ -57,12 +57,16 @@ func decodeSignature(in io.Reader) (*packet.Signature, error) {
 // FindKeysInKeyRing finds the key with ID in keyringFile. If passphrase is not an empty string
 // and a private key that needs decrypting is founds, the passphrase will be used to decrypt it.
 // It returns an error if no keys are found in keyring.
-func FindKeysInKeyRing(keyringFile, ID, passphrase string) (e []Key, err error) {
-	keyringFileBuffer, _ := os.Open(keyringFile)
-	defer keyringFileBuffer.Close()
-	entityList, err := openpgp.ReadKeyRing(keyringFileBuffer)
+func FindKeysInArmoredKeyRing(keyringFile, ID, passphrase string) (e []Key, err error) {
+	keyringFileBuffer, err := os.Open(keyringFile)
 	if err != nil {
-		err = fmt.Errorf("Error reading keyring: %s", err)
+		err = fmt.Errorf("Error opening armored keyring: %s", err)
+		return nil, err
+	}
+	defer keyringFileBuffer.Close()
+	entityList, err := openpgp.ReadArmoredKeyRing(keyringFileBuffer)
+	if err != nil {
+		err = fmt.Errorf("Error reading armored keyring: %s", err)
 		return
 	}
 
