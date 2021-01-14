@@ -35,6 +35,12 @@ func (s releaseDescribe) Man() cli.Manual {
 	}
 }
 
+func printableManifest(man release.Manifest) (string, error) {
+	var m manifest
+	m.fromModel(man)
+	return m.toYAML()
+}
+
 func (s releaseDescribe) Run(ctx context.Context, args []string) error {
 	args, _, err := cli.Parse(s.fs, 1, args)
 	if err != nil {
@@ -55,9 +61,7 @@ func (s releaseDescribe) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	var m manifest
-	m.fromModel(man)
-	data, err := m.toYAML()
+	data, err := printableManifest(man)
 	if err != nil {
 		return err
 	}

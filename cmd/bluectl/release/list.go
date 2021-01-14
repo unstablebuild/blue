@@ -37,7 +37,7 @@ type releaseList struct {
 }
 
 func newReleaseListCLI(m release.Manager) cli.CLI {
-	l := releaseList{
+	l := &releaseList{
 		m:       m,
 		filters: metaFilters(map[string]string{}),
 	}
@@ -46,7 +46,7 @@ func newReleaseListCLI(m release.Manager) cli.CLI {
 	return l
 }
 
-func (s releaseList) Man() cli.Manual {
+func (s *releaseList) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "list",
 		Summary:  "Print all release tags to stdout",
@@ -55,7 +55,7 @@ func (s releaseList) Man() cli.Manual {
 	}
 }
 
-func (s releaseList) Run(ctx context.Context, args []string) error {
+func (s *releaseList) Run(ctx context.Context, args []string) error {
 	args, _, err := cli.Parse(s.fs, 0, args)
 	if err != nil {
 		if err == cli.ErrHelp || err == cli.ErrInvalidArgs {
