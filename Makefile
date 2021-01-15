@@ -6,10 +6,11 @@ EXECSRC=$(wildcard cmd/**/*.go)
 EXECDIRS=$(sort $(dir $(EXECSRC)))
 EXEC=$(patsubst cmd/%/,$(BIN)/%,$(EXECDIRS))
 COVERPROF=test.coverprofile
-CODEGEN=rpc/*.pb.go
+PROTO=rpc/*.pb.go
+GOMOCKS=$(wildcard **/*_gomock.go)
 GOFLAGS=
 
-.PHONY: clean test coverage rpc release debug
+.PHONY: clean test coverage generate release debug
 
 default: $(EXEC)
 
@@ -30,9 +31,11 @@ coverage-html: $(COVERPROF)
 format:
 	@ go fmt ./.../...
 
-rpc:
-	rm -rf $(CODEGEN)
-	protoc $(LIBRPC) --go_out=plugins=grpc:.
+# TODO migrate protoc calls to go geneate statements
+generate:
+	@ rm -rf $(PROTO) $(GOMOCKS)
+	@ protoc $(LIBRPC) --go_out=plugins=grpc:.
+	@ go generate ./.../...
 
 install:
 	@ go install ./...
