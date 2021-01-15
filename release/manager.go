@@ -1,5 +1,7 @@
 package release
 
+//go:generate mockgen -destination=./manager_gomock.go -package release -self_package release -source manager.go
+
 import (
 	"context"
 	"io"

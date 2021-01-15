@@ -1,0 +1,135 @@
+package release
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/ernestrc/blue/crypto"
+)
+
+// ErrEncryptedKey is returned when provided key is encrypted and needs decrypting first.
+var ErrEncryptedKey = errors.New("provided PGP key is encrypted. " +
+	"Decrypt first before using it")
+
+const (
+	pgpSignedMetadata         = "pgp-signature"
+	pgpSignedMetadataKey      = "pgp-signing-key-id"
+	pgpSignedMetadataIdentity = "pgp-signing-primary-identity"
+)
+
+type signingManager struct {
+	root Manager
+	key  crypto.Key
+}
+
+// NewSigningManager returns a Manager that wraps anoter manager to provide
+// PGP signing of release artifacts with Create and PGP verification
+// with Get requests.
+func NewSigningManager(other Manager, key crypto.Key) Manager {
+	ret := new(signingManager)
+	ret.root = other
+	ret.key = key
+	return ret
+}
+
+func (m *signingManager) Create(ctx context.Context, man Manifest, in io.Reader) error {
+	var out bytes.Buffer
+	var relayIn io.Reader
+
+	// if in is seeker, then avoid buffering and instead reset reader
+	// before Create call to underlying Manager
+	seeker, isSeeker := in.(io.Seeker)
+	if isSeeker {
+		relayIn = in
+	} else {
+		var buf bytes.Buffer
+		in = io.TeeReader(in, &buf)
+		relayIn = &buf
+	}
+
+	err := crypto.ArmoredSign(in, &out, m.key)
+	if err != nil {
+		if !strings.Contains(err.Error(), "signing key is encrypted") {
+			err = fmt.Errorf("failed to sign release artifact with PGP key: %s", err)
+			return err
+		}
+		return ErrEncryptedKey
+	}
+
+	if man.Metadata == nil {
+		man.Metadata = make(map[string]string)
+	}
+	man.Metadata[pgpSignedMetadataIdentity] = m.key.PrimaryIdentity().Name
+	man.Metadata[pgpSignedMetadata] = out.String()
+	man.Metadata[pgpSignedMetadataKey] = m.key.PrivateKey.KeyIdString()
+
+	if isSeeker {
+		_, err = seeker.Seek(0, 0)
+		if err != nil {
+			err = fmt.Errorf("failed to seek release artifact: %s", err)
+			return err
+		}
+	}
+
+	return m.root.Create(ctx, man, relayIn)
+}
+
+func (m *signingManager) Get(
+	ctx context.Context, ID string, out io.Writer,
+) (Manifest, error) {
+	var relayIn io.Writer
+	var verifyReader io.Reader
+
+	// if out is read write seeker, then avoid buffering and instead reset it
+	// before verifying signature
+	readWriteSeeker, isReadWriteSeeker := out.(io.ReadWriteSeeker)
+	if isReadWriteSeeker {
+		relayIn = readWriteSeeker
+		verifyReader = readWriteSeeker
+	} else {
+		var buf bytes.Buffer
+		verifyReader = io.TeeReader(&buf, out)
+		relayIn = &buf
+	}
+
+	man, err := m.root.Get(ctx, ID, relayIn)
+	if err != nil {
+		return Manifest{}, err
+	}
+
+	const templateMissingMetadata = "WARNING: Failed to check data integrity: " +
+		"release artifact is missing %s in manifest metadata"
+	signature, ok := man.Metadata[pgpSignedMetadata]
+	if !ok {
+		err := fmt.Errorf(templateMissingMetadata, pgpSignedMetadata)
+		return Manifest{}, err
+	}
+
+	if isReadWriteSeeker {
+		_, err = readWriteSeeker.Seek(0, 0)
+		if err != nil {
+			err = fmt.Errorf("failed to seek release artifact file: %s", err)
+			return Manifest{}, err
+		}
+	}
+
+	sig := strings.NewReader(signature)
+	err = crypto.Verify(verifyReader, sig, m.key)
+	if err != nil {
+		return Manifest{}, err
+	}
+
+	return man, err
+}
+
+func (m *signingManager) Delete(ctx context.Context, ID string) error {
+	return m.root.Delete(ctx, ID)
+}
+
+func (m *signingManager) List(ctx context.Context, filters map[string]string) ([]Manifest, error) {
+	return m.root.List(ctx, filters)
+}
