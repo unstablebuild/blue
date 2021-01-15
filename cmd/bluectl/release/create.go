@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/user"
-	"strings"
 	"syscall"
 	"time"
 
@@ -51,7 +50,8 @@ func newReleaseCreateCLI(m release.Manager) cli.CLI {
 	c.fs = cli.NewFlagSet("create")
 	c.fs.StringVar(&c.privKeyID, "k", "", "Sign release with PGP private key. "+
 		"This forces clients to provide a public key upon downloading release.")
-	c.fs.StringVar(&c.keyRingFile, "r", "secring.gpg", "Armored keyring file to use to find private key.")
+	c.fs.StringVar(&c.keyRingFile, "r", "secring.gpg",
+		"Armored keyring file to use to find private key.")
 	return c
 }
 
@@ -64,7 +64,9 @@ func (s *releaseCreate) Man() cli.Manual {
 	}
 }
 
-func findPrivateKeyInKeyRing(keyRingFile, privKeyID, passphrase string) (crypto.Key, error) {
+func findPrivateKeyInKeyRing(
+	keyRingFile, privKeyID, passphrase string,
+) (crypto.Key, error) {
 	keys, err := crypto.FindKeysInArmoredKeyRing(keyRingFile, privKeyID, passphrase)
 	if err != nil {
 		return crypto.Key{}, err
@@ -91,12 +93,14 @@ func readPasswordFromStdin() (string, error) {
 	return string(bytePassword), nil
 }
 
-func (s *releaseCreate) signWithPrivKey(in *os.File, m *release.Manifest) (err error) {
+func (s *releaseCreate) createSignedRelease(
+	ctx context.Context, m release.Manifest, in *os.File,
+) error {
 	var out bytes.Buffer
 	var passphrase string
 	var key crypto.Key
 	for {
-		_, err = in.Seek(0, 0)
+		_, err := in.Seek(0, 0)
 		if err != nil {
 			err = fmt.Errorf("failed to seek release artifact file: %s", err)
 			return err
@@ -110,12 +114,17 @@ func (s *releaseCreate) signWithPrivKey(in *os.File, m *release.Manifest) (err e
 		}
 
 		out.Reset()
-		err = crypto.ArmoredSign(in, &out, key)
+
+		sm := release.NewSigningManager(s.m, key)
+
+		ctx, cancel := context.WithTimeout(ctx, createTimeout)
+		defer cancel()
+
+		err = sm.Create(ctx, m, in)
 		if err == nil {
-			break
+			return nil
 		}
-		if !strings.Contains(err.Error(), "signing key is encrypted") {
-			err = fmt.Errorf("failed to sign release artifact with PGP key: %s", err)
+		if err != release.ErrEncryptedKey {
 			return err
 		}
 
@@ -123,20 +132,9 @@ func (s *releaseCreate) signWithPrivKey(in *os.File, m *release.Manifest) (err e
 
 		passphrase, err = readPasswordFromStdin()
 		if err != nil {
-			return
+			return err
 		}
 	}
-
-	_, err = in.Seek(0, 0)
-	if err != nil {
-		err = fmt.Errorf("failed to seek release artifact file: %s", err)
-		return err
-	}
-
-	m.Metadata[pgpSignedMetadataIdentity] = key.PrimaryIdentity().Name
-	m.Metadata[pgpSignedMetadata] = out.String()
-	m.Metadata[pgpSignedMetadataKey] = key.PrivateKey.KeyIdString()
-	return nil
 }
 
 func (s *releaseCreate) Run(ctx context.Context, args []string) error {
@@ -161,12 +159,7 @@ func (s *releaseCreate) Run(ctx context.Context, args []string) error {
 	}
 
 	if s.privKeyID != "" {
-		err = s.signWithPrivKey(file, &m)
-		if err != nil {
-			return err
-		}
-		log.Debugf("added release PGP signature with private key: %s: %s",
-			s.privKeyID, m.Metadata[pgpSignedMetadata])
+		return s.createSignedRelease(ctx, m, file)
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)

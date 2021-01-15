@@ -4,13 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/ernestrc/blue/cli"
 	"github.com/ernestrc/blue/crypto"
 	"github.com/ernestrc/blue/release"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -45,28 +43,13 @@ func (s *releaseGet) Man() cli.Manual {
 	}
 }
 
-func (s *releaseGet) verifySignature(in *os.File, keyID, signature string) error {
-	if s.pubKeyID != "" {
-		keyID = s.pubKeyID
-	}
-
-	keys, err := crypto.FindKeysInArmoredKeyRing(s.keyring, keyID, "")
+func (s *releaseGet) findKeyInArmoredKeyRing() (crypto.Key, error) {
+	keys, err := crypto.FindKeysInArmoredKeyRing(s.keyring, s.pubKeyID, "")
 	if err != nil {
-		return err
+		return crypto.Key{}, err
 	}
 
-	key := keys[0]
-	sig := strings.NewReader(signature)
-	log.Debugf("verifying release PGP signature with public keyring %s and key ID %s: %s",
-		s.keyring, keyID, signature)
-
-	_, err = in.Seek(0, 0)
-	if err != nil {
-		err = fmt.Errorf("failed to seek release artifact file: %s", err)
-		return err
-	}
-
-	return crypto.Verify(in, sig, key)
+	return keys[0], nil
 }
 
 func (s *releaseGet) Run(ctx context.Context, args []string) error {
@@ -90,28 +73,21 @@ func (s *releaseGet) Run(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, defaultGetTimeout)
 	defer cancel()
 
-	m, err := s.m.Get(ctx, id, f)
+	var m release.Manifest
+	key, err := s.findKeyInArmoredKeyRing()
 	if err != nil {
-		return err
-	}
-
-	const templateMissingMetadata = "WARNING: Failed to check data integrity: " +
-		"release artifact is missing %s in manifest metadata"
-	signature, ok := m.Metadata[pgpSignedMetadata]
-	if !ok {
-		err := fmt.Errorf(templateMissingMetadata, pgpSignedMetadata)
-		return err
-	}
-
-	keyID, ok := m.Metadata[pgpSignedMetadataKey]
-	if !ok {
-		err := fmt.Errorf(templateMissingMetadata, pgpSignedMetadataKey)
-		return err
-	}
-
-	err = s.verifySignature(f, keyID, signature)
-	if err != nil {
-		return err
+		fmt.Printf("WARNING: Failed to check data integrity: "+
+			"error finding armored key '%s' in keyring: %s", s.pubKeyID, err)
+		m, err = s.m.Get(ctx, id, f)
+		if err != nil {
+			return err
+		}
+	} else {
+		sm := release.NewSigningManager(s.m, key)
+		m, err = sm.Get(ctx, id, f)
+		if err != nil {
+			return err
+		}
 	}
 
 	data, err := printableManifest(m)
