@@ -7,10 +7,14 @@ EXECDIRS=$(sort $(dir $(EXECSRC)))
 EXEC=$(patsubst cmd/%/,$(BIN)/%,$(EXECDIRS))
 COVERPROF=test.coverprofile
 CODEGEN=rpc/*.pb.go
+GOFLAGS=
 
-.PHONY: clean test coverage rpc release
+.PHONY: clean test coverage rpc release debug
 
 default: $(EXEC)
+
+debug: GOFLAGS=-race
+debug: $(EXEC)
 
 test:
 	go test ./.../... -race
@@ -41,7 +45,7 @@ $(BIN):
 	@mkdir $(BIN)
 
 $(BIN)/%: $(EXECSRC) $(LIBRPC) $(LIBSRC) $(BIN)
-	@cd $(patsubst bin/%,cmd/%,$@) && go build $(CFLAGS) -o ../../$@
+	@cd $(patsubst bin/%,cmd/%,$@) && go build $(GOFLAGS) -o ../../$@
 
 make_release:
 	@ mkdir -p $(TARGET)/$(TARGET_OS)_$(TARGET_ARCH)
