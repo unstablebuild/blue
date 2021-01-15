@@ -22,6 +22,6 @@ jobs:
       uses: actions/checkout@v1
 
     - name: Build & Test
-      run: make test
+      run: make test GOTESTFLAGS="-timeout 120s"
       env:
         GOPRIVATE: github.com/ernestrc
