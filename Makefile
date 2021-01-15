@@ -9,6 +9,7 @@ COVERPROF=test.coverprofile
 PROTO=rpc/*.pb.go
 GOMOCKS=$(wildcard **/*_gomock.go)
 GOFLAGS=
+GOTESTFLAGS=-timeout 20s
 
 .PHONY: clean test coverage generate release debug
 
@@ -18,7 +19,7 @@ debug: GOFLAGS=-race
 debug: $(EXEC)
 
 test:
-	go test ./.../... -race
+	go test ./.../... -race $(GOTESTFLAGS)
 
 coverage: $(COVERPROF)
 	go test ./.../... -coverprofile=$(COVERPROF)
