@@ -5,13 +5,20 @@ import (
 	"net"
 	"testing"
 
+	"github.com/ernestrc/blue/rpc"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
 
-func runDatastoreServer(t *testing.T, other Service) (string, func()) {
+func tcpListener() (net.Listener, error) {
+	return net.Listen("tcp", ":0")
+}
+
+func runDatastoreServerOverListener(
+	t *testing.T, other Service, listener func() (net.Listener, error),
+) (net.Addr, func()) {
 	srv := NewServer(other)
-	lis, err := net.Listen("tcp", ":0")
+	lis, err := listener()
 	require.NoError(t, err)
 
 	teardown := func() {
@@ -21,14 +28,19 @@ func runDatastoreServer(t *testing.T, other Service) (string, func()) {
 
 	go srv.Serve(lis)
 
-	return lis.Addr().String(), teardown
+	return lis.Addr(), teardown
 }
 
-func TestRPC(t *testing.T) {
+func runDatastoreServer(t *testing.T, other Service) (net.Addr, func()) {
+	return runDatastoreServerOverListener(t, other, tcpListener)
+}
+
+func testRPCDatastoreOverListener(t *testing.T, listener func() (net.Listener, error)) {
 	teardowns := []func(){}
+
 	testDatastore(t, func(t *testing.T) Service {
 		cache := NewInMemoryCache()
-		addr, teardown := runDatastoreServer(t, cache)
+		addr, teardown := runDatastoreServerOverListener(t, cache, listener)
 		teardowns = append(teardowns, teardown)
 
 		store, err := NewClient(addr, grpc.WithInsecure())
@@ -40,6 +52,16 @@ func TestRPC(t *testing.T) {
 	for _, fn := range teardowns {
 		fn()
 	}
+}
+
+func TestRPC(t *testing.T) {
+	t.Run("over TCP", func(t *testing.T) {
+		testRPCDatastoreOverListener(t, tcpListener)
+	})
+
+	t.Run("over Unix domain sockets", func(t *testing.T) {
+		testRPCDatastoreOverListener(t, rpc.TempUnixListener)
+	})
 }
 
 type interopHelper struct {
