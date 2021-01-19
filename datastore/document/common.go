@@ -32,12 +32,33 @@ func clone(data interface{}) reflect.Value {
 	return dst
 }
 
+func setMapUpdatedAtFields(m map[string]interface{}) map[string]interface{} {
+	ret := make(map[string]interface{})
+	for k, v := range m {
+		ret[k] = v
+	}
+	now := time.Now()
+	ret[DefaultCreatedAtField] = now
+	ret[DefaultUpdatedAtField] = now
+	return ret
+}
+
+func setStructUpdatedAtFields(data interface{}) interface{} {
+	dst := clone(data)
+	now := time.Now()
+	reflectSetTimeField(dst, DefaultCreatedAtField, now)
+	reflectSetTimeField(dst, DefaultUpdatedAtField, now)
+	return dst.Elem().Interface()
+}
+
 func encode(data interface{}, addCreatedAt bool) []byte {
 	if addCreatedAt {
-		dst := clone(data)
-		reflectSetTimeField(dst, DefaultCreatedAtField, time.Now())
-		reflectSetTimeField(dst, DefaultUpdatedAtField, time.Now())
-		data = dst.Elem().Interface()
+		m, ok := data.(map[string]interface{})
+		if ok {
+			data = setMapUpdatedAtFields(m)
+		} else {
+			data = setStructUpdatedAtFields(data)
+		}
 	}
 
 	b, err := bson.Marshal(data)

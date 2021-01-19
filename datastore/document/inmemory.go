@@ -36,7 +36,7 @@ func (c *inMemoryCache) set(
 	errAlreadyExists bool,
 ) (err error) {
 	if data == nil {
-		panic("invalid nil data argument to Create")
+		panic("invalid nil data argument to Create/Set")
 	}
 	data, err = derefCreateValue(reflect.ValueOf(data))
 	if err != nil {
