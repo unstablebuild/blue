@@ -3,7 +3,6 @@ package document
 import (
 	"context"
 	"reflect"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -264,7 +263,7 @@ func testDatastoreGet(t *testing.T, serviceFactory fnServiceFactory) {
 		s := serviceFactory(t)
 		defer s.Close()
 		var myVal segador
-		require.Equal(t, ErrNotFound, s.Get(ctx, "bobID", myVal))
+		require.Equal(t, ErrNotFound, s.Get(ctx, "bobID", &myVal))
 	})
 
 	t.Run("Get errors with anything that's not a pointer to struct or map", func(t *testing.T) {
@@ -399,15 +398,6 @@ func testDatastoreUpdate(t *testing.T, serviceFactory fnServiceFactory) {
 	})
 
 	t.Run("Update converts a nested document field when type is a struct", func(t *testing.T) {
-		if strings.Contains(t.Name(), "TestInMemory") ||
-			strings.Contains(t.Name(), "TestBolt") ||
-			strings.Contains(t.Name(), "TestLogging") {
-			// mapstructure seems to not convert nested
-			// struct values in map[string]interface{} to map[string]interface{}.
-			// Behaviour is actually fine, so just skip the test.
-			t.Skip()
-		}
-
 		s, myID := prepareForUpdate(t, alice)
 		defer s.Close()
 
