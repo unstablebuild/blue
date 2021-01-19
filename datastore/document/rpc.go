@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"reflect"
+	"time"
 
 	"github.com/ernestrc/blue/rpc"
 	"google.golang.org/grpc"
@@ -20,8 +21,21 @@ type client struct {
 // NewClient returns a grpc-based client that satisfies Service
 // by relaying operations to remote datastore server. See NewServer
 // for more details.
-func NewClient(remote string, opts ...grpc.DialOption) (Service, error) {
-	cc, err := grpc.Dial(remote, opts...)
+func NewClient(addr net.Addr, opts ...grpc.DialOption) (Service, error) {
+	opts = append(opts, grpc.WithDialer(
+		func(_ string, _ time.Duration) (net.Conn, error) {
+			conn, err := net.Dial(addr.Network(), addr.String())
+			if err != nil {
+				return nil, err
+			}
+			if tcpConn, ok := conn.(*net.TCPConn); ok {
+				// Make sure to set keep alive so that the connection doesn't die
+				tcpConn.SetKeepAlive(true)
+			}
+			return conn, err
+		},
+	))
+	cc, err := grpc.Dial("", opts...)
 	if err != nil {
 		return nil, fmt.Errorf("grpc.Dial error: %v", err)
 	}
