@@ -110,34 +110,14 @@ func (s *BoltStore) set(
 		return err
 	}
 
-	tx, err := s.db.Begin(true)
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		err := recover()
-		if err != nil {
-			_ = tx.Rollback()
-			panic(err)
+	return s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(s.collID)
+		key := []byte(ID)
+		if errAlreadyExists && len(b.Get(key)) != 0 {
+			return ErrAlreadyExists
 		}
-	}()
-
-	b := tx.Bucket(s.collID)
-	key := []byte(ID)
-
-	if errAlreadyExists && len(b.Get(key)) != 0 {
-		_ = tx.Rollback()
-		return ErrAlreadyExists
-	}
-
-	err = b.Put(key, encode(doc, true))
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	return tx.Commit()
+		return b.Put(key, encode(doc, true))
+	})
 }
 
 // Update satisfies document.Service.
