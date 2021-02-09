@@ -128,16 +128,22 @@ func (s *BoltStore) Update(
 		panic("Update: no paths to update")
 	}
 
-	var doc map[string]interface{}
-	err := s.getData(ID, &doc)
-	if err != nil {
-		return err
-	}
-
-	updateProto(updates, doc)
-
 	return s.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(s.collID)
+		data := b.Get([]byte(ID))
+
+		if len(data) == 0 {
+			return ErrNotFound
+		}
+
+		var doc map[string]interface{}
+		err := safeDecode(&doc, data)
+		if err != nil {
+			return err
+		}
+
+		updateProto(updates, doc)
+
 		return b.Put([]byte(ID), encode(doc, false))
 	})
 }
