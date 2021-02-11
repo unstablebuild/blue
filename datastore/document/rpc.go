@@ -13,8 +13,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-type client struct {
-	cc *grpc.ClientConn
+type Client struct {
+	cc grpc.ClientConnInterface
 	pb rpc.DocumentStoreClient
 }
 
@@ -40,10 +40,14 @@ func NewClient(addr net.Addr, opts ...grpc.DialOption) (Service, error) {
 		return nil, fmt.Errorf("grpc.Dial error: %v", err)
 	}
 
-	ret := new(client)
-	ret.cc = cc
-	ret.pb = rpc.NewDocumentStoreClient(cc)
+	ret := new(Client)
+	ret.Init(cc)
 	return ret, nil
+}
+
+func (c *Client) Init(cc grpc.ClientConnInterface) {
+	c.cc = cc
+	c.pb = rpc.NewDocumentStoreClient(cc)
 }
 
 func encodeCreateData(data interface{}) ([]byte, error) {
@@ -58,7 +62,7 @@ func encodeCreateData(data interface{}) ([]byte, error) {
 	return encode(data, true), nil
 }
 
-func (c *client) Create(
+func (c *Client) Create(
 	ctx context.Context, ID string, data interface{},
 ) error {
 	bytes, err := encodeCreateData(data)
@@ -77,7 +81,7 @@ func (c *client) Create(
 	return nil
 }
 
-func (c *client) Set(
+func (c *Client) Set(
 	ctx context.Context, ID string, data interface{},
 ) error {
 	bytes, err := encodeCreateData(data)
@@ -134,7 +138,7 @@ func makeModelUpdates(updates []*rpc.UpdateDocumentRequest_Update) (
 	return
 }
 
-func (c *client) Update(
+func (c *Client) Update(
 	ctx context.Context, ID string, updates []Update,
 ) error {
 	if len(updates) == 0 {
@@ -152,7 +156,7 @@ func (c *client) Update(
 	return nil
 }
 
-func (c *client) Get(
+func (c *Client) Get(
 	ctx context.Context, ID string, doc interface{},
 ) error {
 	req := rpc.GetDocumentRequest{Id: ID}
@@ -172,7 +176,7 @@ func (c *client) Get(
 	return nil
 }
 
-func (c *client) Delete(
+func (c *Client) Delete(
 	ctx context.Context, ID string,
 ) error {
 	req := rpc.DeleteDocumentRequest{Id: ID}
@@ -284,7 +288,7 @@ func makeProtoFilters(filters []Filter) (
 	return
 }
 
-func (c *client) List(
+func (c *Client) List(
 	ctx context.Context, filters []Filter,
 ) (Iterator, error) {
 	f, err := makeProtoFilters(filters)
@@ -299,8 +303,11 @@ func (c *client) List(
 	return &rpcIterator{cc: res}, nil
 }
 
-func (c *client) Close() error {
-	return c.cc.Close()
+func (c *Client) Close() error {
+	if closer, ok := c.cc.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
 }
 
 // Server wraps another document.Service and exposes it through a grpc interface.
