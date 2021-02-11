@@ -323,9 +323,13 @@ func NewServer(other Service, opt ...grpc.ServerOption) *Server {
 	srv := grpc.NewServer()
 	rpc.RegisterDocumentStoreServer(srv, ret)
 
-	ret.srv = srv
-	ret.other = other
+	ret.Init(other, srv)
 	return ret
+}
+
+func (s *Server) Init(other Service, srv *grpc.Server) {
+	s.srv = srv
+	s.other = other
 }
 
 // Create satisfies rpc.DocumentStoreServer
