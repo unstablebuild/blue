@@ -56,12 +56,8 @@ func (s *releaseList) Man() cli.Manual {
 }
 
 func (s *releaseList) Run(ctx context.Context, args []string) error {
-	args, _, err := cli.Parse(s.fs, 0, args)
-	if err != nil {
-		if err == cli.ErrHelp || err == cli.ErrInvalidArgs {
-			cli.Usage(s)
-			err = nil
-		}
+	_, ok, err := cli.ParseUsage(s, s.fs, 0, args)
+	if err != nil || !ok {
 		return err
 	}
 

@@ -47,16 +47,24 @@ func (m manifest) toYAML() (string, error) {
 	return string(data), nil
 }
 
-func tempManifest(ID string, author string) (ret release.Manifest, err error) {
+func tempManifest(ID string, author string, extraMdata map[string]string) (ret release.Manifest, err error) {
+	log.Debugf("decoding release %s manifest from temp file with metadata: %#v", ID, extraMdata)
+
 	f, err := ioutil.TempFile("", "blue-release")
 	if err != nil {
 		err = fmt.Errorf("failed create temp file: %v", err)
 		return release.Manifest{}, err
 	}
 
-	m := manifest{ID: ID, Metadata: map[string]string{
+	mdata := map[string]string{
 		authorKey: author,
-	}}
+	}
+
+	for k, v := range extraMdata {
+		mdata[k] = v
+	}
+
+	m := manifest{ID: ID, Metadata: mdata}
 	dataIn, err := yaml.Marshal(&m)
 	if err != nil {
 		panic(err)

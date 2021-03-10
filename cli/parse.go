@@ -67,12 +67,30 @@ func Parse(fs *FlagSet, expectedArgs int, args []string) (
 		}
 	}
 
-	if expectedArgs > len(args)+optsLen {
+	if expectedArgs > len(args)-optsLen {
 		err = ErrInvalidArgs
 		return
 	}
 
 	actualArgs = args[optsLen : optsLen+expectedArgs]
 	rest = args[optsLen+expectedArgs:]
+	return
+}
+
+// ParseUsage calls Parse and handles ErrHelp by returning false. If flags are parsed with no
+// errors and usage flag is not passed, then this function returns true.
+func ParseUsage(cli CLI, fs *FlagSet, expectedArgs int, args []string) (
+	rargs []string, ok bool, err error,
+) {
+	args, _, err = Parse(fs, expectedArgs, args)
+	if err != nil {
+		if err == ErrHelp {
+			Usage(cli)
+			err = nil
+		}
+		return
+	}
+	ok = true
+	rargs = args
 	return
 }

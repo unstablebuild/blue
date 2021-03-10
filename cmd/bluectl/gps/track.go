@@ -71,19 +71,15 @@ func (c trackCLI) track(ctx context.Context, deviceID string) (pos []gps.Coordin
 }
 
 func (c trackCLI) Run(ctx context.Context, args []string) error {
-	parsed, _, err := cli.Parse(c.fs, 1, args)
-	if err != nil {
-		if err == cli.ErrHelp || err == cli.ErrInvalidArgs {
-			cli.Usage(c)
-			err = nil
-		}
+	args, ok, err := cli.ParseUsage(c, c.fs, 1, args)
+	if err != nil || !ok {
 		return err
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, defaultTrackTimeout)
 	defer cancel()
 
-	poss, err := c.track(ctx, parsed[0])
+	poss, err := c.track(ctx, args[0])
 	if err != nil {
 		return err
 	}

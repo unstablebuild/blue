@@ -3,9 +3,11 @@ package release
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/user"
+	"strings"
 	"syscall"
 	"time"
 
@@ -24,11 +26,23 @@ const (
 	pgpSignedMetadataIdentity = "pgp-signing-primary-identity"
 )
 
+type metadataFlag []string
+
+func (i *metadataFlag) String() string {
+	return ""
+}
+
+func (i *metadataFlag) Set(value string) error {
+	*i = append(*i, value)
+	return nil
+}
+
 type releaseCreate struct {
 	m           release.Manager
 	fs          *cli.FlagSet
 	privKeyID   string
 	keyRingFile string
+	mdataFlag   metadataFlag
 }
 
 func getDefaultAuthor() string {
@@ -52,6 +66,7 @@ func newReleaseCreateCLI(m release.Manager) cli.CLI {
 		"This forces clients to provide a public key upon downloading release.")
 	c.fs.StringVar(&c.keyRingFile, "r", "secring.gpg",
 		"Armored keyring file to use to find private key.")
+	c.fs.Var(&c.mdataFlag, "d", "Add default metadata to manifest. Expects format to be <key>=<value>")
 	return c
 }
 
@@ -137,13 +152,21 @@ func (s *releaseCreate) createSignedRelease(
 	}
 }
 
-func (s *releaseCreate) Run(ctx context.Context, args []string) error {
-	args, _, err := cli.Parse(s.fs, 2, args)
-	if err != nil {
-		if err == cli.ErrHelp || err == cli.ErrInvalidArgs {
-			cli.Usage(s)
-			err = nil
+func (s *releaseCreate) parseMetadataFlag() (map[string]string, error) {
+	ret := make(map[string]string)
+	for _, arg := range s.mdataFlag {
+		kv := strings.Split(arg, "=")
+		if len(kv) != 2 {
+			return nil, errors.New("invalid -d format")
 		}
+		ret[kv[0]] = kv[1]
+	}
+	return ret, nil
+}
+
+func (s *releaseCreate) Run(ctx context.Context, args []string) error {
+	args, ok, err := cli.ParseUsage(s, s.fs, 2, args)
+	if err != nil || !ok {
 		return err
 	}
 
@@ -153,7 +176,13 @@ func (s *releaseCreate) Run(ctx context.Context, args []string) error {
 	}
 	defer file.Close()
 
-	m, err := tempManifest(args[0], getDefaultAuthor())
+	mdata, err := s.parseMetadataFlag()
+	if err != nil {
+		cli.Usage(s)
+		return err
+	}
+
+	m, err := tempManifest(args[0], getDefaultAuthor(), mdata)
 	if err != nil {
 		return err
 	}
