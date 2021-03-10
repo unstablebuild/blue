@@ -46,7 +46,7 @@ func initializeConfig(init initializer, configPath string) (*cliConfig, error) {
 
 func (c *blueCtl) initFlagSet(configFolder string) {
 	fs := cli.NewFlagSet("blue")
-	fs.BoolVar(&c.debug, "d", false, "Run with verbose instrumentation.")
+	fs.BoolVar(&c.debug, "v", false, "Run with verbose instrumentation.")
 	fs.StringVar(&c.configFolder, "c", configFolder, "Use a different config folder.")
 
 	c.fs = fs

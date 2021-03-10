@@ -14,3 +14,4 @@ target
 config/*.*
 !config/config.go
 *.csv
+*swp

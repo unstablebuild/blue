@@ -53,12 +53,8 @@ func (s *releaseGet) findKeyInArmoredKeyRing() (crypto.Key, error) {
 }
 
 func (s *releaseGet) Run(ctx context.Context, args []string) error {
-	args, _, err := cli.Parse(s.fs, 2, args)
-	if err != nil {
-		if err == cli.ErrHelp || err == cli.ErrInvalidArgs {
-			cli.Usage(s)
-			err = nil
-		}
+	args, ok, err := cli.ParseUsage(s, s.fs, 2, args)
+	if err != nil || !ok {
 		return err
 	}
 

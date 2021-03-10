@@ -59,12 +59,8 @@ func (c getAllCLI) getAll(ctx context.Context) (pos []gps.Coordinates, err error
 }
 
 func (c getAllCLI) Run(ctx context.Context, args []string) error {
-	_, _, err := cli.Parse(c.fs, 0, args)
-	if err != nil {
-		if err == cli.ErrHelp || err == cli.ErrInvalidArgs {
-			cli.Usage(c)
-			err = nil
-		}
+	_, ok, err := cli.ParseUsage(c, c.fs, 0, args)
+	if err != nil || !ok {
 		return err
 	}
 
