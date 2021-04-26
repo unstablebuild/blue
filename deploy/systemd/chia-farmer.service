@@ -1,0 +1,11 @@
+[Unit]
+Description=Chia full node
+After=network.target
+
+[Service]
+ExecStart=/home/ernestrc/chia/src/venv/bin/chia_farmer
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=default.target
