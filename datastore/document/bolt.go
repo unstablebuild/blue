@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -15,6 +16,9 @@ const (
 
 var (
 	// only one instance of db per path can be instantiated
+	// and often we want to instante multiple BoltStore's
+	// in the same db path, one per collection.
+	mu      sync.Mutex
 	dbs     = make(map[string]*bolt.DB)
 	options = bolt.Options{Timeout: defaultBoltTimeout}
 )
@@ -30,8 +34,12 @@ type BoltStore struct {
 // NewBolt allocates store for a new BoltStore and initializes it with the given
 // dbPath and collectionID.
 func NewBolt(dbPath string, collectionID string) (*BoltStore, error) {
+	mu.Lock()
+	defer mu.Unlock()
 	if dbs[dbPath] == nil {
+		mu.Unlock()
 		db, err := bolt.Open(dbPath, 0600, &options)
+		mu.Lock()
 		if err != nil {
 			err = fmt.Errorf("Could not open DB at path %s: %v", dbPath, err)
 			return nil, err
