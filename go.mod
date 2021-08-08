@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go v0.63.0 // indirect
 	cloud.google.com/go/firestore v1.2.0
 	github.com/adrianmo/go-nmea v1.2.0
+	github.com/ernestrc/go-multierror v1.1.2 // indirect
 	github.com/ernestrc/logd-go v0.0.0-20180509171507-65871c1d5504
 	github.com/ernestrc/sensible v0.0.0-20170704153812-102a955adfdf
 	github.com/golang/mock v1.4.4

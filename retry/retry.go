@@ -4,6 +4,8 @@ import (
 	"context"
 	"math"
 	"time"
+
+	multierror "github.com/ernestrc/go-multierror"
 )
 
 // Strategy represents a retry strategy. See Retry for more details.
@@ -35,6 +37,15 @@ func ExponentialStrategy(min, max time.Duration) Strategy {
 	}
 }
 
+// SequentialStrategy returns a retry strategy that never stops and retries
+// always after 'every' duration.
+func SequentialStrategy(every time.Duration) Strategy {
+	return func(count uint) (sleep time.Duration, stop bool) {
+		sleep = every
+		return
+	}
+}
+
 // CombinedStrategy returns a retry strategy that combines all the given strategies
 // using the following rules:
 //	- If any returns stop=true, then stop=true is returned.
@@ -57,25 +68,37 @@ func CombinedStrategy(i Strategy, n ...Strategy) Strategy {
 	}
 }
 
-// Retry retries the given function with the given Strategy, until strategy
-// returns stop=true, function returns retry=false, or ctx deadline is exceeded.
+// Retry retries the given function with the given Strategy, until function returns
+// no error, strategy returns stop=true, function returns error and retry=false,
+// or ctx deadline is exceeded.
 func Retry(
 	ctx context.Context, strategy Strategy,
-	fn func(ctx context.Context) (retry bool),
-) {
+	fn func(ctx context.Context) (bool, error),
+) error {
 	var retryCount uint
+	var result error
 	for {
-		retry := fn(ctx)
-
-		if ctx.Err() != nil || !retry {
-			return
+		retry, err := fn(ctx)
+		if err == nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			result = multierror.Append(result, ctx.Err())
+		}
+		result = multierror.Append(result, err)
+		if !retry {
+			return result
 		}
 
 		retryCount++
 		sleep, stop := strategy(retryCount)
 		if stop {
-			return
+			return result
 		}
-		time.Sleep(sleep)
+		select {
+		case <-ctx.Done():
+			return result
+		case <-time.After(sleep):
+		}
 	}
 }
