@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 
 	"github.com/ernestrc/blue/datastore/document"
 	"github.com/sirupsen/logrus"
@@ -84,16 +85,28 @@ func (d *documentManager) createDataChunks(
 	buffer := make([]byte, maxDocSizeBytes)
 
 	hasher := sha256.New()
+	var totalSize int64
+	var totalRead int
+	// progress is best effort
+	if stater, ok := r.(interface{ Stat() (os.FileInfo, error) }); ok {
+		fi, err := stater.Stat()
+		if err == nil {
+			totalSize = fi.Size()
+		}
+	}
+	// TODO update fc to use int64
+	r.Progress(0, int(totalSize), "bytes")
 	for i := 0; ; i++ {
 		read, rerr := r.Read(buffer)
 		if rerr != nil && rerr != io.EOF {
 			rerr = fmt.Errorf("failed to read release data: %v", rerr)
 			return nil, "", d.forceRemoveChunks(rerr, m.ID, ids)
 		}
-
 		if read == 0 {
 			break
 		}
+		totalRead += read
+		r.Progress(totalRead, int(totalSize), "bytes")
 
 		// hash.Hash impls never return an error
 		_, _ = hasher.Write(buffer[:read])
@@ -170,7 +183,8 @@ func (d *documentManager) writeChunks(
 	var dataDoc releaseData
 	hasher := sha256.New()
 
-	for _, chunkID := range doc.DataChunks {
+	out.Progress(0, len(doc.DataChunks), "chunks")
+	for i, chunkID := range doc.DataChunks {
 		err := d.db.Get(ctx, chunkID, &dataDoc)
 		if err != nil {
 			return fmt.Errorf("failed to read release data chunk: %v", err)
@@ -180,6 +194,7 @@ func (d *documentManager) writeChunks(
 			return fmt.Errorf("failed to write release data: %v", err)
 		}
 		_, _ = hasher.Write(dataDoc.Data)
+		out.Progress(i+1, len(doc.DataChunks), "chunks")
 	}
 
 	checksum := hex.EncodeToString(hasher.Sum(nil))
@@ -229,7 +244,7 @@ func (d *documentManager) Delete(ctx context.Context, id string) error {
 
 func makeDocumentManifestFilter(userFilters map[string]string) []document.Filter {
 	ret := []document.Filter{
-		document.Filter{
+		{
 			Field: document.Field{
 				FieldPath: []string{"Type"},
 				Value:     documentTypeManifest,

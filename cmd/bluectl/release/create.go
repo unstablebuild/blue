@@ -114,6 +114,12 @@ func (s *releaseCreate) createSignedRelease(
 	var out bytes.Buffer
 	var passphrase string
 	var key crypto.Key
+	var pb *barProgress
+	defer func() {
+		if pb != nil {
+			pb.Close()
+		}
+	}()
 	for {
 		_, err := in.Seek(0, 0)
 		if err != nil {
@@ -135,7 +141,9 @@ func (s *releaseCreate) createSignedRelease(
 		ctx, cancel := context.WithTimeout(ctx, createTimeout)
 		defer cancel()
 
-		err = sm.Create(ctx, m, release.NopProgressReader(in))
+		pb = newBarProgress(in)
+
+		err = sm.Create(ctx, m, pb)
 		if err == nil {
 			return nil
 		}
@@ -149,6 +157,9 @@ func (s *releaseCreate) createSignedRelease(
 		if err != nil {
 			return err
 		}
+
+		pb.Close()
+		pb = nil
 	}
 }
 
@@ -194,5 +205,8 @@ func (s *releaseCreate) Run(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	return s.m.Create(ctx, m, release.NopProgressReader(file))
+	pb := newBarProgress(file)
+	defer pb.Close()
+
+	return s.m.Create(ctx, m, pb)
 }

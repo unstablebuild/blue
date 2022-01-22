@@ -74,13 +74,13 @@ func (s *releaseGet) Run(ctx context.Context, args []string) error {
 	if err != nil {
 		fmt.Printf("WARNING: Failed to check data integrity: "+
 			"error finding armored key '%s' in keyring: %s", s.pubKeyID, err)
-		m, err = s.m.Get(ctx, id, release.NopProgressWriter(f))
+		m, err = s.m.Get(ctx, id, newBarProgress(f))
 		if err != nil {
 			return err
 		}
 	} else {
 		sm := release.NewSigningManager(s.m, key)
-		m, err = sm.Get(ctx, id, release.NopProgressWriter(f))
+		m, err = sm.Get(ctx, id, newBarProgress(f))
 		if err != nil {
 			return err
 		}
