@@ -35,7 +35,7 @@ func (m *MockProgressReader) EXPECT() *MockProgressReaderMockRecorder {
 }
 
 // Progress mocks base method.
-func (m *MockProgressReader) Progress(progress, total int, units string) {
+func (m *MockProgressReader) Progress(progress, total int64, units string) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Progress", progress, total, units)
 }
@@ -85,7 +85,7 @@ func (m *MockProgressWriter) EXPECT() *MockProgressWriterMockRecorder {
 }
 
 // Progress mocks base method.
-func (m *MockProgressWriter) Progress(progress, total int, units string) {
+func (m *MockProgressWriter) Progress(progress, total int64, units string) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Progress", progress, total, units)
 }

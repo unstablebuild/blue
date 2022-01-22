@@ -31,12 +31,12 @@ var (
 )
 
 type testProgressDelegate struct {
-	progress []int
-	total    []int
+	progress []int64
+	total    []int64
 	units    []string
 }
 
-func (d *testProgressDelegate) Progress(progress, total int, units string) {
+func (d *testProgressDelegate) Progress(progress, total int64, units string) {
 	d.progress = append(d.progress, progress)
 	d.total = append(d.total, total)
 	d.units = append(d.units, units)
@@ -102,13 +102,13 @@ func TestDocumentManager(t *testing.T) {
 		assert.Equal(t, fixtureRelease, manifest)
 		assert.Equal(t, fixtureLargeData, b.Bytes())
 		expectedCreateProgress := testProgressDelegate{
-			progress: []int{0, 1048423, 2096846, 3145269},
-			total:    []int{0, 0, 0, 0},
+			progress: []int64{0, 1048423, 2096846, 3145269},
+			total:    []int64{0, 0, 0, 0},
 			units:    []string{"bytes", "bytes", "bytes", "bytes"},
 		}
 		expectedGetProgress := testProgressDelegate{
-			progress: []int{0, 1, 2, 3},
-			total:    []int{3, 3, 3, 3},
+			progress: []int64{0, 1, 2, 3},
+			total:    []int64{3, 3, 3, 3},
 			units:    []string{"chunks", "chunks", "chunks", "chunks"},
 		}
 		assert.Equal(t, expectedCreateProgress, createProgress)
