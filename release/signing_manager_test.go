@@ -51,7 +51,10 @@ func signReleaseContent(
 	}
 }
 
-func expectCreate(t *testing.T, mock *MockManager, key crypto.Key, man Manifest) {
+func expectCreate(
+	t *testing.T, mock *MockManager, key crypto.Key, man Manifest,
+	expectStat bool,
+) {
 	mock.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(ctx context.Context, _man Manifest, in io.Reader) error {
 			assert.Equal(t, man.ID, _man.ID)
@@ -65,6 +68,9 @@ func expectCreate(t *testing.T, mock *MockManager, key crypto.Key, man Manifest)
 			signature := strings.NewReader(signatureStr)
 
 			require.NoError(t, crypto.Verify(in, signature, key))
+
+			_, ok = in.(interface{ Stat() (os.FileInfo, error) })
+			assert.Equal(t, expectStat, ok)
 
 			return nil
 		}).Times(1)
@@ -88,7 +94,11 @@ func TestSigningManager(t *testing.T) {
 		// does not satisfy io.Seeker
 		in := NopProgressReader(strings.NewReader("we want buffered I/O!"))
 
-		expectCreate(t, mock, key, man)
+		// NOTE: last arg should be false.
+		// Should refactor delegate to install delegate without
+		// Stat if input does not satisfy os.Stat, so implementations
+		// can still use interface tests
+		expectCreate(t, mock, key, man, true)
 
 		err := m.Create(ctx, man, in)
 		require.NoError(t, err)
@@ -105,7 +115,7 @@ func TestSigningManager(t *testing.T) {
 		in := makeReleaseContent(t, "wasup")
 		defer in.Close()
 
-		expectCreate(t, mock, key, man)
+		expectCreate(t, mock, key, man, true)
 
 		err := m.Create(ctx, man, NopProgressReader(in))
 		require.NoError(t, err)

@@ -35,6 +35,17 @@ func newSeekerProgressDelegate(rws io.ReadWriteSeeker) seekerProgressDelegate {
 	}
 }
 
+func newRelayProgressReader(in ProgressReader, relayIn io.Reader) ProgressReader {
+	statDelegate, _ := in.(interface{ Stat() (os.FileInfo, error) })
+	return seekerProgressDelegate{
+		progressDelegate: progressDelegate{
+			readDelegate:     relayIn,
+			progressDelegate: in,
+		},
+		statDelegate: statDelegate,
+	}
+}
+
 func (d progressDelegate) Progress(progress, total int64, units string) {
 	if d.progressDelegate == nil {
 		return

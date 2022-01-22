@@ -75,8 +75,7 @@ func (m *signingManager) Create(ctx context.Context, man Manifest, in ProgressRe
 			return err
 		}
 	}
-
-	progReader := progressDelegate{readDelegate: relayIn, progressDelegate: in}
+	progReader := newRelayProgressReader(in, relayIn)
 	return m.root.Create(ctx, man, progReader)
 }
 
