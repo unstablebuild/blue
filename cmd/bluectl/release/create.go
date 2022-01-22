@@ -135,7 +135,7 @@ func (s *releaseCreate) createSignedRelease(
 		ctx, cancel := context.WithTimeout(ctx, createTimeout)
 		defer cancel()
 
-		err = sm.Create(ctx, m, in)
+		err = sm.Create(ctx, m, release.NopProgressReader(in))
 		if err == nil {
 			return nil
 		}
@@ -194,5 +194,5 @@ func (s *releaseCreate) Run(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	return s.m.Create(ctx, m, file)
+	return s.m.Create(ctx, m, release.NopProgressReader(file))
 }

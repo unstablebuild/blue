@@ -36,9 +36,10 @@ func NewSigningManager(other Manager, key crypto.Key) Manager {
 	return ret
 }
 
-func (m *signingManager) Create(ctx context.Context, man Manifest, in io.Reader) error {
+func (m *signingManager) Create(ctx context.Context, man Manifest, in ProgressReader) error {
 	var out bytes.Buffer
 	var relayIn io.Reader
+	var inArmored io.Reader = in
 
 	// if in is seeker, then avoid buffering and instead reset reader
 	// before Create call to underlying Manager
@@ -47,11 +48,11 @@ func (m *signingManager) Create(ctx context.Context, man Manifest, in io.Reader)
 		relayIn = in
 	} else {
 		var buf bytes.Buffer
-		in = io.TeeReader(in, &buf)
+		inArmored = io.TeeReader(in, &buf)
 		relayIn = &buf
 	}
 
-	err := crypto.ArmoredSign(in, &out, m.key)
+	err := crypto.ArmoredSign(inArmored, &out, m.key)
 	if err != nil {
 		if !strings.Contains(err.Error(), "signing key is encrypted") {
 			err = fmt.Errorf("failed to sign release artifact with PGP key: %s", err)
@@ -75,11 +76,12 @@ func (m *signingManager) Create(ctx context.Context, man Manifest, in io.Reader)
 		}
 	}
 
-	return m.root.Create(ctx, man, relayIn)
+	progReader := progressDelegate{readDelegate: relayIn, progressDelegate: in}
+	return m.root.Create(ctx, man, progReader)
 }
 
 func (m *signingManager) Get(
-	ctx context.Context, ID string, out io.Writer,
+	ctx context.Context, ID string, out ProgressWriter,
 ) (Manifest, error) {
 	var relayIn io.Writer
 	var verifyReader io.Reader
@@ -96,7 +98,8 @@ func (m *signingManager) Get(
 		relayIn = &buf
 	}
 
-	man, err := m.root.Get(ctx, ID, relayIn)
+	progWriter := progressDelegate{writeDelegate: relayIn, progressDelegate: out}
+	man, err := m.root.Get(ctx, ID, progWriter)
 	if err != nil {
 		return Manifest{}, err
 	}

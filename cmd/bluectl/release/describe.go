@@ -52,7 +52,7 @@ func (s releaseDescribe) Run(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, defaultDescribeTimeout)
 	defer cancel()
 
-	man, err := s.m.Get(ctx, id, ioutil.Discard)
+	man, err := s.m.Get(ctx, id, release.NopProgressWriter(ioutil.Discard))
 	if err != nil {
 		return err
 	}
