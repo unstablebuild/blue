@@ -9,7 +9,7 @@ import (
 var _ io.ReadWriteSeeker = seekerProgressDelegate{}
 
 type progresser interface {
-	Progress(progress, total int, units string)
+	Progress(progress, total int64, units string)
 }
 
 type progressDelegate struct {
@@ -35,7 +35,7 @@ func newSeekerProgressDelegate(rws io.ReadWriteSeeker) seekerProgressDelegate {
 	}
 }
 
-func (d progressDelegate) Progress(progress, total int, units string) {
+func (d progressDelegate) Progress(progress, total int64, units string) {
 	if d.progressDelegate == nil {
 		return
 	}

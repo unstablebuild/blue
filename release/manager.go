@@ -20,7 +20,7 @@ type Manifest struct {
 // to know about the current Create progress.
 type ProgressReader interface {
 	io.Reader
-	Progress(progress, total int, units string)
+	Progress(progress, total int64, units string)
 }
 
 // ProgressWriter wraps io.Writer to add a Progress hook so
@@ -28,7 +28,7 @@ type ProgressReader interface {
 // to know about the current Get progress.
 type ProgressWriter interface {
 	io.Writer
-	Progress(progress, total int, units string)
+	Progress(progress, total int64, units string)
 }
 
 type Manager interface {

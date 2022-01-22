@@ -86,7 +86,7 @@ func (d *documentManager) createDataChunks(
 
 	hasher := sha256.New()
 	var totalSize int64
-	var totalRead int
+	var totalRead int64
 	// progress is best effort
 	if stater, ok := r.(interface{ Stat() (os.FileInfo, error) }); ok {
 		fi, err := stater.Stat()
@@ -94,8 +94,7 @@ func (d *documentManager) createDataChunks(
 			totalSize = fi.Size()
 		}
 	}
-	// TODO update fc to use int64
-	r.Progress(0, int(totalSize), "bytes")
+	r.Progress(0, totalSize, "bytes")
 	for i := 0; ; i++ {
 		read, rerr := r.Read(buffer)
 		if rerr != nil && rerr != io.EOF {
@@ -105,8 +104,8 @@ func (d *documentManager) createDataChunks(
 		if read == 0 {
 			break
 		}
-		totalRead += read
-		r.Progress(totalRead, int(totalSize), "bytes")
+		totalRead += int64(read)
+		r.Progress(totalRead, totalSize, "bytes")
 
 		// hash.Hash impls never return an error
 		_, _ = hasher.Write(buffer[:read])
@@ -183,7 +182,7 @@ func (d *documentManager) writeChunks(
 	var dataDoc releaseData
 	hasher := sha256.New()
 
-	out.Progress(0, len(doc.DataChunks), "chunks")
+	out.Progress(0, int64(len(doc.DataChunks)), "chunks")
 	for i, chunkID := range doc.DataChunks {
 		err := d.db.Get(ctx, chunkID, &dataDoc)
 		if err != nil {
@@ -194,7 +193,7 @@ func (d *documentManager) writeChunks(
 			return fmt.Errorf("failed to write release data: %v", err)
 		}
 		_, _ = hasher.Write(dataDoc.Data)
-		out.Progress(i+1, len(doc.DataChunks), "chunks")
+		out.Progress(int64(i+1), int64(len(doc.DataChunks)), "chunks")
 	}
 
 	checksum := hex.EncodeToString(hasher.Sum(nil))
