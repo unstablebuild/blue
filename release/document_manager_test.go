@@ -48,7 +48,8 @@ func TestDocumentManager(t *testing.T) {
 
 	t.Run("creates a new manifest and uploads release data", func(t *testing.T) {
 		m, svc := newTestingDocumentManager()
-		err := m.Create(ctx, fixtureRelease, bytes.NewBuffer(fixtureSmallData))
+		err := m.Create(ctx, fixtureRelease,
+			NopProgressReader(bytes.NewBuffer(fixtureSmallData)))
 		assert.NoError(t, err)
 
 		it, err := svc.List(ctx, nil)
@@ -62,7 +63,7 @@ func TestDocumentManager(t *testing.T) {
 		assert.Equal(t, 2, i)
 
 		var b bytes.Buffer
-		manifest, err := m.Get(ctx, fixtureRelease.ID, &b)
+		manifest, err := m.Get(ctx, fixtureRelease.ID, NopProgressWriter(&b))
 		require.NoError(t, err)
 		assert.Equal(t, fixtureRelease, manifest)
 		assert.Equal(t, fixtureSmallData, b.Bytes())
@@ -70,11 +71,12 @@ func TestDocumentManager(t *testing.T) {
 
 	t.Run("creates a new manifest and uploads chunkified release data", func(t *testing.T) {
 		m, _ := newTestingDocumentManager()
-		err := m.Create(ctx, fixtureRelease, bytes.NewBuffer(fixtureLargeData))
+		err := m.Create(ctx, fixtureRelease,
+			NopProgressReader(bytes.NewBuffer(fixtureLargeData)))
 		assert.NoError(t, err)
 
 		var b bytes.Buffer
-		manifest, err := m.Get(ctx, fixtureRelease.ID, &b)
+		manifest, err := m.Get(ctx, fixtureRelease.ID, NopProgressWriter(&b))
 		require.NoError(t, err)
 		assert.Equal(t, fixtureRelease, manifest)
 		assert.Equal(t, fixtureLargeData, b.Bytes())
@@ -82,9 +84,11 @@ func TestDocumentManager(t *testing.T) {
 
 	t.Run("list filters out by metadata", func(t *testing.T) {
 		m, _ := newTestingDocumentManager()
-		err := m.Create(ctx, fixtureRelease, bytes.NewBuffer(fixtureSmallData))
+		err := m.Create(ctx, fixtureRelease,
+			NopProgressReader(bytes.NewBuffer(fixtureSmallData)))
 		require.NoError(t, err)
-		err = m.Create(ctx, fixtureRelease2, bytes.NewBuffer(fixtureLargeData))
+		err = m.Create(ctx, fixtureRelease2,
+			NopProgressReader(bytes.NewBuffer(fixtureLargeData)))
 		require.NoError(t, err)
 
 		filters := map[string]string{"repository": "blue"}
@@ -97,7 +101,8 @@ func TestDocumentManager(t *testing.T) {
 
 	t.Run("get fails if data has been altered since point of manifest creation", func(t *testing.T) {
 		m, svc := newTestingDocumentManager()
-		err := m.Create(ctx, fixtureRelease, bytes.NewBuffer(fixtureSmallData))
+		err := m.Create(ctx, fixtureRelease,
+			NopProgressReader(bytes.NewBuffer(fixtureSmallData)))
 		assert.NoError(t, err)
 
 		tamperedData := releaseData{
@@ -108,7 +113,7 @@ func TestDocumentManager(t *testing.T) {
 		require.NoError(t, err)
 
 		var b bytes.Buffer
-		manifest, err := m.Get(ctx, fixtureRelease.ID, &b)
+		manifest, err := m.Get(ctx, fixtureRelease.ID, NopProgressWriter(&b))
 		require.Equal(t, ErrDataIntegrity, err)
 		require.Zero(t, manifest)
 	})
@@ -119,7 +124,8 @@ func BenchmarkDocumentManagerCreate(b *testing.B) {
 	ctx := context.Background()
 
 	for i := 0; i < b.N; i++ {
-		_ = m.Create(ctx, fixtureRelease, bytes.NewBuffer(fixtureLargeData))
+		_ = m.Create(ctx, fixtureRelease,
+			NopProgressReader(bytes.NewBuffer(fixtureLargeData)))
 	}
 }
 
@@ -128,7 +134,8 @@ func BenchmarkDocumentManagerCreateDelete(b *testing.B) {
 	ctx := context.Background()
 
 	for i := 0; i < b.N; i++ {
-		_ = m.Create(ctx, fixtureRelease, bytes.NewBuffer(fixtureLargeData))
+		_ = m.Create(ctx, fixtureRelease,
+			NopProgressReader(bytes.NewBuffer(fixtureLargeData)))
 		_ = m.Delete(ctx, fixtureRelease.ID)
 	}
 }
@@ -136,11 +143,13 @@ func BenchmarkDocumentManagerCreateDelete(b *testing.B) {
 func BenchmarkDocumentManagerGet(b *testing.B) {
 	m, _ := newTestingDocumentManager()
 	ctx := context.Background()
-	_ = m.Create(ctx, fixtureRelease, bytes.NewBuffer(fixtureLargeData))
+	_ = m.Create(ctx, fixtureRelease,
+		NopProgressReader(bytes.NewBuffer(fixtureLargeData)))
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, _ = m.Get(ctx, fixtureRelease.ID, ioutil.Discard)
+		_, _ = m.Get(ctx, fixtureRelease.ID,
+			NopProgressWriter(ioutil.Discard))
 	}
 }

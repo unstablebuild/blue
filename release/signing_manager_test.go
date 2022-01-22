@@ -86,7 +86,7 @@ func TestSigningManager(t *testing.T) {
 		m := NewSigningManager(mock, key)
 
 		// does not satisfy io.Seeker
-		in := strings.NewReader("we want buffered I/O!")
+		in := NopProgressReader(strings.NewReader("we want buffered I/O!"))
 
 		expectCreate(t, mock, key, man)
 
@@ -107,7 +107,7 @@ func TestSigningManager(t *testing.T) {
 
 		expectCreate(t, mock, key, man)
 
-		err := m.Create(ctx, man, in)
+		err := m.Create(ctx, man, NopProgressReader(in))
 		require.NoError(t, err)
 	})
 
@@ -122,7 +122,7 @@ func TestSigningManager(t *testing.T) {
 		in := makeReleaseContent(t, "wasup")
 		defer in.Close()
 
-		err := m.Create(ctx, man, in)
+		err := m.Create(ctx, man, NopProgressReader(in))
 		require.Equal(t, ErrEncryptedKey, err)
 	})
 
@@ -138,7 +138,7 @@ func TestSigningManager(t *testing.T) {
 		mock.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(errors.New("capitol insurrectionists")).Times(1)
 
-		err := m.Create(ctx, man, in)
+		err := m.Create(ctx, man, NopProgressReader(in))
 		assert.Error(t, err)
 	})
 
@@ -154,7 +154,7 @@ func TestSigningManager(t *testing.T) {
 			DoAndReturn(signReleaseContent(t, key, man, contentStr, contentStr)).Times(1)
 
 		var out bytes.Buffer
-		ret, err := m.Get(ctx, man.ID, &out)
+		ret, err := m.Get(ctx, man.ID, NopProgressWriter(&out))
 		require.NoError(t, err)
 		assert.Equal(t, man.ID, ret.ID)
 		assert.Equal(t, man.Notes, ret.Notes)
@@ -175,7 +175,7 @@ func TestSigningManager(t *testing.T) {
 
 		out := makeReleaseContent(t, "")
 		defer out.Close()
-		ret, err := m.Get(ctx, man.ID, out)
+		ret, err := m.Get(ctx, man.ID, NopProgressWriter(out))
 		require.NoError(t, err)
 		assert.Equal(t, man.ID, ret.ID)
 		assert.Equal(t, man.Notes, ret.Notes)
@@ -200,7 +200,7 @@ func TestSigningManager(t *testing.T) {
 		mock.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(Manifest{}, errors.New("oopsie daisy")).Times(1)
 
-		_, err := m.Get(ctx, man.ID, ioutil.Discard)
+		_, err := m.Get(ctx, man.ID, NopProgressWriter(ioutil.Discard))
 		require.Error(t, err)
 	})
 
@@ -217,7 +217,7 @@ func TestSigningManager(t *testing.T) {
 
 		out := makeReleaseContent(t, "")
 		defer out.Close()
-		_, err := m.Get(ctx, man.ID, out)
+		_, err := m.Get(ctx, man.ID, NopProgressWriter(out))
 		require.Error(t, err)
 	})
 
@@ -237,7 +237,7 @@ func TestSigningManager(t *testing.T) {
 
 		out := makeReleaseContent(t, "")
 		defer out.Close()
-		_, err := m.Get(ctx, man.ID, out)
+		_, err := m.Get(ctx, man.ID, NopProgressWriter(out))
 		require.Error(t, err)
 	})
 }

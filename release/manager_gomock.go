@@ -6,11 +6,110 @@ package release
 
 import (
 	context "context"
-	io "io"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
 )
+
+// MockProgressReader is a mock of ProgressReader interface.
+type MockProgressReader struct {
+	ctrl     *gomock.Controller
+	recorder *MockProgressReaderMockRecorder
+}
+
+// MockProgressReaderMockRecorder is the mock recorder for MockProgressReader.
+type MockProgressReaderMockRecorder struct {
+	mock *MockProgressReader
+}
+
+// NewMockProgressReader creates a new mock instance.
+func NewMockProgressReader(ctrl *gomock.Controller) *MockProgressReader {
+	mock := &MockProgressReader{ctrl: ctrl}
+	mock.recorder = &MockProgressReaderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockProgressReader) EXPECT() *MockProgressReaderMockRecorder {
+	return m.recorder
+}
+
+// Progress mocks base method.
+func (m *MockProgressReader) Progress(progress, total int, units string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Progress", progress, total, units)
+}
+
+// Progress indicates an expected call of Progress.
+func (mr *MockProgressReaderMockRecorder) Progress(progress, total, units interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Progress", reflect.TypeOf((*MockProgressReader)(nil).Progress), progress, total, units)
+}
+
+// Read mocks base method.
+func (m *MockProgressReader) Read(p []byte) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Read", p)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Read indicates an expected call of Read.
+func (mr *MockProgressReaderMockRecorder) Read(p interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Read", reflect.TypeOf((*MockProgressReader)(nil).Read), p)
+}
+
+// MockProgressWriter is a mock of ProgressWriter interface.
+type MockProgressWriter struct {
+	ctrl     *gomock.Controller
+	recorder *MockProgressWriterMockRecorder
+}
+
+// MockProgressWriterMockRecorder is the mock recorder for MockProgressWriter.
+type MockProgressWriterMockRecorder struct {
+	mock *MockProgressWriter
+}
+
+// NewMockProgressWriter creates a new mock instance.
+func NewMockProgressWriter(ctrl *gomock.Controller) *MockProgressWriter {
+	mock := &MockProgressWriter{ctrl: ctrl}
+	mock.recorder = &MockProgressWriterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockProgressWriter) EXPECT() *MockProgressWriterMockRecorder {
+	return m.recorder
+}
+
+// Progress mocks base method.
+func (m *MockProgressWriter) Progress(progress, total int, units string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Progress", progress, total, units)
+}
+
+// Progress indicates an expected call of Progress.
+func (mr *MockProgressWriterMockRecorder) Progress(progress, total, units interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Progress", reflect.TypeOf((*MockProgressWriter)(nil).Progress), progress, total, units)
+}
+
+// Write mocks base method.
+func (m *MockProgressWriter) Write(p []byte) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Write", p)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Write indicates an expected call of Write.
+func (mr *MockProgressWriterMockRecorder) Write(p interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write", reflect.TypeOf((*MockProgressWriter)(nil).Write), p)
+}
 
 // MockManager is a mock of Manager interface.
 type MockManager struct {
@@ -36,7 +135,7 @@ func (m *MockManager) EXPECT() *MockManagerMockRecorder {
 }
 
 // Create mocks base method.
-func (m *MockManager) Create(arg0 context.Context, arg1 Manifest, arg2 io.Reader) error {
+func (m *MockManager) Create(arg0 context.Context, arg1 Manifest, arg2 ProgressReader) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Create", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -64,7 +163,7 @@ func (mr *MockManagerMockRecorder) Delete(arg0, arg1 interface{}) *gomock.Call {
 }
 
 // Get mocks base method.
-func (m *MockManager) Get(arg0 context.Context, arg1 string, arg2 io.Writer) (Manifest, error) {
+func (m *MockManager) Get(arg0 context.Context, arg1 string, arg2 ProgressWriter) (Manifest, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", arg0, arg1, arg2)
 	ret0, _ := ret[0].(Manifest)

@@ -78,7 +78,7 @@ func makeChunkID(id string, i int) string {
 }
 
 func (d *documentManager) createDataChunks(
-	ctx context.Context, m Manifest, r io.Reader,
+	ctx context.Context, m Manifest, r ProgressReader,
 ) ([]string, string, error) {
 	ids := make([]string, 0)
 	buffer := make([]byte, maxDocSizeBytes)
@@ -135,7 +135,7 @@ func (d *documentManager) removeChunks(ctx context.Context, ids []string) error 
 }
 
 func (d *documentManager) Create(
-	ctx context.Context, m Manifest, r io.Reader,
+	ctx context.Context, m Manifest, r ProgressReader,
 ) error {
 	id := m.ID
 	doc := releaseDocument{
@@ -165,7 +165,7 @@ func (d *documentManager) Create(
 }
 
 func (d *documentManager) writeChunks(
-	ctx context.Context, doc releaseDocument, out io.Writer,
+	ctx context.Context, doc releaseDocument, out ProgressWriter,
 ) error {
 	var dataDoc releaseData
 	hasher := sha256.New()
@@ -190,7 +190,7 @@ func (d *documentManager) writeChunks(
 }
 
 func (d *documentManager) Get(
-	ctx context.Context, id string, out io.Writer,
+	ctx context.Context, id string, out ProgressWriter,
 ) (Manifest, error) {
 	var doc releaseDocument
 
