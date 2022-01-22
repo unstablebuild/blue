@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go v0.63.0 // indirect
 	cloud.google.com/go/firestore v1.2.0
 	github.com/adrianmo/go-nmea v1.2.0
+	github.com/cheggaaa/pb/v3 v3.0.8 // indirect
 	github.com/ernestrc/go-multierror v1.1.2 // indirect
 	github.com/ernestrc/logd-go v0.0.0-20180509171507-65871c1d5504
 	github.com/ernestrc/sensible v0.0.0-20170704153812-102a955adfdf
@@ -22,7 +23,6 @@ require (
 	go.etcd.io/bbolt v1.3.4
 	go.uber.org/config v1.4.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	golang.org/x/sys v0.0.0-20200806125547-5acd03effb82 // indirect
 	google.golang.org/api v0.30.0
 	google.golang.org/grpc v1.31.0
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22

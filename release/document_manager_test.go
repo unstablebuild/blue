@@ -30,6 +30,18 @@ var (
 	fixtureLargeData = []byte{}
 )
 
+type testProgressDelegate struct {
+	progress []int
+	total    []int
+	units    []string
+}
+
+func (d *testProgressDelegate) Progress(progress, total int, units string) {
+	d.progress = append(d.progress, progress)
+	d.total = append(d.total, total)
+	d.units = append(d.units, units)
+}
+
 func init() {
 	buffer := make([]byte, maxDocSizeBytes)
 	for i := 0; i < 3; i++ {
@@ -69,17 +81,38 @@ func TestDocumentManager(t *testing.T) {
 		assert.Equal(t, fixtureSmallData, b.Bytes())
 	})
 
-	t.Run("creates a new manifest and uploads chunkified release data", func(t *testing.T) {
+	t.Run("creates a new manifest and uploads chunkified release data with progress", func(t *testing.T) {
 		m, _ := newTestingDocumentManager()
-		err := m.Create(ctx, fixtureRelease,
-			NopProgressReader(bytes.NewBuffer(fixtureLargeData)))
+		createProgress := testProgressDelegate{}
+		read := progressDelegate{
+			readDelegate:     bytes.NewBuffer(fixtureLargeData),
+			progressDelegate: &createProgress,
+		}
+		err := m.Create(ctx, fixtureRelease, read)
 		assert.NoError(t, err)
 
 		var b bytes.Buffer
-		manifest, err := m.Get(ctx, fixtureRelease.ID, NopProgressWriter(&b))
+		getProgress := testProgressDelegate{}
+		write := progressDelegate{
+			writeDelegate:    &b,
+			progressDelegate: &getProgress,
+		}
+		manifest, err := m.Get(ctx, fixtureRelease.ID, write)
 		require.NoError(t, err)
 		assert.Equal(t, fixtureRelease, manifest)
 		assert.Equal(t, fixtureLargeData, b.Bytes())
+		expectedCreateProgress := testProgressDelegate{
+			progress: []int{0, 1048423, 2096846, 3145269},
+			total:    []int{0, 0, 0, 0},
+			units:    []string{"bytes", "bytes", "bytes", "bytes"},
+		}
+		expectedGetProgress := testProgressDelegate{
+			progress: []int{0, 1, 2, 3},
+			total:    []int{3, 3, 3, 3},
+			units:    []string{"chunks", "chunks", "chunks", "chunks"},
+		}
+		assert.Equal(t, expectedCreateProgress, createProgress)
+		assert.Equal(t, expectedGetProgress, getProgress)
 	})
 
 	t.Run("list filters out by metadata", func(t *testing.T) {

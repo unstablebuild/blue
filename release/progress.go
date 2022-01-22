@@ -1,6 +1,10 @@
 package release
 
-import "io"
+import (
+	"errors"
+	"io"
+	"os"
+)
 
 var _ io.ReadWriteSeeker = seekerProgressDelegate{}
 
@@ -18,6 +22,17 @@ type progressDelegate struct {
 // interface satisfaction to optimize io processing
 type seekerProgressDelegate struct {
 	progressDelegate
+	statDelegate interface{ Stat() (os.FileInfo, error) }
+}
+
+func newSeekerProgressDelegate(rws io.ReadWriteSeeker) seekerProgressDelegate {
+	statDelegate, _ := rws.(interface{ Stat() (os.FileInfo, error) })
+	return seekerProgressDelegate{
+		progressDelegate: progressDelegate{
+			writeDelegate: rws, readDelegate: rws,
+		},
+		statDelegate: statDelegate,
+	}
 }
 
 func (d progressDelegate) Progress(progress, total int, units string) {
@@ -36,19 +51,22 @@ func (d progressDelegate) Write(p []byte) (n int, err error) {
 }
 
 func (d seekerProgressDelegate) Seek(offset int64, whence int) (int64, error) {
-	if d.readDelegate != nil {
-		return d.readDelegate.(io.Seeker).Seek(offset, whence)
-	}
 	return d.writeDelegate.(io.Seeker).Seek(offset, whence)
 }
 
-// NopProgressReader wraps r to satisfy ProgressReader. If r satisfies io.Seeker
-// then the returned ProgressReader will satisfy io.Seeker as well.
+func (d seekerProgressDelegate) Stat() (os.FileInfo, error) {
+	if d.statDelegate == nil {
+		return nil, errors.New("cannot stat non os.File")
+	}
+	return d.statDelegate.Stat()
+}
+
+// NopProgressReader wraps r to satisfy ProgressReader.
+// If r satisfies io.ReadWriteSeeker then the returned ProgressReader
+// will satisfy io.ReadWriteSeeker as well.
 func NopProgressReader(r io.Reader) ProgressReader {
-	if _, ok := r.(io.Seeker); ok {
-		return seekerProgressDelegate{
-			progressDelegate: progressDelegate{readDelegate: r},
-		}
+	if rws, ok := r.(io.ReadWriteSeeker); ok {
+		return newSeekerProgressDelegate(rws)
 	}
 	return progressDelegate{readDelegate: r}
 }
@@ -58,11 +76,7 @@ func NopProgressReader(r io.Reader) ProgressReader {
 // will satisfy io.ReadWriteSeeker as well.
 func NopProgressWriter(w io.Writer) ProgressWriter {
 	if rws, ok := w.(io.ReadWriteSeeker); ok {
-		return seekerProgressDelegate{
-			progressDelegate: progressDelegate{
-				writeDelegate: rws, readDelegate: rws,
-			},
-		}
+		return newSeekerProgressDelegate(rws)
 	}
 	return progressDelegate{writeDelegate: w}
 }
