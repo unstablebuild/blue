@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"io/ioutil"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/ernestrc/blue/datastore/document"
 	"github.com/stretchr/testify/assert"
@@ -34,12 +36,38 @@ type testProgressDelegate struct {
 	progress []int64
 	total    []int64
 	units    []string
+	fileInfo testFileInfo
+}
+
+type testFileInfo struct {
+	size int64
+}
+
+func (t testFileInfo) Name() string { return "" }
+func (t testFileInfo) Size() int64 {
+	return t.size
+}
+func (t testFileInfo) Mode() os.FileMode {
+	return 0
+}
+func (t testFileInfo) ModTime() time.Time {
+	return time.Now()
+}
+func (t testFileInfo) IsDir() bool {
+	return false
+}
+func (t testFileInfo) Sys() interface{} {
+	return nil
 }
 
 func (d *testProgressDelegate) Progress(progress, total int64, units string) {
 	d.progress = append(d.progress, progress)
 	d.total = append(d.total, total)
 	d.units = append(d.units, units)
+}
+
+func (d *testProgressDelegate) Stat() (os.FileInfo, error) {
+	return d.fileInfo, nil
 }
 
 func init() {
@@ -83,10 +111,15 @@ func TestDocumentManager(t *testing.T) {
 
 	t.Run("creates a new manifest and uploads chunkified release data with progress", func(t *testing.T) {
 		m, _ := newTestingDocumentManager()
-		createProgress := testProgressDelegate{}
-		read := progressDelegate{
-			readDelegate:     bytes.NewBuffer(fixtureLargeData),
-			progressDelegate: &createProgress,
+		data := bytes.NewBuffer(fixtureLargeData)
+		testFinfo := testFileInfo{size: int64(data.Len())}
+		createProgress := testProgressDelegate{fileInfo: testFinfo}
+		read := seekerProgressDelegate{
+			progressDelegate: progressDelegate{
+				readDelegate:     data,
+				progressDelegate: &createProgress,
+			},
+			statDelegate: &createProgress,
 		}
 		err := m.Create(ctx, fixtureRelease, read)
 		assert.NoError(t, err)
@@ -103,7 +136,7 @@ func TestDocumentManager(t *testing.T) {
 		assert.Equal(t, fixtureLargeData, b.Bytes())
 		expectedCreateProgress := testProgressDelegate{
 			progress: []int64{0, 1048423, 2096846, 3145269},
-			total:    []int64{0, 0, 0, 0},
+			total:    []int64{3145269, 3145269, 3145269, 3145269},
 			units:    []string{"bytes", "bytes", "bytes", "bytes"},
 		}
 		expectedGetProgress := testProgressDelegate{
@@ -111,6 +144,7 @@ func TestDocumentManager(t *testing.T) {
 			total:    []int64{3, 3, 3, 3},
 			units:    []string{"chunks", "chunks", "chunks", "chunks"},
 		}
+		createProgress.fileInfo.size = 0 // not what we are testing
 		assert.Equal(t, expectedCreateProgress, createProgress)
 		assert.Equal(t, expectedGetProgress, getProgress)
 	})
