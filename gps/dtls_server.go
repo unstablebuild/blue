@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ernestrc/blue/gps/rpc"
 	"github.com/ernestrc/blue/logging/trace"
-	"github.com/ernestrc/blue/rpc"
-	"github.com/golang/protobuf/proto"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/pion/dtls/v2"
 )

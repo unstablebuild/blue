@@ -6,20 +6,20 @@ import (
 	"strings"
 	"time"
 
-	structpb "github.com/golang/protobuf/ptypes/struct"
-	"github.com/golang/protobuf/ptypes/timestamp"
+	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // ProtoTimeToStd converts timestamp.Timestamp (proto) into time.Time
-func ProtoTimeToStd(ts *timestamp.Timestamp) time.Time {
+func ProtoTimeToStd(ts *timestamppb.Timestamp) time.Time {
 	return time.Unix(ts.GetSeconds(), int64(ts.GetNanos()))
 }
 
 // StdTimeToProto converts time.Time into timestamp.Timestamp (proto).
-func StdTimeToProto(ts time.Time) timestamp.Timestamp {
+func StdTimeToProto(ts time.Time) timestamppb.Timestamp {
 	seconds := ts.Unix()
 	nanos := ts.Nanosecond()
-	return timestamp.Timestamp{Seconds: seconds, Nanos: int32(nanos)}
+	return timestamppb.Timestamp{Seconds: seconds, Nanos: int32(nanos)}
 }
 
 func protoValueToIface(in *structpb.Value) interface{} {

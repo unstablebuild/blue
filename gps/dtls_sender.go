@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ernestrc/blue/gps/rpc"
 	"github.com/ernestrc/blue/logging"
-	"github.com/ernestrc/blue/rpc"
-	"github.com/golang/protobuf/proto"
 	"github.com/pion/dtls/v2"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 )
 
 const (

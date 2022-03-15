@@ -1,6 +1,8 @@
 package datastore
 
-import structpb "github.com/golang/protobuf/ptypes/struct"
+import (
+	"google.golang.org/protobuf/types/known/structpb"
+)
 
 var (
 	str1     = "jdbc://root@127.0.0.1:3336"

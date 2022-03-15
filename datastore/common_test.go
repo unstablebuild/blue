@@ -1,13 +1,11 @@
 package datastore
 
 import (
-	"context"
 	"testing"
 	"time"
 
-	"github.com/ernestrc/blue/datastore/document"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestTimestampConversion(t *testing.T) {
@@ -43,15 +41,4 @@ func TestProtoStructConversion(t *testing.T) {
 	t.Run("non empty map", func(t *testing.T) {
 		testProtoStructConversion(t, fields1)
 	})
-}
-
-func testResourcePersistence(
-	t *testing.T, in, out Entity, validate func(*testing.T, Entity, Entity),
-) {
-	svc := document.NewInMemoryCache()
-
-	assert.NoError(t, svc.Create(context.Background(), "1234", in))
-
-	assert.NoError(t, svc.Get(context.Background(), "1234", out))
-	validate(t, in, out)
 }
