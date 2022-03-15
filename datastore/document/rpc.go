@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/ernestrc/blue/rpc"
+	"github.com/ernestrc/blue/datastore/rpc"
 	"google.golang.org/grpc"
 )
 
@@ -314,6 +314,7 @@ func (c *Client) Close() error {
 type Server struct {
 	other Service
 	srv   *grpc.Server
+	rpc.UnimplementedDocumentStoreServer
 }
 
 // NewServer allocates storage for a new Server and initializes it.

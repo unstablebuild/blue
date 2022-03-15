@@ -266,7 +266,7 @@ func matchesAllFilters(proto map[string]interface{}, filters []Filter) bool {
 func ListIterator(docs ...interface{}) Iterator {
 	iter := &listIterator{docs: make([][]byte, 0)}
 	for _, data := range docs {
-		 iter.maybeExtend(nil, encode(data, false))
+		iter.maybeExtend(nil, encode(data, false))
 	}
 	return iter
 }

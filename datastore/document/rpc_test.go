@@ -2,10 +2,11 @@ package document
 
 import (
 	"context"
+	"io/ioutil"
 	"net"
+	"os"
 	"testing"
 
-	"github.com/ernestrc/blue/rpc"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -54,13 +55,39 @@ func testRPCDatastoreOverListener(t *testing.T, listener func() (net.Listener, e
 	}
 }
 
+// tempUnixListener creates a temp file and exposes it
+// as a unix domain sockets net.Listener.
+func tempUnixListener() (net.Listener, error) {
+	tf, err := ioutil.TempFile("", "plugin")
+	if err != nil {
+		return nil, err
+	}
+	path := tf.Name()
+
+	// Close the file and remove it because it has to not exist for
+	// the domain socket.
+	if err := tf.Close(); err != nil {
+		return nil, err
+	}
+	if err := os.Remove(path); err != nil {
+		return nil, err
+	}
+
+	l, err := net.Listen("unix", path)
+	if err != nil {
+		return nil, err
+	}
+
+	return l, nil
+}
+
 func TestRPC(t *testing.T) {
 	t.Run("over TCP", func(t *testing.T) {
 		testRPCDatastoreOverListener(t, tcpListener)
 	})
 
 	t.Run("over Unix domain sockets", func(t *testing.T) {
-		testRPCDatastoreOverListener(t, rpc.TempUnixListener)
+		testRPCDatastoreOverListener(t, tempUnixListener)
 	})
 }
 

@@ -1,13 +1,11 @@
 BIN=bin
 TARGET=target
 LIBSRC=$(wildcard **/*.go) $(wildcard **/**/*.go) $(wildcard **/**/**/*.go)
-LIBRPC=$(wildcard rpc/*.proto)
 EXECSRC=$(wildcard cmd/**/*.go)
 EXECDIRS=$(sort $(dir $(EXECSRC)))
 EXEC=$(patsubst cmd/%/,$(BIN)/%,$(EXECDIRS))
 COVERPROF=test.coverprofile
-PROTO=rpc/*.pb.go
-GOMOCKS=$(wildcard **/*_gomock.go)
+LIBRPC=$(wildcard **/**/*.proto)
 GOFLAGS=
 GOTESTFLAGS=-timeout 20s
 
@@ -32,10 +30,7 @@ coverage-html: $(COVERPROF)
 format:
 	@ go fmt ./.../...
 
-# TODO migrate protoc calls to go geneate statements
 generate:
-	@ rm -rf $(PROTO) $(GOMOCKS)
-	@ protoc $(LIBRPC) --go_out=plugins=grpc:.
 	@ go generate ./.../...
 
 install:
