@@ -75,6 +75,6 @@ func init() {
 	flagsets := []*FlagSet{gitFlagSet, gitLogFlagSet, gitCommitFlagSet}
 	for _, fs := range flagsets {
 		var b bool // discard
-		fs.BoolVar(&b, "-version", false, "display cli version")
+		fs.BoolVar(&b, "version", false, "display cli version")
 	}
 }

@@ -12,8 +12,8 @@ const expectedGitAddUsage = `Add file contents to the index
 Usage: add [options]
 
 Options: 
-  --version  display cli version [default: false]
-  -h         Display this message [default: false]
+  -h        Display this message [default: false]
+  -version  display cli version [default: false]
 
 `
 
@@ -22,12 +22,12 @@ const expectedGitUsage = `Git is the stupid content tracker
 Usage: git [options] <cmd>
 
 Options: 
-  --version  display cli version [default: false]
-  -h         Display this message [default: false]
+  -h        Display this message [default: false]
+  -version  display cli version [default: false]
 
 Commands: 
-  commit     Record changes to the repository
-  add        Add file contents to the index
+  commit    Record changes to the repository
+  add       Add file contents to the index
 
 `
 
