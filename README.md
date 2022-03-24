@@ -24,3 +24,9 @@ gc:
     project-id: "dev"
     creds-file: "/home/ernestrc/src/go/src/github.com/ernestrc/blue/config/gc-creds-2.json"
 ```
+
+### Pre-commit hook
+Git hooks are installed at [.githooks](.githooks) directory. Run the following to configure git:
+```
+  git config core.hooksPath .githooks
+```
