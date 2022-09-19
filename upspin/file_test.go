@@ -1,0 +1,282 @@
+package upspin
+
+import (
+	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	_ "upspin.io/pack/plain"
+	"upspin.io/upspin"
+)
+
+var (
+	inProcess = upspin.Endpoint{
+		Transport: upspin.InProcess,
+		NetAddr:   "", // ignored
+	}
+)
+
+func create(t *testing.T, name upspin.PathName) *File {
+	f, err := Open(&dummyClient{}, name, os.O_RDWR|os.O_CREATE)
+	require.NoError(t, err)
+	return f
+}
+
+func TestWrite(t *testing.T) {
+	const dummyData = "This is some dummy data."
+	fileName := upspin.PathName("foo@bar.com/hello.txt")
+
+	suite := []struct {
+		desc   string
+		method func(*File) error
+	}{
+		{"Close", (*File).Close},
+		{"Sync", (*File).Sync},
+		{"Truncate+Write+Sync", func(f *File) error {
+			if err := f.Truncate(4); err != nil {
+				return err
+			}
+			if _, err := f.Write([]byte(dummyData[4:])); err != nil {
+				return err
+			}
+			return f.Sync()
+		}},
+	}
+
+	for _, test := range suite {
+		t.Run(test.desc, func(t *testing.T) {
+			f := create(t, fileName)
+			n, err := f.Write([]byte(dummyData))
+			require.NoError(t, err)
+			assert.Equal(t, len(dummyData), n)
+
+			err = test.method(f)
+			require.NoError(t, err)
+
+			dummyClient := f.client.(*dummyClient)
+			assert.Equal(t, string(dummyClient.putData), dummyData)
+		})
+	}
+}
+
+// copied from upspin.File tests
+func TestFileOverflow(t *testing.T) {
+	maxInt = 100
+	defer func() { maxInt = int64(^uint(0) >> 1) }()
+	const (
+		user     = "ernest@unstable.build"
+		fileName = user + "/" + "file"
+	)
+	f := create(t, fileName)
+	defer f.Close()
+	buf := make([]byte, maxInt)
+	n, err := f.Write(buf)
+	if err != nil {
+		t.Fatal("write file:", err)
+	}
+	if n != int(maxInt) {
+		t.Fatalf("write file: expected %d got %d", maxInt, n)
+	}
+	_, err = f.Write(make([]byte, maxInt))
+	if err == nil {
+		t.Fatal("write file: expected overflow")
+	}
+	if !strings.Contains(err.Error(), "file too long") {
+		t.Fatal("write file: expected overflow error, got", err)
+	}
+
+	n64, err := f.Seek(0, 0)
+	if err != nil {
+		t.Fatal("seek file:", err)
+	}
+	if n64 != 0 {
+		t.Fatalf("seek begin file: expected 0 got %d", n64)
+	}
+	n64, err = f.Seek(maxInt, 0)
+	if err != nil {
+		t.Fatal("seek end file:", err)
+	}
+	if n64 != maxInt {
+		t.Fatalf("seek file: expected %d got %d", maxInt, n64)
+	}
+	_, err = f.Seek(maxInt+1, 0)
+	if err == nil {
+		t.Fatal("seek past file: expected error")
+	}
+
+	f = create(t, fileName+"x")
+	defer f.Close()
+	n64, err = f.Seek(maxInt, 0)
+	if err != nil {
+		t.Fatal("seek maxInt filex:", err)
+	}
+	if n64 != maxInt {
+		t.Fatalf("seek filex: expected %d got %d", maxInt, n64)
+	}
+	_, err = f.Seek(maxInt+1, 0)
+	if err == nil {
+		t.Fatal("seek maxint+1 filex: expected error")
+	}
+}
+
+func TestReadWritable(t *testing.T) {
+	t.Run("Read initial content", func(t *testing.T) {
+		f, client := makeReadWritableFile(t, "a", "found it!")
+		expectFileContent(t, f, client, "found it!")
+	})
+
+	t.Run("Truncate initial content", func(t *testing.T) {
+		f, client := makeReadWritableFile(t, "a", "breachez")
+		err := f.Truncate(0)
+		require.NoError(t, err)
+		expectFileContent(t, f, client, "")
+	})
+
+	t.Run("Write to initial content", func(t *testing.T) {
+		f, client := makeReadWritableFile(t, "a", "found it!")
+		_, err := f.Write([]byte("hello world"))
+		require.NoError(t, err)
+		expectFileContent(t, f, client, "found it!hello world")
+	})
+
+	t.Run("Write to empty file", func(t *testing.T) {
+		f, client := makeReadWritableFile(t, "a", "")
+		_, err := f.Write([]byte("hello world"))
+		require.NoError(t, err)
+		expectFileContent(t, f, client, "hello world")
+	})
+
+	t.Run("read from empty file", func(t *testing.T) {
+		f, client := makeReadWritableFile(t, "a", "")
+		expectFileContent(t, f, client, "")
+	})
+
+	t.Run("Seek then write", func(t *testing.T) {
+		f, client := makeReadWritableFile(t, "a", "a\nb\n")
+
+		_, err := f.Seek(1, io.SeekStart)
+		require.NoError(t, err)
+
+		_, err = f.Write([]byte("hello world"))
+		require.NoError(t, err)
+
+		expectFileContent(t, f, client, "ahello world")
+	})
+
+	t.Run("Seek then read", func(t *testing.T) {
+		f, client := makeReadWritableFile(t, "a", "hello world")
+		_, err := f.Seek(1, io.SeekStart)
+		require.NoError(t, err)
+
+		got, err := ioutil.ReadAll(f)
+		require.NoError(t, err)
+		assert.Equal(t, "ello world", string(got))
+
+		expectFileContent(t, f, client, "hello world")
+	})
+
+	t.Run("write then read", func(t *testing.T) {
+		f, client := makeReadWritableFile(t, "a", "")
+		for j := 0; j < 10; j++ {
+
+			// reset read-side offsets
+			_, err := f.Seek(0, io.SeekStart)
+			require.NoError(t, err)
+
+			for i := 0; i < 10; i++ {
+				n, err := f.Write([]byte(fmt.Sprintf("%d", i)))
+				require.NoError(t, err)
+				assert.Equal(t, 1, n)
+
+				got, err := ioutil.ReadAll(f)
+				require.NoError(t, err)
+				assert.Equal(t, fmt.Sprintf("%d", i), string(got))
+			}
+
+			expectFileContent(t, f, client, "0123456789")
+
+			err = f.Truncate(0)
+			require.NoError(t, err)
+		}
+	})
+}
+
+func expectFileContent(t *testing.T, f *File, client *dummyClient, expected string) {
+	_, err := f.Seek(0, io.SeekStart)
+	require.NoError(t, err)
+
+	got, err := ioutil.ReadAll(f)
+	require.NoError(t, err)
+	assert.Equal(t, expected, string(got))
+
+	require.NoError(t, f.Sync())
+	assert.Equal(t, expected, string(client.putData))
+}
+
+func makeReadWritableFile(t *testing.T, name upspin.PathName, content string) (*File, *dummyClient) {
+	mockClient := &dummyClient{putData: []byte(content)}
+	f, err := Open(mockClient, name, os.O_CREATE|os.O_RDWR)
+	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected ReadWritable error: %v", err)
+	}
+	return f, mockClient
+}
+
+type dummyClient struct {
+	putData []byte
+}
+
+var _ upspin.Client = (*dummyClient)(nil)
+
+func (d *dummyClient) Get(name upspin.PathName) ([]byte, error) {
+	return d.putData, nil
+}
+func (d *dummyClient) Lookup(name upspin.PathName, followFinal bool) (*upspin.DirEntry, error) {
+	return new(upspin.DirEntry), nil
+}
+func (d *dummyClient) Put(name upspin.PathName, data []byte) (*upspin.DirEntry, error) {
+	d.putData = make([]byte, len(data))
+	copy(d.putData, data)
+	return new(upspin.DirEntry), nil
+}
+func (d *dummyClient) PutSequenced(name upspin.PathName, seq int64, data []byte) (*upspin.DirEntry, error) {
+	d.putData = make([]byte, len(data))
+	copy(d.putData, data)
+	return new(upspin.DirEntry), nil
+}
+func (d *dummyClient) PutLink(oldName, newName upspin.PathName) (*upspin.DirEntry, error) {
+	return nil, nil
+}
+func (d *dummyClient) PutDuplicate(oldName, newName upspin.PathName) (*upspin.DirEntry, error) {
+	return nil, nil
+}
+func (d *dummyClient) MakeDirectory(dirName upspin.PathName) (*upspin.DirEntry, error) {
+	return nil, nil
+}
+func (d *dummyClient) Delete(name upspin.PathName) error {
+	return nil
+}
+func (d *dummyClient) Glob(pattern string) ([]*upspin.DirEntry, error) {
+	return nil, nil
+}
+func (d *dummyClient) Create(name upspin.PathName) (upspin.File, error) {
+	return nil, nil
+}
+func (d *dummyClient) Open(name upspin.PathName) (upspin.File, error) {
+	return nil, nil
+}
+func (d *dummyClient) DirServer(name upspin.PathName) (upspin.DirServer, error) {
+	return nil, nil
+}
+func (d *dummyClient) Rename(oldName, newName upspin.PathName) (*upspin.DirEntry, error) {
+	return nil, nil
+}
+func (d *dummyClient) SetTime(name upspin.PathName, t upspin.Time) error {
+	return nil
+}
