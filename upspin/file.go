@@ -3,12 +3,9 @@ package upspin
 import (
 	"bytes"
 	stdErr "errors"
-	"fmt"
 	"io"
-	"io/fs"
 	"math"
 	"os"
-	"time"
 
 	"upspin.io/errors"
 	"upspin.io/upspin"
@@ -221,15 +218,6 @@ func (f *File) Truncate(size int) error {
 	return nil
 }
 
-func (f *File) Stat() (os.FileInfo, error) {
-	entry, err := f.client.Lookup(f.Name(), true)
-	if err != nil {
-		return nil, fmt.Errorf("upspin.Client.Lookup(%s): %v",
-			f.Name(), err)
-	}
-	return entryAdapter{client: f.client, entry: entry}, nil
-}
-
 // Close implements upspin.File.
 func (f *File) Close() error {
 	const op errors.Op = "file.Close"
@@ -264,39 +252,4 @@ func (f *File) initRead() error {
 		f.readOffset = n
 	}
 	return err
-}
-
-// satisfies os.FileInfo
-type entryAdapter struct {
-	client upspin.Client
-	entry  *upspin.DirEntry
-}
-
-func (e entryAdapter) Name() string {
-	return string(e.entry.Name)
-}
-
-func (e entryAdapter) Size() int64 {
-	// unused
-	return 0
-}
-
-func (e entryAdapter) Mode() fs.FileMode {
-	// only used for symlink
-	if e.entry.Attr == upspin.AttrLink {
-		return fs.ModeSymlink
-	}
-	return 0
-}
-
-func (e entryAdapter) ModTime() time.Time {
-	return time.Unix(int64(e.entry.Time), 0)
-}
-
-func (e entryAdapter) IsDir() bool {
-	return e.entry.IsDir()
-}
-
-func (e entryAdapter) Sys() interface{} {
-	return nil
 }
