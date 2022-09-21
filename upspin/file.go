@@ -2,18 +2,26 @@ package upspin
 
 import (
 	"bytes"
+	"context"
 	stdErr "errors"
+	"fmt"
 	"io"
 	"math"
 	"os"
+	"time"
 
+	"github.com/ernestrc/blue/retry"
 	"upspin.io/errors"
 	"upspin.io/upspin"
 )
 
 var (
-	maxInt             = int64(^uint(0) >> 1) // mimic upspin.File behaviour
-	_      upspin.File = (*File)(nil)
+	maxInt       = int64(^uint(0) >> 1) // mimic upspin.File behaviour
+	syncTimeout  = 10 * time.Second
+	syncStrategy = retry.CombinedStrategy(
+		retry.LimitStrategy(100), retry.ExponentialStrategy(1*time.Millisecond, 1024*time.Millisecond))
+
+	_ upspin.File = (*File)(nil)
 )
 
 // File is an alternate implementation of upspin.File, which allows
@@ -32,7 +40,8 @@ type File struct {
 	// read side
 	reader *bytes.Reader
 	// write side
-	data []byte
+	data         []byte
+	lastPutSeqID int64
 }
 
 var _ upspin.File = (*File)(nil)
@@ -187,14 +196,42 @@ func (f *File) writeAt(op errors.Op, b []byte, off int64) (n int, err error) {
 // Sync writes the accumulated data to a StoreServer, if this file
 // is writeable, otherwise it will return an error.
 func (f *File) Sync() error {
+	seqID, err := f.sync()
+	if err != nil {
+		return err
+	}
+
+	// wait for consistency
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, syncTimeout)
+	defer cancel()
+
+	return retry.Retry(ctx, syncStrategy, func(ctx context.Context) (retry bool, err error) {
+		entry, err := f.client.Lookup(f.Name(), true)
+		if err != nil {
+			return errors.Is(errors.NotExist, err), err
+		}
+		if entry.Sequence != seqID {
+			return true, fmt.Errorf("expected sequence ID %d but Lookup found %d", entry.Sequence, seqID)
+		}
+		return false, nil
+	})
+
+}
+
+func (f *File) sync() (int64, error) {
 	const op errors.Op = "file.Sync"
 	if f.closed {
-		return f.errClosed(op)
+		return 0, f.errClosed(op)
 	}
 	if !f.writable {
-		return errors.E(op, errors.Invalid, f.name, "not open for write")
+		return 0, errors.E(op, errors.Invalid, f.name, "not open for write")
 	}
-	return f.put(op)
+	err := f.put(op)
+	if err != nil {
+		return 0, err
+	}
+	return f.lastPutSeqID, nil
 }
 
 // Truncate changes the size of the file to size.
@@ -239,7 +276,10 @@ func (f *File) errClosed(op errors.Op) error {
 }
 
 func (f *File) put(op errors.Op) error {
-	_, err := f.client.Put(f.name, f.data)
+	entry, err := f.client.Put(f.name, f.data)
+	if err == nil {
+		f.lastPutSeqID = entry.Sequence
+	}
 	return err
 }
 
