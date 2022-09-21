@@ -1,6 +1,7 @@
 package upspin
 
 import (
+	stdErrors "errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -8,8 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ernestrc/blue/retry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"upspin.io/errors"
 	_ "upspin.io/pack/plain"
 	"upspin.io/upspin"
 )
@@ -25,6 +28,105 @@ func create(t *testing.T, name upspin.PathName) *File {
 	f, err := Open(&dummyClient{}, name, os.O_RDWR|os.O_CREATE)
 	require.NoError(t, err)
 	return f
+}
+
+func TestSync(t *testing.T) {
+	t.Run("strong consistency is ok", func(t *testing.T) {
+		client := &dummyClient{}
+		client.returnLookup = func() (*upspin.DirEntry, error) {
+			return &upspin.DirEntry{Sequence: 10}, nil
+		}
+
+		client.returnPut = func() (*upspin.DirEntry, error) {
+			return &upspin.DirEntry{Sequence: 10}, nil
+		}
+
+		f, err := Open(client, "a", os.O_RDWR|os.O_CREATE)
+		require.NoError(t, err)
+
+		require.NoError(t, f.Sync())
+	})
+
+	t.Run("versions eventual consistency", func(t *testing.T) {
+		client := &dummyClient{}
+		var n int64
+		client.returnLookup = func() (*upspin.DirEntry, error) {
+			n++
+			return &upspin.DirEntry{Sequence: n}, nil
+		}
+
+		client.returnPut = func() (*upspin.DirEntry, error) {
+			return &upspin.DirEntry{Sequence: 10}, nil
+		}
+
+		f, err := Open(client, "a", os.O_RDWR|os.O_CREATE)
+		require.NoError(t, err)
+
+		require.NoError(t, f.Sync())
+	})
+
+	t.Run("create eventual consistency", func(t *testing.T) {
+		client := &dummyClient{}
+		var n int64
+		client.returnLookup = func() (*upspin.DirEntry, error) {
+			n++
+			if n < 5 {
+				return nil, errors.E("test", errors.NotExist)
+			}
+			return &upspin.DirEntry{Sequence: 5}, nil
+		}
+
+		client.returnPut = func() (*upspin.DirEntry, error) {
+			return &upspin.DirEntry{Sequence: 5}, nil
+		}
+
+		f, err := Open(client, "a", os.O_RDWR|os.O_CREATE)
+		require.NoError(t, err)
+
+		require.NoError(t, f.Sync())
+	})
+
+	t.Run("bubbles up first Put error", func(t *testing.T) {
+		client := &dummyClient{}
+		var i int
+		client.returnPut = func() (*upspin.DirEntry, error) {
+			i++
+			if i != 1 {
+				t.Fail()
+			}
+			return nil, stdErrors.New("$HIMS")
+		}
+
+		f, err := Open(client, "a", os.O_RDWR|os.O_CREATE)
+		require.NoError(t, err)
+
+		require.Error(t, f.Sync())
+	})
+
+	t.Run("bubbles up exhaustion of retries", func(t *testing.T) {
+		// only allow 2 tries
+		defaultSyncStrategy := syncStrategy
+		syncStrategy = retry.LimitStrategy(2)
+		defer func() {
+			syncStrategy = defaultSyncStrategy
+		}()
+
+		client := &dummyClient{}
+		var n int64
+		client.returnLookup = func() (*upspin.DirEntry, error) {
+			n++
+			return &upspin.DirEntry{Sequence: n}, nil
+		}
+
+		client.returnPut = func() (*upspin.DirEntry, error) {
+			return &upspin.DirEntry{Sequence: 3}, nil
+		}
+
+		f, err := Open(client, "a", os.O_RDWR|os.O_CREATE)
+		require.NoError(t, err)
+
+		require.Error(t, f.Sync())
+	})
 }
 
 func TestWrite(t *testing.T) {
@@ -229,7 +331,9 @@ func makeReadWritableFile(t *testing.T, name upspin.PathName, content string) (*
 }
 
 type dummyClient struct {
-	putData []byte
+	putData      []byte
+	returnLookup func() (*upspin.DirEntry, error)
+	returnPut    func() (*upspin.DirEntry, error)
 }
 
 var _ upspin.Client = (*dummyClient)(nil)
@@ -238,11 +342,17 @@ func (d *dummyClient) Get(name upspin.PathName) ([]byte, error) {
 	return d.putData, nil
 }
 func (d *dummyClient) Lookup(name upspin.PathName, followFinal bool) (*upspin.DirEntry, error) {
+	if d.returnLookup != nil {
+		return d.returnLookup()
+	}
 	return new(upspin.DirEntry), nil
 }
 func (d *dummyClient) Put(name upspin.PathName, data []byte) (*upspin.DirEntry, error) {
 	d.putData = make([]byte, len(data))
 	copy(d.putData, data)
+	if d.returnPut != nil {
+		return d.returnPut()
+	}
 	return new(upspin.DirEntry), nil
 }
 func (d *dummyClient) PutSequenced(name upspin.PathName, seq int64, data []byte) (*upspin.DirEntry, error) {
