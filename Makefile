@@ -6,14 +6,16 @@ EXECDIRS=$(sort $(dir $(EXECSRC)))
 EXEC=$(patsubst cmd/%/,$(BIN)/%,$(EXECDIRS))
 COVERPROF=test.coverprofile
 LIBRPC=$(wildcard **/**/*.proto)
-GOFLAGS=
+GOFLAGS="-ldflags=-X main.Tag=$$(git describe --tags) -X main.Commit=$$(git rev-parse --short HEAD)"
 GOTESTFLAGS=-timeout 20s
 
 .PHONY: clean test coverage generate release debug
 
+default: CGO_ENABLED=CGO_ENABLED=0
 default: $(EXEC)
 
 debug: GOFLAGS=-race
+debug: CGO_ENABLED=CGO_ENABLED=1
 debug: $(EXEC)
 
 test:
@@ -44,11 +46,11 @@ $(BIN):
 	@mkdir $(BIN)
 
 $(BIN)/%: $(EXECSRC) $(LIBRPC) $(LIBSRC) $(BIN)
-	@cd $(patsubst bin/%,cmd/%,$@) && go build $(GOFLAGS) -o ../../$@
+	@cd $(patsubst bin/%,cmd/%,$@) && $(CGO_ENABLED) go build $(GOFLAGS) -o ../../$@
 
 make_release:
 	@ mkdir -p $(TARGET)/$(TARGET_OS)_$(TARGET_ARCH)
-	@ GOARCH=$(TARGET_ARCH) $(TARGET_ARCH_FLAGS) GOOS=$(TARGET_OS) go build -o `pwd`/$(TARGET)/$(TARGET_OS)_$(TARGET_ARCH) ./... 
+	@ CGO_ENABLED=0 GOARCH=$(TARGET_ARCH) $(TARGET_ARCH_FLAGS) GOOS=$(TARGET_OS) go build -o `pwd`/$(TARGET)/$(TARGET_OS)_$(TARGET_ARCH) ./... 
 	@ cp -R deploy $(TARGET)/$(TARGET_OS)_$(TARGET_ARCH)
 	@ cp deploy/Makefile $(TARGET)/$(TARGET_OS)_$(TARGET_ARCH)
 	@ rm $(TARGET)/$(TARGET_OS)_$(TARGET_ARCH)/deploy/Makefile
