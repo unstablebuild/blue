@@ -25,7 +25,10 @@ const (
 	maxDocSizeBytes = 1048487 - 64
 
 	documentTypeData documentType = iota
-	documentTypeManifest
+	// package bundle document
+	documentTypeReleaseBundle
+	// package document
+	documentTypePackage
 )
 
 type documentManager struct {
@@ -34,9 +37,15 @@ type documentManager struct {
 
 type releaseDocument struct {
 	Type       documentType
-	Manifest   Manifest
+	Package    string
+	Bundle     Bundle
 	DataChunks []string
 	Checksum   string
+}
+
+type packageDocument struct {
+	Type    documentType
+	Package Package
 }
 
 type releaseData struct {
@@ -74,15 +83,16 @@ func (d *documentManager) forceRemoveChunks(err error, releaseID string, ids []s
 	return err
 }
 
-func makeChunkID(id string, i int) string {
-	return fmt.Sprintf("%s:chunk:%d", id, i)
+func makeChunkID(pack string, ver Version, i int) string {
+	return fmt.Sprintf("%s:%s:chunk:%d", pack, ver, i)
 }
 
 func (d *documentManager) createDataChunks(
-	ctx context.Context, m Manifest, r ProgressReader,
+	ctx context.Context, m Bundle, r ProgressReader,
 ) ([]string, string, error) {
 	ids := make([]string, 0)
 	buffer := make([]byte, maxDocSizeBytes)
+	docID := makeReleaseDocID(m.Package, m.Version)
 
 	hasher := sha256.New()
 	var totalSize int64
@@ -99,7 +109,7 @@ func (d *documentManager) createDataChunks(
 		read, rerr := r.Read(buffer)
 		if rerr != nil && rerr != io.EOF {
 			rerr = fmt.Errorf("failed to read release data: %v", rerr)
-			return nil, "", d.forceRemoveChunks(rerr, m.ID, ids)
+			return nil, "", d.forceRemoveChunks(rerr, docID, ids)
 		}
 		if read == 0 {
 			break
@@ -110,14 +120,14 @@ func (d *documentManager) createDataChunks(
 		// hash.Hash impls never return an error
 		_, _ = hasher.Write(buffer[:read])
 
-		chunkID := makeChunkID(m.ID, i)
+		chunkID := makeChunkID(m.Package, m.Version, i)
 		chunk := releaseData{
 			Type: documentTypeData,
 			Data: buffer[:read],
 		}
 		err := d.db.Set(ctx, chunkID, chunk)
 		if err != nil {
-			return nil, "", d.forceRemoveChunks(err, m.ID, ids)
+			return nil, "", d.forceRemoveChunks(err, docID, ids)
 		}
 		ids = append(ids, chunkID)
 
@@ -147,12 +157,36 @@ func (d *documentManager) removeChunks(ctx context.Context, ids []string) error 
 }
 
 func (d *documentManager) Create(
-	ctx context.Context, m Manifest, r ProgressReader,
+	ctx context.Context, m Package,
 ) error {
-	id := m.ID
+	p := packageDocument{
+		Type:    documentTypePackage,
+		Package: m,
+	}
+	packageDocID := makePackageDocID(m.Name)
+	err := d.db.Set(ctx, packageDocID, p)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func makeReleaseDocID(pack string, ver Version) string {
+	return fmt.Sprintf("release:%s:%s", pack, ver)
+}
+
+func makePackageDocID(pack string) string {
+	return fmt.Sprintf("package:%s", pack)
+}
+
+func (d *documentManager) Upload(
+	ctx context.Context, m Bundle, r ProgressReader,
+) error {
+	id := makeReleaseDocID(m.Package, m.Version)
 	doc := releaseDocument{
-		Type:       documentTypeManifest,
-		Manifest:   m,
+		Type:       documentTypeReleaseBundle,
+		Package:    m.Package,
+		Bundle:     m,
 		DataChunks: nil,
 	}
 	err := d.db.Create(ctx, id, &doc)
@@ -171,6 +205,21 @@ func (d *documentManager) Create(
 	if err != nil {
 		err = d.forceDelete(err, id)
 		return d.forceRemoveChunks(err, id, ids)
+	}
+
+	// update latest version of package structure
+	// if it doesn't exist, then create one
+	p := packageDocument{
+		Type: documentTypePackage,
+		Package: Package{
+			Name:   m.Package,
+			Latest: m.Version,
+		},
+	}
+	packageDocID := makePackageDocID(m.Package)
+	err = d.db.Set(ctx, packageDocID, p)
+	if err != nil {
+		return d.forceDelete(err, id)
 	}
 
 	return nil
@@ -204,30 +253,35 @@ func (d *documentManager) writeChunks(
 }
 
 func (d *documentManager) Get(
-	ctx context.Context, id string, out ProgressWriter,
-) (Manifest, error) {
+	ctx context.Context, pack string,
+	ver Version, out ProgressWriter,
+) (Bundle, error) {
 	var doc releaseDocument
 
+	id := makeReleaseDocID(pack, ver)
 	err := d.db.Get(ctx, id, &doc)
 	if err != nil {
-		return Manifest{}, err
+		return Bundle{}, err
 	}
 
 	if out == ioutil.Discard {
-		return doc.Manifest, nil
+		return doc.Bundle, nil
 	}
 
 	err = d.writeChunks(ctx, doc, out)
 	if err != nil {
-		return Manifest{}, err
+		return Bundle{}, err
 	}
 
-	return doc.Manifest, nil
+	return doc.Bundle, nil
 }
 
-func (d *documentManager) Delete(ctx context.Context, id string) error {
+func (d *documentManager) Delete(
+	ctx context.Context, pack string, ver Version,
+) error {
 	var doc releaseDocument
 
+	id := makeReleaseDocID(pack, ver)
 	err := d.db.Get(ctx, id, &doc)
 	if err != nil {
 		return err
@@ -241,20 +295,30 @@ func (d *documentManager) Delete(ctx context.Context, id string) error {
 	return d.db.Delete(ctx, id)
 }
 
-func makeDocumentManifestFilter(userFilters map[string]string) []document.Filter {
+func makeDocumentBundleFilter(
+	pack string, userFilters map[string]string,
+) []document.Filter {
 	ret := []document.Filter{
 		{
 			Field: document.Field{
 				FieldPath: []string{"Type"},
-				Value:     documentTypeManifest,
+				Value:     documentTypeReleaseBundle,
 			},
 			Op: document.OpEqual,
-		}}
+		},
+		{
+			Field: document.Field{
+				FieldPath: []string{"Package"},
+				Value:     pack,
+			},
+			Op: document.OpEqual,
+		},
+	}
 	for k, v := range userFilters {
 		ret = append(ret,
 			document.Filter{
 				Field: document.Field{
-					FieldPath: []string{"Manifest", "Metadata", k},
+					FieldPath: []string{"Bundle", "Metadata", k},
 					Value:     v,
 				},
 				Op: document.OpEqual,
@@ -264,12 +328,13 @@ func makeDocumentManifestFilter(userFilters map[string]string) []document.Filter
 }
 
 func (d *documentManager) List(
-	ctx context.Context, filters map[string]string,
-) (ret []Manifest, err error) {
+	ctx context.Context, pack string,
+	filters map[string]string,
+) (ret []Bundle, err error) {
 	var it document.Iterator
-	ret = make([]Manifest, 0)
+	ret = make([]Bundle, 0)
 
-	it, err = d.db.List(ctx, makeDocumentManifestFilter(filters))
+	it, err = d.db.List(ctx, makeDocumentBundleFilter(pack, filters))
 	if err != nil {
 		return
 	}
@@ -280,7 +345,55 @@ func (d *documentManager) List(
 		if err != nil {
 			return
 		}
-		ret = append(ret, doc.Manifest)
+		ret = append(ret, doc.Bundle)
+	}
+
+	return
+}
+
+func makeDocumentPackageFilter(
+	userFilters map[string]string,
+) []document.Filter {
+	ret := []document.Filter{
+		{
+			Field: document.Field{
+				FieldPath: []string{"Type"},
+				Value:     documentTypePackage,
+			},
+			Op: document.OpEqual,
+		},
+	}
+	for k, v := range userFilters {
+		ret = append(ret,
+			document.Filter{
+				Field: document.Field{
+					FieldPath: []string{"Bundle", "Metadata", k},
+					Value:     v,
+				},
+				Op: document.OpEqual,
+			})
+	}
+	return ret
+}
+
+func (d *documentManager) ListPackages(
+	ctx context.Context, filters map[string]string,
+) (ret []Package, err error) {
+	ret = make([]Package, 0)
+
+	var it document.Iterator
+	it, err = d.db.List(ctx, makeDocumentPackageFilter(filters))
+	if err != nil {
+		return
+	}
+
+	var doc packageDocument
+	for it.HasNext() {
+		err = it.NextTo(&doc)
+		if err != nil {
+			return
+		}
+		ret = append(ret, doc.Package)
 	}
 
 	return

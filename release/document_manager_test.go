@@ -14,16 +14,18 @@ import (
 )
 
 var (
-	fixtureRelease = Manifest{
-		ID:    "1.0.0",
-		Notes: "It worked in my computer!",
+	fixtureRelease = Bundle{
+		Package: "blue",
+		Version: "1.0.0",
+		Notes:   "It worked in my computer!",
 		Metadata: map[string]string{
 			"NeverUnderstood": "NoBueno",
 			"author":          "Theranos",
 		},
 	}
-	fixtureRelease2 = Manifest{
-		ID: "1.0.1",
+	fixtureRelease2 = Bundle{
+		Package: "blue",
+		Version: "1.0.1",
 		Metadata: map[string]string{
 			"repository": "blue",
 		},
@@ -86,27 +88,68 @@ func newTestingDocumentManager() (m Manager, svc document.Service) {
 func TestDocumentManager(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("creates a new manifest and uploads release data", func(t *testing.T) {
+	t.Run("creates a new package", func(t *testing.T) {
+		m, _ := newTestingDocumentManager()
+		err := m.Create(ctx, Package{
+			Name:   fixtureRelease.Package,
+			Notes:  "blabla",
+			Latest: "", // allowed to be empty
+		})
+		require.NoError(t, err)
+		packages, err := m.ListPackages(ctx, nil)
+		require.NoError(t, err)
+
+		require.Len(t, packages, 1)
+		assert.Equal(t, Package{
+			Name:     fixtureRelease.Package,
+			Notes:    "blabla",
+			Metadata: map[string]string{},
+		}, packages[0])
+	})
+
+	t.Run("uploads a new release bundle and uploads data", func(t *testing.T) {
 		m, svc := newTestingDocumentManager()
-		err := m.Create(ctx, fixtureRelease,
+		err := m.Upload(ctx, fixtureRelease,
 			NopProgressReader(bytes.NewBuffer(fixtureSmallData)))
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		// add another release to make sure we download only from one
+		err = m.Upload(ctx, fixtureRelease2,
+			NopProgressReader(bytes.NewBuffer([]byte("stuff"))))
+		require.NoError(t, err)
 
 		it, err := svc.List(ctx, nil)
 		require.NoError(t, err)
 
-		i := 0
-		for ; it.HasNext(); i++ {
+		for it.HasNext() {
 			var doc interface{}
 			_ = it.NextTo(&doc)
 		}
-		assert.Equal(t, 2, i)
 
 		var b bytes.Buffer
-		manifest, err := m.Get(ctx, fixtureRelease.ID, NopProgressWriter(&b))
+		manifest, err := m.Get(
+			ctx, fixtureRelease.Package,
+			fixtureRelease.Version, NopProgressWriter(&b))
 		require.NoError(t, err)
 		assert.Equal(t, fixtureRelease, manifest)
 		assert.Equal(t, fixtureSmallData, b.Bytes())
+	})
+
+	t.Run("uploads a new release bundle and updates latest package version, even if package doesn't exist", func(t *testing.T) {
+		m, _ := newTestingDocumentManager()
+		bundle := fixtureRelease
+		bundle.Version = "0.1.2"
+		err := m.Upload(ctx, bundle,
+			NopProgressReader(bytes.NewBuffer([]byte(""))))
+		require.NoError(t, err)
+
+		packages, err := m.ListPackages(ctx, nil)
+		require.NoError(t, err)
+		require.Len(t, packages, 1)
+		assert.Equal(t, Package{
+			Name:     fixtureRelease.Package,
+			Latest:   Version("0.1.2"),
+			Metadata: map[string]string{},
+		}, packages[0])
 	})
 
 	t.Run("creates a new manifest and uploads chunkified release data with progress", func(t *testing.T) {
@@ -121,7 +164,7 @@ func TestDocumentManager(t *testing.T) {
 			},
 			statDelegate: &createProgress,
 		}
-		err := m.Create(ctx, fixtureRelease, read)
+		err := m.Upload(ctx, fixtureRelease, read)
 		assert.NoError(t, err)
 
 		var b bytes.Buffer
@@ -130,7 +173,8 @@ func TestDocumentManager(t *testing.T) {
 			writeDelegate:    &b,
 			progressDelegate: &getProgress,
 		}
-		manifest, err := m.Get(ctx, fixtureRelease.ID, write)
+		manifest, err := m.Get(ctx, fixtureRelease.Package,
+			fixtureRelease.Version, write)
 		require.NoError(t, err)
 		assert.Equal(t, fixtureRelease, manifest)
 		assert.Equal(t, fixtureLargeData, b.Bytes())
@@ -151,24 +195,24 @@ func TestDocumentManager(t *testing.T) {
 
 	t.Run("list filters out by metadata", func(t *testing.T) {
 		m, _ := newTestingDocumentManager()
-		err := m.Create(ctx, fixtureRelease,
+		err := m.Upload(ctx, fixtureRelease,
 			NopProgressReader(bytes.NewBuffer(fixtureSmallData)))
 		require.NoError(t, err)
-		err = m.Create(ctx, fixtureRelease2,
+		err = m.Upload(ctx, fixtureRelease2,
 			NopProgressReader(bytes.NewBuffer(fixtureLargeData)))
 		require.NoError(t, err)
 
 		filters := map[string]string{"repository": "blue"}
-		items, err := m.List(ctx, filters)
+		items, err := m.List(ctx, fixtureRelease.Package, filters)
 		require.NoError(t, err)
 
-		assert.Len(t, items, 1)
-		assert.Equal(t, fixtureRelease2.ID, items[0].ID)
+		require.Len(t, items, 1)
+		assert.Equal(t, fixtureRelease2.Version, items[0].Version)
 	})
 
 	t.Run("get fails if data has been altered since point of manifest creation", func(t *testing.T) {
 		m, svc := newTestingDocumentManager()
-		err := m.Create(ctx, fixtureRelease,
+		err := m.Upload(ctx, fixtureRelease,
 			NopProgressReader(bytes.NewBuffer(fixtureSmallData)))
 		assert.NoError(t, err)
 
@@ -176,47 +220,49 @@ func TestDocumentManager(t *testing.T) {
 			Type: documentTypeData,
 			Data: []byte("\x00"),
 		}
-		err = svc.Set(ctx, makeChunkID(fixtureRelease.ID, 0), tamperedData)
+		err = svc.Set(ctx, makeChunkID(fixtureRelease.Package,
+			fixtureRelease.Version, 0), tamperedData)
 		require.NoError(t, err)
 
 		var b bytes.Buffer
-		manifest, err := m.Get(ctx, fixtureRelease.ID, NopProgressWriter(&b))
+		manifest, err := m.Get(ctx, fixtureRelease.Package,
+			fixtureRelease.Version, NopProgressWriter(&b))
 		require.Equal(t, ErrDataIntegrity, err)
 		require.Zero(t, manifest)
 	})
 }
 
-func BenchmarkDocumentManagerCreate(b *testing.B) {
+func BenchmarkDocumentManagerUpload(b *testing.B) {
 	m, _ := newTestingDocumentManager()
 	ctx := context.Background()
 
 	for i := 0; i < b.N; i++ {
-		_ = m.Create(ctx, fixtureRelease,
+		_ = m.Upload(ctx, fixtureRelease,
 			NopProgressReader(bytes.NewBuffer(fixtureLargeData)))
 	}
 }
 
-func BenchmarkDocumentManagerCreateDelete(b *testing.B) {
+func BenchmarkDocumentManagerUploadDelete(b *testing.B) {
 	m, _ := newTestingDocumentManager()
 	ctx := context.Background()
 
 	for i := 0; i < b.N; i++ {
-		_ = m.Create(ctx, fixtureRelease,
+		_ = m.Upload(ctx, fixtureRelease,
 			NopProgressReader(bytes.NewBuffer(fixtureLargeData)))
-		_ = m.Delete(ctx, fixtureRelease.ID)
+		_ = m.Delete(ctx, fixtureRelease.Package, fixtureRelease.Version)
 	}
 }
 
 func BenchmarkDocumentManagerGet(b *testing.B) {
 	m, _ := newTestingDocumentManager()
 	ctx := context.Background()
-	_ = m.Create(ctx, fixtureRelease,
+	_ = m.Upload(ctx, fixtureRelease,
 		NopProgressReader(bytes.NewBuffer(fixtureLargeData)))
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, _ = m.Get(ctx, fixtureRelease.ID,
+		_, _ = m.Get(ctx, fixtureRelease.Package, fixtureRelease.Version,
 			NopProgressWriter(ioutil.Discard))
 	}
 }

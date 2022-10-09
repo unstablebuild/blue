@@ -135,59 +135,88 @@ func (m *MockManager) EXPECT() *MockManagerMockRecorder {
 }
 
 // Create mocks base method.
-func (m *MockManager) Create(arg0 context.Context, arg1 Manifest, arg2 ProgressReader) error {
+func (m *MockManager) Create(arg0 context.Context, arg1 Package) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Create", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Create", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockManagerMockRecorder) Create(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockManagerMockRecorder) Create(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockManager)(nil).Create), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockManager)(nil).Create), arg0, arg1)
 }
 
 // Delete mocks base method.
-func (m *MockManager) Delete(arg0 context.Context, arg1 string) error {
+func (m *MockManager) Delete(arg0 context.Context, arg1 string, arg2 Version) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", arg0, arg1)
+	ret := m.ctrl.Call(m, "Delete", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockManagerMockRecorder) Delete(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockManagerMockRecorder) Delete(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockManager)(nil).Delete), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockManager)(nil).Delete), arg0, arg1, arg2)
 }
 
 // Get mocks base method.
-func (m *MockManager) Get(arg0 context.Context, arg1 string, arg2 ProgressWriter) (Manifest, error) {
+func (m *MockManager) Get(arg0 context.Context, arg1 string, arg2 Version, arg3 ProgressWriter) (Bundle, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", arg0, arg1, arg2)
-	ret0, _ := ret[0].(Manifest)
+	ret := m.ctrl.Call(m, "Get", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(Bundle)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockManagerMockRecorder) Get(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockManagerMockRecorder) Get(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockManager)(nil).Get), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockManager)(nil).Get), arg0, arg1, arg2, arg3)
 }
 
 // List mocks base method.
-func (m *MockManager) List(arg0 context.Context, arg1 map[string]string) ([]Manifest, error) {
+func (m *MockManager) List(arg0 context.Context, arg1 string, arg2 map[string]string) ([]Bundle, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "List", arg0, arg1)
-	ret0, _ := ret[0].([]Manifest)
+	ret := m.ctrl.Call(m, "List", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]Bundle)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // List indicates an expected call of List.
-func (mr *MockManagerMockRecorder) List(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockManagerMockRecorder) List(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockManager)(nil).List), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockManager)(nil).List), arg0, arg1, arg2)
+}
+
+// ListPackages mocks base method.
+func (m *MockManager) ListPackages(arg0 context.Context, arg1 map[string]string) ([]Package, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPackages", arg0, arg1)
+	ret0, _ := ret[0].([]Package)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPackages indicates an expected call of ListPackages.
+func (mr *MockManagerMockRecorder) ListPackages(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPackages", reflect.TypeOf((*MockManager)(nil).ListPackages), arg0, arg1)
+}
+
+// Upload mocks base method.
+func (m *MockManager) Upload(arg0 context.Context, arg1 Bundle, arg2 ProgressReader) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Upload", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Upload indicates an expected call of Upload.
+func (mr *MockManagerMockRecorder) Upload(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upload", reflect.TypeOf((*MockManager)(nil).Upload), arg0, arg1, arg2)
 }

@@ -37,8 +37,8 @@ func newReleaseGetCLI(m release.Manager) cli.CLI {
 func (s *releaseGet) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "get",
-		Summary:  "Download a release by tag",
-		Synopsis: "<tag> <out>",
+		Summary:  "Download a package bundle",
+		Synopsis: "<package> <version> <out>",
 		Options:  *s.fs,
 	}
 }
@@ -53,13 +53,14 @@ func (s *releaseGet) findKeyInArmoredKeyRing() (crypto.Key, error) {
 }
 
 func (s *releaseGet) Run(ctx context.Context, args []string) error {
-	args, ok, err := cli.ParseUsage(s, s.fs, 2, args)
+	args, ok, err := cli.ParseUsage(s, s.fs, 3, args)
 	if err != nil || !ok {
 		return err
 	}
 
-	id := args[0]
-	outfile := args[1]
+	pack := args[0]
+	version := release.Version(args[1])
+	outfile := args[2]
 	f, err := os.Create(outfile)
 	if err != nil {
 		return err
@@ -69,24 +70,24 @@ func (s *releaseGet) Run(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, defaultGetTimeout)
 	defer cancel()
 
-	var m release.Manifest
+	var m release.Bundle
 	key, err := s.findKeyInArmoredKeyRing()
 	if err != nil {
 		fmt.Printf("WARNING: Failed to check data integrity: "+
 			"error finding armored key '%s' in keyring: %s", s.pubKeyID, err)
-		m, err = s.m.Get(ctx, id, newBarProgress(f))
+		m, err = s.m.Get(ctx, pack, version, newBarProgress(f))
 		if err != nil {
 			return err
 		}
 	} else {
 		sm := release.NewSigningManager(s.m, key)
-		m, err = sm.Get(ctx, id, newBarProgress(f))
+		m, err = sm.Get(ctx, pack, version, newBarProgress(f))
 		if err != nil {
 			return err
 		}
 	}
 
-	data, err := printableManifest(m)
+	data, err := printableBundle(m)
 	if err != nil {
 		return err
 	}

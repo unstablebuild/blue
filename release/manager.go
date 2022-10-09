@@ -8,8 +8,27 @@ import (
 	"time"
 )
 
-type Manifest struct {
-	ID        string
+// Package represents.. well, a package.
+type Package struct {
+	Name      string
+	Latest    Version
+	Notes     string
+	Metadata  map[string]string
+	CreatedAt time.Time `firestore:",serverTimestamp"`
+}
+
+// Version represents a package version.
+type Version string
+
+// Latest is a reserved Version that
+// references the latest version uploaded
+// for a package.
+const Latest = "latest"
+
+// Bundle represents a package release bundle.
+type Bundle struct {
+	Package   string
+	Version   Version
 	Notes     string
 	Metadata  map[string]string
 	CreatedAt time.Time `firestore:",serverTimestamp"`
@@ -31,9 +50,21 @@ type ProgressWriter interface {
 	Progress(progress, total int64, units string)
 }
 
+// Manager represents the behaviour to manage package releases.
 type Manager interface {
-	Create(context.Context, Manifest, ProgressReader) error
-	Get(context.Context, string, ProgressWriter) (Manifest, error)
-	Delete(context.Context, string) error
-	List(context.Context, map[string]string) ([]Manifest, error)
+	// Create creates a new package or updates a package.
+	Create(context.Context, Package) error
+	// Upload uploads a package bundle and reports progress via ProgressReader.
+	// It updates the Latest field of the Package.
+	// If package has not been created via Create then it creates a new one.
+	Upload(context.Context, Bundle, ProgressReader) error
+	// Get downloads a Package bundle by package name and version and reports
+	// progress via ProgressWriter.
+	Get(context.Context, string, Version, ProgressWriter) (Bundle, error)
+	// Delete deletes a package bundle by package name and version.
+	Delete(context.Context, string, Version) error
+	// List lists all bundles of a package.
+	List(context.Context, string, map[string]string) ([]Bundle, error)
+	// ListPackages lists all packages.
+	ListPackages(context.Context, map[string]string) ([]Package, error)
 }
