@@ -9,6 +9,17 @@ import (
 	"github.com/ernestrc/blue/cli"
 )
 
+var (
+	// compile-time variables
+	Tag     = "development"
+	Commit  = "HEAD"
+	Version string
+)
+
+func init() {
+	Version = fmt.Sprintf("%s (HEAD is %s)", Tag, Commit)
+}
+
 func exitWithError(err error) {
 	fmt.Fprint(os.Stderr, err)
 	os.Exit(1)

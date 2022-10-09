@@ -19,6 +19,7 @@ type blueCtl struct {
 	fs           *cli.FlagSet
 	db           document.Service
 	debug        bool
+	version      bool
 }
 
 func initializeConfig(init initializer, configPath string) (*cliConfig, error) {
@@ -46,7 +47,8 @@ func initializeConfig(init initializer, configPath string) (*cliConfig, error) {
 
 func (c *blueCtl) initFlagSet(configFolder string) {
 	fs := cli.NewFlagSet("blue")
-	fs.BoolVar(&c.debug, "v", false, "Run with verbose instrumentation.")
+	fs.BoolVar(&c.version, "v", false, "Print CLI version information to stdout.")
+	fs.BoolVar(&c.debug, "V", false, "Run with verbose instrumentation.")
 	fs.StringVar(&c.configFolder, "c", configFolder, "Use a different config folder.")
 
 	c.fs = fs
@@ -102,6 +104,10 @@ func (c *blueCtl) initializeCli() error {
 	return nil
 }
 
+func (c *blueCtl) printVersion() {
+	fmt.Printf("Bluectl %s\n", Version)
+}
+
 func (c *blueCtl) Run(ctx context.Context, args []string) error {
 	_, rest, perr := cli.Parse(c.fs, 0, args)
 	if perr != nil && perr != cli.ErrHelp {
@@ -111,6 +117,11 @@ func (c *blueCtl) Run(ctx context.Context, args []string) error {
 	err := c.initializeCli()
 	if err != nil {
 		return err
+	}
+
+	if c.version {
+		c.printVersion()
+		return nil
 	}
 
 	if perr == cli.ErrHelp {
