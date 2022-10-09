@@ -29,35 +29,37 @@ func newReleaseDescribeCLI(m release.Manager) cli.CLI {
 func (s releaseDescribe) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "describe",
-		Summary:  "Describe a release manifest",
-		Synopsis: "<tag>",
+		Summary:  "Describe a package bundle",
+		Synopsis: "<package> <version>",
 		Options:  *s.fs,
 	}
 }
 
-func printableManifest(man release.Manifest) (string, error) {
+func printableBundle(man release.Bundle) (string, error) {
 	var m manifest
 	m.fromModel(man)
 	return m.toYAML()
 }
 
 func (s releaseDescribe) Run(ctx context.Context, args []string) error {
-	args, ok, err := cli.ParseUsage(s, s.fs, 1, args)
+	args, ok, err := cli.ParseUsage(s, s.fs, 2, args)
 	if err != nil || !ok {
 		return err
 	}
 
-	id := args[0]
+	pack := args[0]
+	version := release.Version(args[1])
 
 	ctx, cancel := context.WithTimeout(ctx, defaultDescribeTimeout)
 	defer cancel()
 
-	man, err := s.m.Get(ctx, id, release.NopProgressWriter(ioutil.Discard))
+	man, err := s.m.Get(ctx, pack, version,
+		release.NopProgressWriter(ioutil.Discard))
 	if err != nil {
 		return err
 	}
 
-	data, err := printableManifest(man)
+	data, err := printableBundle(man)
 	if err != nil {
 		return err
 	}

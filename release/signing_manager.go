@@ -36,7 +36,9 @@ func NewSigningManager(other Manager, key crypto.Key) Manager {
 	return ret
 }
 
-func (m *signingManager) Create(ctx context.Context, man Manifest, in ProgressReader) error {
+func (m *signingManager) Upload(
+	ctx context.Context, man Bundle, in ProgressReader,
+) error {
 	var out bytes.Buffer
 	var relayIn io.Reader
 	var inArmored io.Reader = in
@@ -76,12 +78,13 @@ func (m *signingManager) Create(ctx context.Context, man Manifest, in ProgressRe
 		}
 	}
 	progReader := newRelayProgressReader(in, relayIn)
-	return m.root.Create(ctx, man, progReader)
+	return m.root.Upload(ctx, man, progReader)
 }
 
 func (m *signingManager) Get(
-	ctx context.Context, ID string, out ProgressWriter,
-) (Manifest, error) {
+	ctx context.Context, pack string,
+	ver Version, out ProgressWriter,
+) (Bundle, error) {
 	var relayIn io.Writer
 	var verifyReader io.Reader
 
@@ -98,9 +101,9 @@ func (m *signingManager) Get(
 	}
 
 	progWriter := progressDelegate{writeDelegate: relayIn, progressDelegate: out}
-	man, err := m.root.Get(ctx, ID, progWriter)
+	man, err := m.root.Get(ctx, pack, ver, progWriter)
 	if err != nil {
-		return Manifest{}, err
+		return Bundle{}, err
 	}
 
 	const templateMissingMetadata = "WARNING: Failed to check data integrity: " +
@@ -108,30 +111,44 @@ func (m *signingManager) Get(
 	signature, ok := man.Metadata[pgpSignedMetadata]
 	if !ok {
 		err := fmt.Errorf(templateMissingMetadata, pgpSignedMetadata)
-		return Manifest{}, err
+		return Bundle{}, err
 	}
 
 	if isReadWriteSeeker {
 		_, err = readWriteSeeker.Seek(0, 0)
 		if err != nil {
 			err = fmt.Errorf("failed to seek release artifact file: %s", err)
-			return Manifest{}, err
+			return Bundle{}, err
 		}
 	}
 
 	sig := strings.NewReader(signature)
 	err = crypto.Verify(verifyReader, sig, m.key)
 	if err != nil {
-		return Manifest{}, err
+		return Bundle{}, err
 	}
 
 	return man, err
 }
 
-func (m *signingManager) Delete(ctx context.Context, ID string) error {
-	return m.root.Delete(ctx, ID)
+func (m *signingManager) Create(ctx context.Context, pack Package) error {
+	return m.root.Create(ctx, pack)
 }
 
-func (m *signingManager) List(ctx context.Context, filters map[string]string) ([]Manifest, error) {
-	return m.root.List(ctx, filters)
+func (m *signingManager) Delete(
+	ctx context.Context, pack string, ver Version,
+) error {
+	return m.root.Delete(ctx, pack, ver)
+}
+
+func (m *signingManager) List(
+	ctx context.Context, pack string, filters map[string]string,
+) ([]Bundle, error) {
+	return m.root.List(ctx, pack, filters)
+}
+
+func (m *signingManager) ListPackages(
+	ctx context.Context, filters map[string]string,
+) ([]Package, error) {
+	return m.root.ListPackages(ctx, filters)
 }

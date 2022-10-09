@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	createTimeout             = 10 * time.Minute
+	uploadTimeout             = 10 * time.Minute
 	pgpSignedMetadata         = "pgp-signature"
 	pgpSignedMetadataKey      = "pgp-signing-key-id"
 	pgpSignedMetadataIdentity = "pgp-signing-primary-identity"
@@ -37,7 +37,7 @@ func (i *metadataFlag) Set(value string) error {
 	return nil
 }
 
-type releaseCreate struct {
+type releaseUpload struct {
 	m           release.Manager
 	fs          *cli.FlagSet
 	privKeyID   string
@@ -57,11 +57,11 @@ func getDefaultAuthor() string {
 	return fmt.Sprintf("%s@%s", u.Username, h)
 }
 
-func newReleaseCreateCLI(m release.Manager) cli.CLI {
-	c := &releaseCreate{
+func newReleaseUploadCLI(m release.Manager) cli.CLI {
+	c := &releaseUpload{
 		m: m,
 	}
-	c.fs = cli.NewFlagSet("create")
+	c.fs = cli.NewFlagSet("upload")
 	c.fs.StringVar(&c.privKeyID, "k", "", "Sign release with PGP private key. "+
 		"This forces clients to provide a public key upon downloading release.")
 	c.fs.StringVar(&c.keyRingFile, "r", "secring.gpg",
@@ -70,11 +70,11 @@ func newReleaseCreateCLI(m release.Manager) cli.CLI {
 	return c
 }
 
-func (s *releaseCreate) Man() cli.Manual {
+func (s *releaseUpload) Man() cli.Manual {
 	return cli.Manual{
-		Name:     "create",
-		Summary:  "Create a release with the given tag and tar file",
-		Synopsis: "<tag> <filename>",
+		Name:     "upload",
+		Summary:  "Upload a package bundle with the given tag and tar file",
+		Synopsis: "<package> <version> <filename>",
 		Options:  *s.fs,
 	}
 }
@@ -108,8 +108,8 @@ func readPasswordFromStdin() (string, error) {
 	return string(bytePassword), nil
 }
 
-func (s *releaseCreate) createSignedRelease(
-	ctx context.Context, m release.Manifest, in *os.File,
+func (s *releaseUpload) uploadSignedRelease(
+	ctx context.Context, m release.Bundle, in *os.File,
 ) error {
 	var out bytes.Buffer
 	var passphrase string
@@ -138,12 +138,12 @@ func (s *releaseCreate) createSignedRelease(
 
 		sm := release.NewSigningManager(s.m, key)
 
-		ctx, cancel := context.WithTimeout(ctx, createTimeout)
+		ctx, cancel := context.WithTimeout(ctx, uploadTimeout)
 		defer cancel()
 
 		pb = newBarProgress(in)
 
-		err = sm.Create(ctx, m, pb)
+		err = sm.Upload(ctx, m, pb)
 		if err == nil {
 			return nil
 		}
@@ -163,7 +163,7 @@ func (s *releaseCreate) createSignedRelease(
 	}
 }
 
-func (s *releaseCreate) parseMetadataFlag() (map[string]string, error) {
+func (s *releaseUpload) parseMetadataFlag() (map[string]string, error) {
 	ret := make(map[string]string)
 	for _, arg := range s.mdataFlag {
 		kv := strings.Split(arg, "=")
@@ -175,13 +175,16 @@ func (s *releaseCreate) parseMetadataFlag() (map[string]string, error) {
 	return ret, nil
 }
 
-func (s *releaseCreate) Run(ctx context.Context, args []string) error {
-	args, ok, err := cli.ParseUsage(s, s.fs, 2, args)
+func (s *releaseUpload) Run(ctx context.Context, args []string) error {
+	args, ok, err := cli.ParseUsage(s, s.fs, 3, args)
 	if err != nil || !ok {
 		return err
 	}
+	pack := args[0]
+	version := release.Version(args[1])
+	out := args[2]
 
-	file, err := options.OpenFile(args[1])
+	file, err := options.OpenFile(out)
 	if err != nil {
 		return err
 	}
@@ -193,20 +196,20 @@ func (s *releaseCreate) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	m, err := tempManifest(args[0], getDefaultAuthor(), mdata)
+	m, err := tempBundle(pack, version, getDefaultAuthor(), mdata)
 	if err != nil {
 		return err
 	}
 
 	if s.privKeyID != "" {
-		return s.createSignedRelease(ctx, m, file)
+		return s.uploadSignedRelease(ctx, m, file)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, createTimeout)
+	ctx, cancel := context.WithTimeout(ctx, uploadTimeout)
 	defer cancel()
 
 	pb := newBarProgress(file)
 	defer pb.Close()
 
-	return s.m.Create(ctx, m, pb)
+	return s.m.Upload(ctx, m, pb)
 }

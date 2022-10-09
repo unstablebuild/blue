@@ -13,15 +13,17 @@ import (
 const authorKey = "author"
 
 // manifest represents the structure that the author of the release
-// completes before pushing it.
+// completes before uploading it.
 type manifest struct {
-	ID       string
+	Package  string
+	Version  release.Version
 	Notes    string
 	Metadata map[string]string
 }
 
-func (m *manifest) fromModel(man release.Manifest) {
-	m.ID = man.ID
+func (m *manifest) fromModel(man release.Bundle) {
+	m.Package = man.Package
+	m.Version = man.Version
 	m.Notes = man.Notes
 	m.Metadata = man.Metadata
 }
@@ -31,9 +33,10 @@ func (m manifest) validate() error {
 	return nil
 }
 
-func (m manifest) toModel() release.Manifest {
-	return release.Manifest{
-		ID:       m.ID,
+func (m manifest) toModel() release.Bundle {
+	return release.Bundle{
+		Package:  m.Package,
+		Version:  m.Version,
 		Notes:    m.Notes,
 		Metadata: m.Metadata,
 	}
@@ -47,13 +50,17 @@ func (m manifest) toYAML() (string, error) {
 	return string(data), nil
 }
 
-func tempManifest(ID string, author string, extraMdata map[string]string) (ret release.Manifest, err error) {
-	log.Debugf("decoding release %s manifest from temp file with metadata: %#v", ID, extraMdata)
+func tempBundle(
+	pack string, ver release.Version,
+	author string, extraMdata map[string]string,
+) (ret release.Bundle, err error) {
+	log.Debugf("decoding package %q release %q manifest from temp file with metadata: %#v",
+		pack, ver, extraMdata)
 
 	f, err := ioutil.TempFile("", "blue-release")
 	if err != nil {
 		err = fmt.Errorf("failed create temp file: %v", err)
-		return release.Manifest{}, err
+		return release.Bundle{}, err
 	}
 
 	mdata := map[string]string{
@@ -64,7 +71,7 @@ func tempManifest(ID string, author string, extraMdata map[string]string) (ret r
 		mdata[k] = v
 	}
 
-	m := manifest{ID: ID, Metadata: mdata}
+	m := manifest{Package: pack, Version: ver, Metadata: mdata}
 	dataIn, err := yaml.Marshal(&m)
 	if err != nil {
 		panic(err)
@@ -103,7 +110,8 @@ func tempManifest(ID string, author string, extraMdata map[string]string) (ret r
 		return
 	}
 
-	log.Debugf("decoded release %s manifest from temp file: %#v", ID, m)
+	log.Debugf("decoded package %q release %q manifest from temp file: %#v",
+		pack, ver, m)
 
 	return m.toModel(), m.validate()
 }

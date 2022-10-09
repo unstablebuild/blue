@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	actionCreate   string = "create"
+	actionUpload   string = "upload"
 	actionDelete   string = "delete"
 	actionGet      string = "get"
 	actionDescribe string = "describe"
@@ -25,7 +25,7 @@ type releaseCLI struct {
 func NewCLI(m release.Manager) cli.CLI {
 	return &releaseCLI{
 		cmds: map[string]cli.CLI{
-			actionCreate:   newReleaseCreateCLI(m),
+			actionUpload:   newReleaseUploadCLI(m),
 			actionDelete:   newReleaseDeleteCLI(m),
 			actionGet:      newReleaseGetCLI(m),
 			actionDescribe: newReleaseDescribeCLI(m),

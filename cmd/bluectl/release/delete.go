@@ -27,14 +27,14 @@ func newReleaseDeleteCLI(m release.Manager) cli.CLI {
 func (s releaseDelete) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "delete",
-		Summary:  "Delete a release by tag",
-		Synopsis: "<tag>",
+		Summary:  "Delete a package bundle",
+		Synopsis: "<package> <version>",
 		Options:  *s.fs,
 	}
 }
 
 func (s releaseDelete) Run(ctx context.Context, args []string) error {
-	args, ok, err := cli.ParseUsage(s, s.fs, 1, args)
+	args, ok, err := cli.ParseUsage(s, s.fs, 2, args)
 	if err != nil || !ok {
 		return err
 	}
@@ -42,5 +42,5 @@ func (s releaseDelete) Run(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), deleteTimeout)
 	defer cancel()
 
-	return s.m.Delete(ctx, args[0])
+	return s.m.Delete(ctx, args[0], release.Version(args[1]))
 }

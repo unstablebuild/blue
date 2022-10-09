@@ -50,7 +50,7 @@ $(BIN)/%: $(EXECSRC) $(LIBRPC) $(LIBSRC) $(BIN)
 
 make_release:
 	@ mkdir -p $(TARGET)/$(TARGET_OS)_$(TARGET_ARCH)
-	@ CGO_ENABLED=0 GOARCH=$(TARGET_ARCH) $(TARGET_ARCH_FLAGS) GOOS=$(TARGET_OS) go build -o `pwd`/$(TARGET)/$(TARGET_OS)_$(TARGET_ARCH) ./... 
+	@ CGO_ENABLED=0 GOARCH=$(TARGET_ARCH) $(TARGET_ARCH_FLAGS) GOOS=$(TARGET_OS) go build $(GOFLAGS) -o `pwd`/$(TARGET)/$(TARGET_OS)_$(TARGET_ARCH) ./... 
 	@ cp -R deploy $(TARGET)/$(TARGET_OS)_$(TARGET_ARCH)
 	@ cp deploy/Makefile $(TARGET)/$(TARGET_OS)_$(TARGET_ARCH)
 	@ rm $(TARGET)/$(TARGET_OS)_$(TARGET_ARCH)/deploy/Makefile

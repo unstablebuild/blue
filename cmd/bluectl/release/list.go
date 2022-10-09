@@ -49,30 +49,37 @@ func newReleaseListCLI(m release.Manager) cli.CLI {
 func (s *releaseList) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "list",
-		Summary:  "Print all release tags to stdout",
-		Synopsis: "",
+		Summary:  "Print a package's release bundles to stdout",
+		Synopsis: "<package>",
 		Options:  *s.fs,
 	}
 }
 
 func (s *releaseList) Run(ctx context.Context, args []string) error {
-	_, ok, err := cli.ParseUsage(s, s.fs, 0, args)
+	_, ok, err := cli.ParseUsage(s, s.fs, 1, args)
 	if err != nil || !ok {
 		return err
 	}
+	pack := args[0]
 
-	log.Debugf("listing releases with metadata filters: %v", s.filters)
+	log.Debugf("listing package %q releases with metadata filters: %v",
+		pack, s.filters)
 
 	ctx, cancel := context.WithTimeout(ctx, defaultListTimeout)
 	defer cancel()
 
-	ms, err := s.m.List(ctx, map[string]string(s.filters))
+	bundles, err := s.m.List(ctx, pack, map[string]string(s.filters))
 	if err != nil {
 		return err
 	}
 
-	for _, manifest := range ms {
-		fmt.Printf("%s\n", manifest.ID)
+	if len(bundles) == 0 {
+		fmt.Printf("No bundles found for package %q\n", pack)
+		return nil
+	}
+
+	for _, bundle := range bundles {
+		fmt.Printf("%s\n", bundle.Version)
 	}
 
 	return nil
