@@ -2,6 +2,7 @@ package cli
 
 import (
 	"flag"
+	"fmt"
 )
 
 func isBoolFlag(fs *FlagSet, name string) (is bool) {
@@ -84,7 +85,11 @@ func ParseUsage(cli CLI, fs *FlagSet, expectedArgs int, args []string) (
 ) {
 	args, _, err = Parse(fs, expectedArgs, args)
 	if err != nil {
-		if err == ErrHelp {
+		switch err {
+		case ErrInvalidArgs:
+			fmt.Printf("%s\n\n", err)
+			fallthrough
+		case ErrHelp:
 			Usage(cli)
 			err = nil
 		}
