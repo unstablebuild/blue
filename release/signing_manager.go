@@ -152,3 +152,15 @@ func (m *signingManager) ListPackages(
 ) ([]Package, error) {
 	return m.root.ListPackages(ctx, filters)
 }
+
+func (m *signingManager) DeletePackage(
+	ctx context.Context, pack string,
+) error {
+	return m.root.DeletePackage(ctx, pack)
+}
+
+func (m *signingManager) GetPackage(
+	ctx context.Context, pack string,
+) (Package, error) {
+	return m.root.GetPackage(ctx, pack)
+}

@@ -398,3 +398,28 @@ func (d *documentManager) ListPackages(
 
 	return
 }
+
+func (d *documentManager) DeletePackage(
+	ctx context.Context, pack string,
+) error {
+	id := makePackageDocID(pack)
+	_, err := d.GetPackage(ctx, pack)
+	if err != nil {
+		return err
+	}
+	return d.db.Delete(ctx, id)
+}
+
+func (d *documentManager) GetPackage(
+	ctx context.Context, pack string,
+) (Package, error) {
+	var doc packageDocument
+
+	id := makePackageDocID(pack)
+	err := d.db.Get(ctx, id, &doc)
+	if err != nil {
+		return Package{}, err
+	}
+
+	return doc.Package, nil
+}
