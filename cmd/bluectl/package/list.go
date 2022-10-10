@@ -3,11 +3,13 @@ package pack
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/ernestrc/blue/cli"
 	"github.com/ernestrc/blue/release"
+	"github.com/olekukonko/tablewriter"
 )
 
 const (
@@ -72,9 +74,13 @@ func (s *releaseList) Run(ctx context.Context, args []string) error {
 		return nil
 	}
 
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Name", "Notes", "Latest", "CreatedAt"})
 	for _, pack := range packages {
-		fmt.Printf("%s\t%s\n", pack.Name, pack.Notes)
+		table.Append([]string{pack.Name, pack.Notes,
+			string(pack.Latest), pack.CreatedAt.String()})
 	}
+	table.Render()
 
 	return nil
 }
