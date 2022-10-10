@@ -162,6 +162,20 @@ func (mr *MockManagerMockRecorder) Delete(arg0, arg1, arg2 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockManager)(nil).Delete), arg0, arg1, arg2)
 }
 
+// DeletePackage mocks base method.
+func (m *MockManager) DeletePackage(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePackage", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeletePackage indicates an expected call of DeletePackage.
+func (mr *MockManagerMockRecorder) DeletePackage(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePackage", reflect.TypeOf((*MockManager)(nil).DeletePackage), arg0, arg1)
+}
+
 // Get mocks base method.
 func (m *MockManager) Get(arg0 context.Context, arg1 string, arg2 Version, arg3 ProgressWriter) (Bundle, error) {
 	m.ctrl.T.Helper()
@@ -175,6 +189,21 @@ func (m *MockManager) Get(arg0 context.Context, arg1 string, arg2 Version, arg3 
 func (mr *MockManagerMockRecorder) Get(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockManager)(nil).Get), arg0, arg1, arg2, arg3)
+}
+
+// GetPackage mocks base method.
+func (m *MockManager) GetPackage(arg0 context.Context, arg1 string) (Package, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPackage", arg0, arg1)
+	ret0, _ := ret[0].(Package)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPackage indicates an expected call of GetPackage.
+func (mr *MockManagerMockRecorder) GetPackage(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPackage", reflect.TypeOf((*MockManager)(nil).GetPackage), arg0, arg1)
 }
 
 // List mocks base method.

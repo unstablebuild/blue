@@ -91,20 +91,33 @@ func TestDocumentManager(t *testing.T) {
 	t.Run("creates a new package", func(t *testing.T) {
 		m, _ := newTestingDocumentManager()
 		err := m.Create(ctx, Package{
-			Name:   fixtureRelease.Package,
+			Name:   "blue",
 			Notes:  "blabla",
 			Latest: "", // allowed to be empty
 		})
 		require.NoError(t, err)
+		pack, err := m.GetPackage(ctx, "blue")
+		require.NoError(t, err)
+
+		assert.Equal(t, Package{
+			Name:     "blue",
+			Notes:    "blabla",
+			Metadata: map[string]string{},
+		}, pack)
+	})
+
+	t.Run("deletes a package", func(t *testing.T) {
+		m, _ := newTestingDocumentManager()
+		err := m.Create(ctx, Package{
+			Name:  "hopper",
+			Notes: "blabla",
+		})
+		require.NoError(t, err)
+		require.NoError(t, m.DeletePackage(ctx, "hopper"))
 		packages, err := m.ListPackages(ctx, nil)
 		require.NoError(t, err)
 
-		require.Len(t, packages, 1)
-		assert.Equal(t, Package{
-			Name:     fixtureRelease.Package,
-			Notes:    "blabla",
-			Metadata: map[string]string{},
-		}, packages[0])
+		require.Len(t, packages, 0)
 	})
 
 	t.Run("uploads a new release bundle and uploads data", func(t *testing.T) {
