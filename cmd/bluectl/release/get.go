@@ -52,23 +52,40 @@ func (s *releaseGet) findKeyInArmoredKeyRing() (crypto.Key, error) {
 	return keys[0], nil
 }
 
+func (s *releaseGet) getLatestVersion(
+	ctx context.Context, pack string,
+) (release.Version, error) {
+	p, err := s.m.GetPackage(ctx, pack)
+	if err != nil {
+		return "", err
+	}
+	return p.Latest, nil
+}
+
 func (s *releaseGet) Run(ctx context.Context, args []string) error {
 	args, ok, err := cli.ParseUsage(s, s.fs, 3, args)
 	if err != nil || !ok {
 		return err
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, defaultGetTimeout)
+	defer cancel()
+
 	pack := args[0]
 	version := release.Version(args[1])
+	if version == "latest" {
+		version, err = s.getLatestVersion(ctx, pack)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("latest version is %q\n", version)
+	}
 	outfile := args[2]
 	f, err := os.Create(outfile)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-
-	ctx, cancel := context.WithTimeout(ctx, defaultGetTimeout)
-	defer cancel()
 
 	var m release.Bundle
 	key, err := s.findKeyInArmoredKeyRing()
