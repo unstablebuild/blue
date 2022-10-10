@@ -182,6 +182,9 @@ func (s *releaseUpload) Run(ctx context.Context, args []string) error {
 	}
 	pack := args[0]
 	version := release.Version(args[1])
+	if version == "latest" {
+		return errors.New("'latest' is a reserved version, automatically set to the latest uploaded bundle")
+	}
 	out := args[2]
 
 	file, err := options.OpenFile(out)
