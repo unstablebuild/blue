@@ -1,4 +1,4 @@
-package release
+package pack
 
 import (
 	"errors"
@@ -13,36 +13,33 @@ import (
 
 const authorKey = "author"
 
-// manifest represents the structure that the author of the release
+// manifest represents the structure that the author of the package
 // completes before uploading it.
 type manifest struct {
-	Package  string
-	Version  release.Version
+	Name     string
 	Notes    string
 	Metadata map[string]string
 }
 
-func (m *manifest) fromModel(man release.Bundle) {
-	m.Package = man.Package
-	m.Version = man.Version
+func (m *manifest) fromModel(man release.Package) {
+	m.Name = man.Name
 	m.Notes = man.Notes
 	m.Metadata = man.Metadata
 }
 
 func (m manifest) validate() error {
-	if m.Package == "" {
-		return errors.New("package cannot be empty")
+	if m.Name == "" {
+		return errors.New("name cannot be empty")
 	}
-	if m.Version == "" {
-		return errors.New("version cannot be empty")
+	if m.Notes == "" {
+		return errors.New("notes cannot be empty")
 	}
 	return nil
 }
 
-func (m manifest) toModel() release.Bundle {
-	return release.Bundle{
-		Package:  m.Package,
-		Version:  m.Version,
+func (m manifest) toModel() release.Package {
+	return release.Package{
+		Name:     m.Name,
 		Notes:    m.Notes,
 		Metadata: m.Metadata,
 	}
@@ -56,17 +53,16 @@ func (m manifest) toYAML() (string, error) {
 	return string(data), nil
 }
 
-func tempBundle(
-	pack string, ver release.Version,
-	author string, extraMdata map[string]string,
-) (ret release.Bundle, err error) {
-	log.Debugf("decoding package %q release %q manifest from temp file with metadata: %#v",
-		pack, ver, extraMdata)
+func tempPackage(
+	pack string, author string, extraMdata map[string]string,
+) (ret release.Package, err error) {
+	log.Debugf("decoding package %q manifest from temp file with metadata: %#v",
+		pack, extraMdata)
 
 	f, err := ioutil.TempFile("", "blue-release")
 	if err != nil {
 		err = fmt.Errorf("failed create temp file: %v", err)
-		return release.Bundle{}, err
+		return release.Package{}, err
 	}
 
 	mdata := map[string]string{
@@ -77,7 +73,7 @@ func tempBundle(
 		mdata[k] = v
 	}
 
-	m := manifest{Package: pack, Version: ver, Metadata: mdata}
+	m := manifest{Name: pack, Metadata: mdata}
 	dataIn, err := yaml.Marshal(&m)
 	if err != nil {
 		panic(err)
@@ -110,14 +106,15 @@ func tempBundle(
 		return
 	}
 
-	err = yaml.Unmarshal(data, &m)
+	var n manifest
+	err = yaml.Unmarshal(data, &n)
 	if err != nil {
 		err = fmt.Errorf("failed decode yaml from temp file: %v", err)
 		return
 	}
 
-	log.Debugf("decoded package %q release %q manifest from temp file: %#v",
-		pack, ver, m)
+	log.Debugf("decoded package %q manifest from temp file: %#v",
+		pack, n)
 
-	return m.toModel(), m.validate()
+	return n.toModel(), n.validate()
 }

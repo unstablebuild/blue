@@ -1,4 +1,4 @@
-package release
+package pack
 
 import (
 	"context"
@@ -8,49 +8,46 @@ import (
 )
 
 var (
-	// rename to create
-	actionUpload   string = "upload"
+	actionCreate   string = "create"
 	actionDelete   string = "delete"
-	actionGet      string = "get"
 	actionDescribe string = "describe"
 	actionList     string = "list"
 )
 
-type releaseCLI struct {
+type packageCLI struct {
 	cmds map[string]cli.CLI
 	fs   *cli.FlagSet
 }
 
-// NewCLI allocatest storage for a new release cli.CLI and
-// initializes it with the given release.Manager.
+// NewCLI allocatest storage for a new package cli.CLI and
+// initializes it with the given package.Manager.
 func NewCLI(m release.Manager) cli.CLI {
-	return &releaseCLI{
+	return &packageCLI{
 		cmds: map[string]cli.CLI{
-			actionUpload:   newReleaseUploadCLI(m),
+			actionCreate:   newReleaseCreateCLI(m),
 			actionDelete:   newReleaseDeleteCLI(m),
-			actionGet:      newReleaseGetCLI(m),
 			actionDescribe: newReleaseDescribeCLI(m),
 			actionList:     newReleaseListCLI(m),
 		},
-		fs: cli.NewFlagSet("release"),
+		fs: cli.NewFlagSet("package"),
 	}
 }
 
-func (s *releaseCLI) Man() cli.Manual {
+func (s *packageCLI) Man() cli.Manual {
 	var cmds []cli.Manual
 	for _, cmd := range s.cmds {
 		cmds = append(cmds, cmd.Man())
 	}
 
 	return cli.Manual{
-		Name:     "release",
-		Summary:  "Manage blue package releases",
+		Name:     "package",
+		Summary:  "Manage blue package packages",
 		Synopsis: "<cmd>",
 		Commands: cmds,
 		Options:  *s.fs,
 	}
 }
 
-func (s *releaseCLI) Run(ctx context.Context, args []string) error {
+func (s *packageCLI) Run(ctx context.Context, args []string) error {
 	return cli.ParseAndRunCommand(ctx, s, s.fs, s.cmds, args)
 }
