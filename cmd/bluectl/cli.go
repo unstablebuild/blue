@@ -7,6 +7,7 @@ import (
 
 	"github.com/ernestrc/blue/cli"
 	"github.com/ernestrc/blue/cmd/bluectl/gps"
+	packageCLI "github.com/ernestrc/blue/cmd/bluectl/package"
 	releaseCLI "github.com/ernestrc/blue/cmd/bluectl/release"
 	"github.com/ernestrc/blue/datastore/document"
 	"github.com/ernestrc/blue/logging"
@@ -95,6 +96,7 @@ func (c *blueCtl) initializeCli() error {
 	c.cmds = map[string]cli.CLI{
 		"init":    init,
 		"release": releaseCLI.NewCLI(releaseManager),
+		"package": packageCLI.NewCLI(releaseManager),
 		"gps":     gps.NewCLI(),
 	}
 	c.db = db
