@@ -3,11 +3,13 @@ package release
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/ernestrc/blue/cli"
 	"github.com/ernestrc/blue/release"
+	"github.com/olekukonko/tablewriter"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -78,9 +80,14 @@ func (s *releaseList) Run(ctx context.Context, args []string) error {
 		return nil
 	}
 
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Package", "Version", "Notes", "CreatedAt"})
 	for _, bundle := range bundles {
-		fmt.Printf("%s\n", bundle.Version)
+		table.Append([]string{bundle.Package,
+			string(bundle.Version), bundle.Notes,
+			bundle.CreatedAt.String()})
 	}
+	table.Render()
 
 	return nil
 }

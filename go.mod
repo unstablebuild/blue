@@ -14,8 +14,10 @@ require (
 	github.com/google/uuid v1.1.2
 	github.com/jacobsa/go-serial v0.0.0-20180131005756-15cf729a72d4
 	github.com/julienschmidt/httprouter v1.3.0
-	github.com/olekukonko/tablewriter v0.0.4
+	github.com/mattn/go-runewidth v0.0.14 // indirect
+	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pion/dtls/v2 v2.0.2
+	github.com/rivo/uniseg v0.4.2 // indirect
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.7.0
 	github.com/willf/pad v0.0.0-20200313202418-172aa767f2a4
