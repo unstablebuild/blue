@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ernestrc/blue/datastore"
-	"github.com/ernestrc/blue/datastore/document"
+	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/logging"
 	"github.com/ernestrc/blue/logging/trace"
 )
@@ -132,16 +131,16 @@ func (s *Store) Receive(ctx context.Context, pos Coordinates) error {
 func withFilterTime(
 	in []document.Filter, from, to time.Time,
 ) []document.Filter {
-	in = datastore.WithFilter(in,
+	in = document.WithFilter(in,
 		[]string{"UnixTime"}, from.Unix(), document.OpGreaterThanEqual)
-	return datastore.WithFilter(in,
+	return document.WithFilter(in,
 		[]string{"UnixTime"}, to.Unix(), document.OpLessThan)
 }
 
 func withFilterDeviceID(
 	in []document.Filter, deviceID string,
 ) []document.Filter {
-	return datastore.WithFilter(in, []string{"DeviceID"}, deviceID, document.OpEqual)
+	return document.WithFilter(in, []string{"DeviceID"}, deviceID, document.OpEqual)
 }
 
 // ListDevice lists all the known positions of a device between from and to.

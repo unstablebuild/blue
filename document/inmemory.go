@@ -38,7 +38,7 @@ func (c *inMemoryCache) set(
 	if data == nil {
 		panic("invalid nil data argument to Create/Set")
 	}
-	data, err = derefCreateValue(reflect.ValueOf(data))
+	data, err = DerefCreateValue(reflect.ValueOf(data))
 	if err != nil {
 		return
 	}
@@ -52,7 +52,7 @@ func (c *inMemoryCache) set(
 			return ErrAlreadyExists
 		}
 	}
-	c.storage[ID] = encode(data, true)
+	c.storage[ID] = Encode(data, true)
 	return
 }
 
@@ -71,7 +71,7 @@ func (c *inMemoryCache) getValue(ID string, doc interface{}) (
 		return
 	}
 
-	return safeDecode(doc, raw)
+	return SafeDecode(doc, raw)
 }
 
 func (c *inMemoryCache) Get(
@@ -97,12 +97,12 @@ func (c *inMemoryCache) Update(
 		return err
 	}
 
-	updateProto(updates, proto)
+	UpdateProto(updates, proto)
 
 	c.m.Lock()
 	defer c.m.Unlock()
 
-	c.storage[ID] = encode(proto, false)
+	c.storage[ID] = Encode(proto, false)
 
 	return nil
 }
@@ -122,16 +122,16 @@ func (c *inMemoryCache) Delete(ctx context.Context, ID string) error {
 func (c *inMemoryCache) List(ctx context.Context, filters []Filter) (
 	it Iterator, err error,
 ) {
-	iter := listIterator{docs: make([][]byte, 0)}
+	iter := NewListIterator()
 
 	c.m.Lock()
 	defer c.m.Unlock()
 
 	for _, v := range c.storage {
-		iter.maybeExtend(filters, v)
+		iter.Extend(filters, v)
 	}
 
-	return &iter, nil
+	return iter, nil
 }
 
 func (c *inMemoryCache) Drop(ctx context.Context) error {

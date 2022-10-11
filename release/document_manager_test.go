@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ernestrc/blue/datastore/document"
+	"github.com/ernestrc/blue/document"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

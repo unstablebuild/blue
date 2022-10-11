@@ -1,16 +1,17 @@
-package document
+package logging
 
 import (
 	"context"
 	"reflect"
 	"strings"
 
+	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/logging"
 	"github.com/ernestrc/blue/logging/trace"
 )
 
 type loggingService struct {
-	svc         Service
+	svc         document.Service
 	serviceName string
 }
 
@@ -19,7 +20,7 @@ func getServiceName(tpe reflect.Type) string {
 }
 
 // WithLogging wraps a Service to provide instrumentation in the form of logs.
-func WithLogging(svc Service) Service {
+func WithLogging(svc document.Service) document.Service {
 	return loggingService{
 		svc:         svc,
 		serviceName: getServiceName(reflect.TypeOf(svc)),
@@ -51,7 +52,7 @@ func (s loggingService) Set(
 }
 
 func (s loggingService) Update(
-	ctx context.Context, ID string, updates []Update,
+	ctx context.Context, ID string, updates []document.Update,
 ) error {
 	traceID, ctx := trace.FromContextOrNew(ctx)
 	attemptAt := logging.LogAttempt(traceID, s.serviceName+".Update")
@@ -84,8 +85,8 @@ func (s loggingService) Delete(ctx context.Context, ID string) error {
 	return err
 }
 
-func (s loggingService) List(ctx context.Context, filters []Filter) (
-	Iterator, error,
+func (s loggingService) List(ctx context.Context, filters []document.Filter) (
+	document.Iterator, error,
 ) {
 	traceID, ctx := trace.FromContextOrNew(ctx)
 	attemptAt := logging.LogAttempt(traceID, s.serviceName+".List")

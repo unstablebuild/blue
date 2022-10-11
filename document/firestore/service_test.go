@@ -1,8 +1,10 @@
-package document
+package firestore
 
 import (
 	"testing"
 
+	"github.com/ernestrc/blue/document"
+	documenttest "github.com/ernestrc/blue/document/test"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -28,9 +30,9 @@ func TestFirestore(t *testing.T) {
 	teardown := runFirestoreOrSkip(t)
 	defer teardown()
 
-	testDatastore(t, func(t *testing.T) Service {
+	documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
 		collection := uuid.New().String()
-		store, err := NewFireStore(testProjectID, collection, "")
+		store, err := New(testProjectID, collection, "")
 		require.NoError(t, err)
 		return store
 	})

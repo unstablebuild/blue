@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ernestrc/blue/datastore/document"
+	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/logging"
 	log "github.com/sirupsen/logrus"
 )

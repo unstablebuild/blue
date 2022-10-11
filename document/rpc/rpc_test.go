@@ -1,4 +1,4 @@
-package document
+package rpc
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ernestrc/blue/document"
+	documenttest "github.com/ernestrc/blue/document/test"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -16,7 +18,7 @@ func tcpListener() (net.Listener, error) {
 }
 
 func runDatastoreServerOverListener(
-	t *testing.T, other Service, listener func() (net.Listener, error),
+	t *testing.T, other document.Service, listener func() (net.Listener, error),
 ) (net.Addr, func()) {
 	srv := NewServer(other)
 	lis, err := listener()
@@ -32,15 +34,15 @@ func runDatastoreServerOverListener(
 	return lis.Addr(), teardown
 }
 
-func runDatastoreServer(t *testing.T, other Service) (net.Addr, func()) {
+func runDatastoreServer(t *testing.T, other document.Service) (net.Addr, func()) {
 	return runDatastoreServerOverListener(t, other, tcpListener)
 }
 
 func testRPCDatastoreOverListener(t *testing.T, listener func() (net.Listener, error)) {
 	teardowns := []func(){}
 
-	testDatastore(t, func(t *testing.T) Service {
-		cache := NewInMemoryCache()
+	documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
+		cache := document.NewInMemoryCache()
 		addr, teardown := runDatastoreServerOverListener(t, cache, listener)
 		teardowns = append(teardowns, teardown)
 
@@ -92,8 +94,8 @@ func TestRPC(t *testing.T) {
 }
 
 type interopHelper struct {
-	read  Service
-	write Service
+	read  document.Service
+	write document.Service
 }
 
 func (h interopHelper) Create(ctx context.Context, ID string, doc interface{}) error {
@@ -104,7 +106,7 @@ func (h interopHelper) Set(ctx context.Context, ID string, doc interface{}) erro
 	return h.write.Set(ctx, ID, doc)
 }
 
-func (h interopHelper) Update(ctx context.Context, ID string, updates []Update) error {
+func (h interopHelper) Update(ctx context.Context, ID string, updates []document.Update) error {
 	return h.write.Update(ctx, ID, updates)
 }
 
@@ -116,7 +118,7 @@ func (h interopHelper) Delete(ctx context.Context, ID string) error {
 	return h.write.Delete(ctx, ID)
 }
 
-func (h interopHelper) List(ctx context.Context, filters []Filter) (Iterator, error) {
+func (h interopHelper) List(ctx context.Context, filters []document.Filter) (document.Iterator, error) {
 	return h.read.List(ctx, filters)
 }
 
@@ -133,8 +135,8 @@ func TestRPCInterop(t *testing.T) {
 	teardowns := []func(){}
 
 	t.Run("writes by client/server are readable by underlying service", func(t *testing.T) {
-		testDatastore(t, func(t *testing.T) Service {
-			cache := NewInMemoryCache()
+		documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
+			cache := document.NewInMemoryCache()
 			addr, teardown := runDatastoreServer(t, cache)
 			teardowns = append(teardowns, teardown)
 
@@ -146,8 +148,8 @@ func TestRPCInterop(t *testing.T) {
 	})
 
 	t.Run("writes by underlying service are readable by client/server", func(t *testing.T) {
-		testDatastore(t, func(t *testing.T) Service {
-			cache := NewInMemoryCache()
+		documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
+			cache := document.NewInMemoryCache()
 			addr, teardown := runDatastoreServer(t, cache)
 			teardowns = append(teardowns, teardown)
 

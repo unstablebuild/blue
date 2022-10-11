@@ -1,4 +1,4 @@
-package document
+package bolt
 
 import (
 	"context"
@@ -6,17 +6,19 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ernestrc/blue/document"
+	documenttest "github.com/ernestrc/blue/document/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBolt(t *testing.T) {
-	testDatastore(t, func(t *testing.T) Service {
+	documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
 		f, err := ioutil.TempFile("", "barnack_bolt_test")
 		require.NoError(t, err)
 		defer f.Close()
 
-		store, err := NewBolt(f.Name(), "test")
+		store, err := New(f.Name(), "test")
 		require.NoError(t, err)
 
 		return store
@@ -28,11 +30,11 @@ func TestBolt(t *testing.T) {
 		require.NoError(t, err)
 
 		defer f.Close()
-		store, err := NewBolt(f.Name(), "test")
+		store, err := New(f.Name(), "test")
 		require.NoError(t, err)
 
-		require.NoError(t, store.Set(ctx, "1", alice))
-		require.NoError(t, store.Set(ctx, "2", alice))
+		require.NoError(t, store.Set(ctx, "1", documenttest.Alice()))
+		require.NoError(t, store.Set(ctx, "2", documenttest.Alice()))
 
 		require.NoError(t, store.Drop(ctx))
 
@@ -47,16 +49,16 @@ func TestBolt(t *testing.T) {
 		require.NoError(t, err)
 		defer f.Close()
 
-		store1, err := NewBolt(f.Name(), "test-1")
+		store1, err := New(f.Name(), "test-1")
 		require.NoError(t, err)
 
-		store2, err := NewBolt(f.Name(), "test-2")
+		store2, err := New(f.Name(), "test-2")
 		require.NoError(t, err)
 
 		one := "daas"
 		two := "postmates"
-		e1 := alice
-		e2 := bob
+		e1 := documenttest.Alice()
+		e2 := documenttest.Bob()
 
 		t.Run("is safe to use two instances of the service with same database file", func(t *testing.T) {
 			var wg sync.WaitGroup
@@ -81,8 +83,8 @@ func TestBolt(t *testing.T) {
 
 			wg.Wait()
 
-			var r1 segador
-			var r2 segador
+			var r1 documenttest.Segador
+			var r2 documenttest.Segador
 
 			wg.Add(2)
 			go func() {
@@ -107,11 +109,11 @@ func TestBolt(t *testing.T) {
 		})
 
 		t.Run("List returns data of its corresponding instance", func(t *testing.T) {
-			for _, store := range []Service{store1, store2} {
+			for _, store := range []document.Service{store1, store2} {
 				it, err := store.List(ctx, nil)
 				require.NoError(t, err)
 
-				var r1 segador
+				var r1 documenttest.Segador
 				require.True(t, it.HasNext())
 				assert.NoError(t, it.NextTo(&r1))
 				assert.False(t, it.HasNext())

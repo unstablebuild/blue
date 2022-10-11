@@ -10,7 +10,7 @@ import (
 	"github.com/pion/dtls/v2"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/ernestrc/blue/datastore/document"
+	"github.com/ernestrc/blue/document/bolt"
 	"github.com/ernestrc/blue/gps"
 	"github.com/ernestrc/blue/logging"
 )
@@ -84,7 +84,7 @@ func main() {
 	}
 	defer s.Close()
 
-	db, err := document.NewBolt(*boltDbPath, "gps-producer-buffer")
+	db, err := bolt.New(*boltDbPath, "gps-producer-buffer")
 	if err != nil {
 		log.Fatalf("failed to create bolt db: %v", err)
 	}
