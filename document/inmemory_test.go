@@ -4,8 +4,6 @@ import (
 	"testing"
 )
 
+// tested in logging package
 func TestInMemoryCache(t *testing.T) {
-	testDatastore(t, func(t *testing.T) Service {
-		return NewInMemoryCache()
-	})
 }

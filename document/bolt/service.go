@@ -1,4 +1,4 @@
-package document
+package bolt
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ernestrc/blue/document"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -16,24 +17,24 @@ const (
 
 var (
 	// only one instance of db per path can be instantiated
-	// and often we want to instante multiple BoltStore's
+	// and often we want to instante multiple bolt.Store's
 	// in the same db path, one per collection.
 	mu      sync.Mutex
 	dbs     = make(map[string]*bolt.DB)
 	options = bolt.Options{Timeout: defaultBoltTimeout}
 )
 
-// BoltStore implements a document.Service backed by a local, embedded bolt DB.
+// Store implements a document.Service backed by a local, embedded bolt DB.
 // It additionally provides a method to efficiently delete all
 // contents of a collection: DeleteAll.
-type BoltStore struct {
+type Store struct {
 	db     *bolt.DB
 	collID []byte
 }
 
-// NewBolt allocates store for a new BoltStore and initializes it with the given
+// New allocates store for a new Store and initializes it with the given
 // dbPath and collectionID.
-func NewBolt(dbPath string, collectionID string) (*BoltStore, error) {
+func New(dbPath string, collectionID string) (*Store, error) {
 	mu.Lock()
 	defer mu.Unlock()
 	if dbs[dbPath] == nil {
@@ -50,7 +51,7 @@ func NewBolt(dbPath string, collectionID string) (*BoltStore, error) {
 	db := dbs[dbPath]
 
 	collID := []byte(collectionID)
-	s := &BoltStore{
+	s := &Store{
 		db:     db,
 		collID: collID,
 	}
@@ -62,7 +63,7 @@ func NewBolt(dbPath string, collectionID string) (*BoltStore, error) {
 	return s, nil
 }
 
-func (s *BoltStore) createBucketIfNotExists() error {
+func (s *Store) createBucketIfNotExists() error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(s.collID)
 		if err != nil {
@@ -72,12 +73,12 @@ func (s *BoltStore) createBucketIfNotExists() error {
 	})
 }
 
-// Close closes all resources associated with this BoltStore.
-func (s *BoltStore) Close() error {
+// Close closes all resources associated with this Store .
+func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-func (s *BoltStore) getData(ID string, doc interface{}) (
+func (s *Store) getData(ID string, doc interface{}) (
 	err error,
 ) {
 	return s.db.View(func(tx *bolt.Tx) error {
@@ -85,35 +86,35 @@ func (s *BoltStore) getData(ID string, doc interface{}) (
 		data := b.Get([]byte(ID))
 
 		if len(data) == 0 {
-			return ErrNotFound
+			return document.ErrNotFound
 		}
 
-		return safeDecode(doc, data)
+		return document.SafeDecode(doc, data)
 	})
 }
 
 // Set satisfies document.Service.
-func (s *BoltStore) Set(
+func (s *Store) Set(
 	ctx context.Context, ID string, doc interface{},
 ) error {
 	return s.set(ctx, ID, doc, false)
 }
 
 // Create satisfies document.Service.
-func (s *BoltStore) Create(
+func (s *Store) Create(
 	ctx context.Context, ID string, doc interface{},
 ) error {
 	return s.set(ctx, ID, doc, true)
 }
 
-func (s *BoltStore) set(
+func (s *Store) set(
 	ctx context.Context, ID string, doc interface{},
 	errAlreadyExists bool,
 ) error {
 	if doc == nil {
 		panic("invalid nil data argument to Create")
 	}
-	doc, err := derefCreateValue(reflect.ValueOf(doc))
+	doc, err := document.DerefCreateValue(reflect.ValueOf(doc))
 	if err != nil {
 		return err
 	}
@@ -122,15 +123,15 @@ func (s *BoltStore) set(
 		b := tx.Bucket(s.collID)
 		key := []byte(ID)
 		if errAlreadyExists && len(b.Get(key)) != 0 {
-			return ErrAlreadyExists
+			return document.ErrAlreadyExists
 		}
-		return b.Put(key, encode(doc, true))
+		return b.Put(key, document.Encode(doc, true))
 	})
 }
 
 // Update satisfies document.Service.
-func (s *BoltStore) Update(
-	ctx context.Context, ID string, updates []Update,
+func (s *Store) Update(
+	ctx context.Context, ID string, updates []document.Update,
 ) error {
 	if len(updates) == 0 {
 		panic("Update: no paths to update")
@@ -141,30 +142,30 @@ func (s *BoltStore) Update(
 		data := b.Get([]byte(ID))
 
 		if len(data) == 0 {
-			return ErrNotFound
+			return document.ErrNotFound
 		}
 
 		var doc map[string]interface{}
-		err := safeDecode(&doc, data)
+		err := document.SafeDecode(&doc, data)
 		if err != nil {
 			return err
 		}
 
-		updateProto(updates, doc)
+		document.UpdateProto(updates, doc)
 
-		return b.Put([]byte(ID), encode(doc, false))
+		return b.Put([]byte(ID), document.Encode(doc, false))
 	})
 }
 
 // Get satisfies document.Service.
-func (s *BoltStore) Get(
+func (s *Store) Get(
 	ctx context.Context, ID string, doc interface{},
 ) error {
 	return s.getData(ID, doc)
 }
 
 // Delete satisfies document.Service.
-func (s *BoltStore) Delete(
+func (s *Store) Delete(
 	ctx context.Context, ID string,
 ) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
@@ -174,10 +175,10 @@ func (s *BoltStore) Delete(
 }
 
 // List satisfies document.Service.
-func (s *BoltStore) List(ctx context.Context, filters []Filter) (
-	Iterator, error,
+func (s *Store) List(ctx context.Context, filters []document.Filter) (
+	document.Iterator, error,
 ) {
-	iter := &listIterator{docs: make([][]byte, 0)}
+	iter := document.NewListIterator()
 	err := s.db.View(func(tx *bolt.Tx) error {
 		// NOTE: this buffers all results in memory.
 		// We should paginate results by creating a cursor
@@ -185,7 +186,7 @@ func (s *BoltStore) List(ctx context.Context, filters []Filter) (
 		// documents.
 		b := tx.Bucket(s.collID)
 		return b.ForEach(func(key []byte, value []byte) error {
-			iter.maybeExtend(filters, value)
+			iter.Extend(filters, value)
 			return nil
 		})
 	})
@@ -197,7 +198,7 @@ func (s *BoltStore) List(ctx context.Context, filters []Filter) (
 }
 
 // Drop satisfies document.DroppableService.
-func (s *BoltStore) Drop(ctx context.Context) error {
+func (s *Store) Drop(ctx context.Context) error {
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		return tx.DeleteBucket(s.collID)
 	})

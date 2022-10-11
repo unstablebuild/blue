@@ -1,4 +1,4 @@
-package document
+package test
 
 import (
 	"context"
@@ -7,28 +7,48 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ernestrc/blue/document"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-type fnServiceFactory func(t *testing.T) Service
+type FnServiceFactory func(t *testing.T) document.Service
 
 type Reaper interface {
 	reapChains() error
 }
 
-type segador struct {
+type Segador struct {
 	Name          string
 	Traits        map[string]interface{}
 	internalField string
 }
 
-func (s *segador) reapChains() error {
+func Alice() Segador {
+	return MakeSegador(
+		withName("Alice"),
+		withTrait("dob", "1989-11-03"),
+		withTrait("years", float64(30)),
+		withTrait("fancy", false),
+	)
+}
+
+func Bob() Segador {
+	return MakeSegador(
+		withName("Bob"),
+		withTrait("dob", "1989-11-03"),
+		withTrait("years", float64(30)),
+		withTrait("fancy", true),
+		withTrait("sister", alice.toMap()),
+	)
+}
+
+func (s *Segador) reapChains() error {
 	return nil
 }
 
-func (s *segador) toMap() map[string]interface{} {
+func (s *Segador) toMap() map[string]interface{} {
 	res := make(map[string]interface{})
 	res["name"] = s.Name
 	traitsMap := make(map[string]interface{})
@@ -39,9 +59,9 @@ func (s *segador) toMap() map[string]interface{} {
 	return res
 }
 
-type segadorOpt func(*segador) *segador
+type segadorOpt func(*Segador) *Segador
 
-func makeSegador(opts ...segadorOpt) (s segador) {
+func MakeSegador(opts ...segadorOpt) (s Segador) {
 	for _, o := range opts {
 		s = *o(&s)
 	}
@@ -49,14 +69,14 @@ func makeSegador(opts ...segadorOpt) (s segador) {
 }
 
 func withName(name string) segadorOpt {
-	return func(s *segador) *segador {
+	return func(s *Segador) *Segador {
 		s.Name = name
 		return s
 	}
 }
 
 func withTrait(k string, value interface{}) segadorOpt {
-	return func(s *segador) *segador {
+	return func(s *Segador) *Segador {
 		if s.Traits == nil {
 			s.Traits = make(map[string]interface{})
 		}
@@ -66,20 +86,9 @@ func withTrait(k string, value interface{}) segadorOpt {
 }
 
 var (
-	alice = makeSegador(
-		withName("Alice"),
-		withTrait("dob", "1989-11-03"),
-		withTrait("years", float64(30)),
-		withTrait("fancy", false),
-	)
+	alice = Alice()
 
-	bob = makeSegador(
-		withName("Bob"),
-		withTrait("dob", "1989-11-03"),
-		withTrait("years", float64(30)),
-		withTrait("fancy", true),
-		withTrait("sister", alice.toMap()),
-	)
+	bob = Bob()
 )
 
 type myOtherEntity struct {
@@ -88,7 +97,7 @@ type myOtherEntity struct {
 	CreatedAt time.Time `firestore:",serverTimestamp"`
 }
 
-func testDatastoreCreate(t *testing.T, serviceFactory fnServiceFactory) {
+func testDatastoreCreate(t *testing.T, serviceFactory FnServiceFactory) {
 	ctx := context.Background()
 
 	t.Run("Create returns error if data is not a struct or a map", func(t *testing.T) {
@@ -111,7 +120,7 @@ func testDatastoreCreate(t *testing.T, serviceFactory fnServiceFactory) {
 		err := s.Create(ctx, "bobID", &bobRef)
 		require.NoError(t, err)
 
-		var myVal segador
+		var myVal Segador
 		err = s.Get(ctx, "bobID", &myVal)
 		require.NoError(t, err)
 		assert.Equal(t, bob, myVal)
@@ -124,7 +133,7 @@ func testDatastoreCreate(t *testing.T, serviceFactory fnServiceFactory) {
 		err := s.Create(ctx, "aliceID", bob)
 		require.NoError(t, err)
 
-		assert.Equal(t, ErrAlreadyExists, s.Create(ctx, "aliceID", bob))
+		assert.Equal(t, document.ErrAlreadyExists, s.Create(ctx, "aliceID", bob))
 	})
 
 	t.Run("Create panics if attempt to create a document from nil", func(t *testing.T) {
@@ -141,14 +150,14 @@ func testDatastoreCreate(t *testing.T, serviceFactory fnServiceFactory) {
 		defer s.Close()
 		id := uuid.New().String()
 
-		putxi := makeSegador(
+		putxi := MakeSegador(
 			withName("Putxi"),
 		)
 		putxi.internalField = "foobar"
 		err := s.Create(ctx, id, putxi)
 		require.NoError(t, err)
 
-		var myPutxi segador
+		var myPutxi Segador
 		err = s.Get(ctx, id, &myPutxi)
 		require.NoError(t, err)
 		assert.Equal(t, "", myPutxi.internalField)
@@ -171,7 +180,7 @@ func testDatastoreCreate(t *testing.T, serviceFactory fnServiceFactory) {
 	})
 }
 
-func testDatastoreSet(t *testing.T, serviceFactory fnServiceFactory) {
+func testDatastoreSet(t *testing.T, serviceFactory FnServiceFactory) {
 	ctx := context.Background()
 
 	t.Run("Set returns error if data is not a struct or a map", func(t *testing.T) {
@@ -194,7 +203,7 @@ func testDatastoreSet(t *testing.T, serviceFactory fnServiceFactory) {
 		err := s.Set(ctx, "bobID", &bobRef)
 		require.NoError(t, err)
 
-		var myVal segador
+		var myVal Segador
 		err = s.Get(ctx, "bobID", &myVal)
 		require.NoError(t, err)
 		assert.Equal(t, bob, myVal)
@@ -207,7 +216,7 @@ func testDatastoreSet(t *testing.T, serviceFactory fnServiceFactory) {
 		err := s.Set(ctx, "NighthawkM1", bob)
 		require.NoError(t, err)
 
-		var myVal segador
+		var myVal Segador
 		err = s.Get(ctx, "NighthawkM1", &myVal)
 		require.NoError(t, err)
 		assert.Equal(t, bob, myVal)
@@ -238,7 +247,7 @@ func testDatastoreSet(t *testing.T, serviceFactory fnServiceFactory) {
 	})
 }
 
-func testDatastoreGet(t *testing.T, serviceFactory fnServiceFactory) {
+func testDatastoreGet(t *testing.T, serviceFactory FnServiceFactory) {
 	ctx := context.Background()
 
 	t.Run("Get retrieves a document", func(t *testing.T) {
@@ -246,10 +255,10 @@ func testDatastoreGet(t *testing.T, serviceFactory fnServiceFactory) {
 		defer s.Close()
 		myID := uuid.New().String()
 
-		var myBob segador
+		var myBob Segador
 
 		err := s.Get(ctx, myID, &myBob)
-		assert.Equal(t, ErrNotFound, err)
+		assert.Equal(t, document.ErrNotFound, err)
 
 		err = s.Create(ctx, myID, bob)
 		require.NoError(t, err)
@@ -262,8 +271,8 @@ func testDatastoreGet(t *testing.T, serviceFactory fnServiceFactory) {
 	t.Run("Get returns ErrNotFound if document does not exist", func(t *testing.T) {
 		s := serviceFactory(t)
 		defer s.Close()
-		var myVal segador
-		require.Equal(t, ErrNotFound, s.Get(ctx, "bobID", &myVal))
+		var myVal Segador
+		require.Equal(t, document.ErrNotFound, s.Get(ctx, "bobID", &myVal))
 	})
 
 	t.Run("Get errors with anything that's not a pointer to struct or map", func(t *testing.T) {
@@ -274,7 +283,7 @@ func testDatastoreGet(t *testing.T, serviceFactory fnServiceFactory) {
 		err := s.Create(ctx, myID, myOtherEntity{})
 		require.NoError(t, err)
 
-		var myVal segador
+		var myVal Segador
 		require.Error(t, s.Get(ctx, myID, myVal))
 	})
 
@@ -291,13 +300,13 @@ func testDatastoreGet(t *testing.T, serviceFactory fnServiceFactory) {
 		err = s.Get(ctx, myID, &myBob)
 		require.NoError(t, err)
 
-		delete(myBob, DefaultCreatedAtField)
-		delete(myBob, DefaultUpdatedAtField)
+		delete(myBob, document.DefaultCreatedAtField)
+		delete(myBob, document.DefaultUpdatedAtField)
 		assert.Equal(t, bob.toMap(), myBob)
 	})
 }
 
-func testDatastoreDelete(t *testing.T, serviceFactory fnServiceFactory) {
+func testDatastoreDelete(t *testing.T, serviceFactory FnServiceFactory) {
 	ctx := context.Background()
 
 	t.Run("Get after a Delete returns nil", func(t *testing.T) {
@@ -305,7 +314,7 @@ func testDatastoreDelete(t *testing.T, serviceFactory fnServiceFactory) {
 		defer s.Close()
 		myID := uuid.New().String()
 
-		var myBob segador
+		var myBob Segador
 
 		err := s.Create(ctx, myID, bob)
 		require.NoError(t, err)
@@ -317,28 +326,28 @@ func testDatastoreDelete(t *testing.T, serviceFactory fnServiceFactory) {
 		require.NoError(t, err)
 
 		err = s.Get(ctx, myID, &myBob)
-		require.Equal(t, ErrNotFound, err)
+		require.Equal(t, document.ErrNotFound, err)
 	})
 }
 
-func updateName(newName string) Update {
-	return Update{
+func updateName(newName string) document.Update {
+	return document.Update{
 		FieldPath: []string{"Name"},
 		Value:     newName,
 	}
 }
 
-func updateTrait(k string, v interface{}) Update {
-	return Update{
+func updateTrait(k string, v interface{}) document.Update {
+	return document.Update{
 		FieldPath: []string{"Traits", k},
 		Value:     v,
 	}
 }
 
-func testDatastoreUpdate(t *testing.T, serviceFactory fnServiceFactory) {
+func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 	ctx := context.Background()
 
-	prepareForUpdate := func(t *testing.T, document interface{}) (s Service, myID string) {
+	prepareForUpdate := func(t *testing.T, document interface{}) (s document.Service, myID string) {
 		s = serviceFactory(t)
 		myID = uuid.New().String()
 
@@ -351,7 +360,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory fnServiceFactory) {
 		s := serviceFactory(t)
 		defer s.Close()
 		myID := uuid.New().String()
-		updates := make([]Update, 0)
+		updates := make([]document.Update, 0)
 
 		assert.Panics(t, func() {
 			_ = s.Update(ctx, myID, updates)
@@ -362,21 +371,21 @@ func testDatastoreUpdate(t *testing.T, serviceFactory fnServiceFactory) {
 		s := serviceFactory(t)
 		defer s.Close()
 		myID := uuid.New().String()
-		updates := make([]Update, 1)
+		updates := make([]document.Update, 1)
 		updates[0].FieldPath = []string{"fjklewjflwk"}
 
 		err := s.Update(ctx, myID, updates)
-		require.Equal(t, ErrNotFound, err)
+		require.Equal(t, document.ErrNotFound, err)
 	})
 
 	t.Run("Update updates a document field", func(t *testing.T) {
 		s, myID := prepareForUpdate(t, alice)
 		defer s.Close()
 
-		err := s.Update(ctx, myID, []Update{updateName("Alexandra")})
+		err := s.Update(ctx, myID, []document.Update{updateName("Alexandra")})
 		require.NoError(t, err)
 
-		var myNewAlice segador
+		var myNewAlice Segador
 		err = s.Get(ctx, myID, &myNewAlice)
 		require.NoError(t, err)
 		assert.Equal(t, "Alexandra", myNewAlice.Name)
@@ -386,12 +395,12 @@ func testDatastoreUpdate(t *testing.T, serviceFactory fnServiceFactory) {
 		s, myID := prepareForUpdate(t, alice)
 		defer s.Close()
 
-		err := s.Update(ctx, myID, []Update{
+		err := s.Update(ctx, myID, []document.Update{
 			updateTrait("dob", "2017-03-44"),
 		})
 		require.NoError(t, err)
 
-		var myNewAlice segador
+		var myNewAlice Segador
 		err = s.Get(ctx, myID, &myNewAlice)
 		require.NoError(t, err)
 		assert.Equal(t, "2017-03-44", myNewAlice.Traits["dob"])
@@ -401,12 +410,12 @@ func testDatastoreUpdate(t *testing.T, serviceFactory fnServiceFactory) {
 		s, myID := prepareForUpdate(t, alice)
 		defer s.Close()
 
-		err := s.Update(ctx, myID, []Update{
+		err := s.Update(ctx, myID, []document.Update{
 			updateTrait("brother", bob),
 		})
 		require.NoError(t, err)
 
-		var myNewAlice segador
+		var myNewAlice Segador
 		err = s.Get(ctx, myID, &myNewAlice)
 		require.NoError(t, err)
 
@@ -424,12 +433,12 @@ func testDatastoreUpdate(t *testing.T, serviceFactory fnServiceFactory) {
 		myNewAttr := make(map[string]interface{})
 		myNewAttr["sup"] = "hola"
 
-		err := s.Update(ctx, myID, []Update{
+		err := s.Update(ctx, myID, []document.Update{
 			updateTrait("myNewMap", myNewAttr),
 		})
 		require.NoError(t, err)
 
-		var myNewAlice segador
+		var myNewAlice Segador
 		err = s.Get(ctx, myID, &myNewAlice)
 		require.NoError(t, err)
 		assert.Equal(t, nil, myNewAlice.Traits["sup"])
@@ -439,13 +448,13 @@ func testDatastoreUpdate(t *testing.T, serviceFactory fnServiceFactory) {
 		s, myID := prepareForUpdate(t, alice)
 		defer s.Close()
 
-		err := s.Update(ctx, myID, []Update{
+		err := s.Update(ctx, myID, []document.Update{
 			updateTrait("dob", "2020-02-21"),
 			updateName("Alice"),
 		})
 		require.NoError(t, err)
 
-		var myNewAlice segador
+		var myNewAlice Segador
 		err = s.Get(ctx, myID, &myNewAlice)
 		require.NoError(t, err)
 		assert.Equal(t, "Alice", myNewAlice.Name)
@@ -458,8 +467,8 @@ func testDatastoreUpdate(t *testing.T, serviceFactory fnServiceFactory) {
 
 		t1 := time.Now().Add(-time.Hour * 48)
 
-		err := s.Update(ctx, myID, []Update{
-			Update{FieldPath: []string{DefaultUpdatedAtField}, Value: t1},
+		err := s.Update(ctx, myID, []document.Update{
+			document.Update{FieldPath: []string{document.DefaultUpdatedAtField}, Value: t1},
 		})
 		require.NoError(t, err)
 
@@ -475,8 +484,8 @@ func testDatastoreUpdate(t *testing.T, serviceFactory fnServiceFactory) {
 		s, myID := prepareForUpdate(t, myOtherEntity{})
 		defer s.Close()
 
-		err := s.Update(ctx, myID, []Update{
-			Update{FieldPath: []string{"Value"}, Value: 1},
+		err := s.Update(ctx, myID, []document.Update{
+			document.Update{FieldPath: []string{"Value"}, Value: 1},
 		})
 		require.NoError(t, err)
 
@@ -490,8 +499,8 @@ func testDatastoreUpdate(t *testing.T, serviceFactory fnServiceFactory) {
 }
 
 func prepareServiceForListTest(
-	t *testing.T, serviceFactory fnServiceFactory,
-) Service {
+	t *testing.T, serviceFactory FnServiceFactory,
+) document.Service {
 	s := serviceFactory(t)
 	ctx := context.Background()
 
@@ -511,11 +520,11 @@ func prepareServiceForListTest(
 }
 
 func assertListResults(
-	t *testing.T, it Iterator, expectedLen int,
+	t *testing.T, it document.Iterator, expectedLen int,
 ) {
 	var i int
 	for it.HasNext() {
-		var s segador
+		var s Segador
 		err := it.NextTo(&s)
 		assert.NoError(t, err)
 		i++
@@ -524,7 +533,7 @@ func assertListResults(
 	assert.NoError(t, it.Close())
 }
 
-func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
+func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 	ctx := context.Background()
 
 	t.Run("List retrieves ALL document if filters is nil or empty", func(t *testing.T) {
@@ -541,7 +550,7 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		s := prepareServiceForListTest(t, serviceFactory)
 		defer s.Close()
 
-		var myVal segador
+		var myVal Segador
 		it, err := s.List(ctx, nil)
 		require.NoError(t, err)
 		assert.Error(t, it.NextTo(myVal))
@@ -552,15 +561,15 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		s := prepareServiceForListTest(t, serviceFactory)
 		defer s.Close()
 
-		it, err := s.List(ctx, []Filter{nameFilter("Bob", OpEqual)})
+		it, err := s.List(ctx, []document.Filter{nameFilter("Bob", document.OpEqual)})
 		require.NoError(t, err)
 
 		var myBob map[string]interface{}
 		err = it.NextTo(&myBob)
 		require.NoError(t, err)
 
-		delete(myBob, DefaultCreatedAtField)
-		delete(myBob, DefaultUpdatedAtField)
+		delete(myBob, document.DefaultCreatedAtField)
+		delete(myBob, document.DefaultUpdatedAtField)
 		assert.Equal(t, bob.toMap(), myBob)
 		assert.NoError(t, it.Close())
 	})
@@ -569,7 +578,7 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		s := prepareServiceForListTest(t, serviceFactory)
 		defer s.Close()
 
-		filters := []Filter{Filter{}}
+		filters := []document.Filter{document.Filter{}}
 		assert.Panics(t, func() {
 			_, _ = s.List(ctx, filters)
 		})
@@ -579,7 +588,7 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		s := prepareServiceForListTest(t, serviceFactory)
 		defer s.Close()
 
-		filters := []Filter{nameFilter("Alice", OpEqual)}
+		filters := []document.Filter{nameFilter("Alice", document.OpEqual)}
 		it, err := s.List(ctx, filters)
 		require.NoError(t, err)
 		assertListResults(t, it, 2)
@@ -589,7 +598,7 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		s := prepareServiceForListTest(t, serviceFactory)
 		defer s.Close()
 
-		filters := []Filter{nameFilter("B", OpGreaterThan)}
+		filters := []document.Filter{nameFilter("B", document.OpGreaterThan)}
 		it, err := s.List(ctx, filters)
 		require.NoError(t, err)
 		assertListResults(t, it, 10)
@@ -599,7 +608,7 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		s := prepareServiceForListTest(t, serviceFactory)
 		defer s.Close()
 
-		filters := []Filter{nameFilter("Bob", OpGreaterThanEqual)}
+		filters := []document.Filter{nameFilter("Bob", document.OpGreaterThanEqual)}
 		it, err := s.List(ctx, filters)
 		require.NoError(t, err)
 		assertListResults(t, it, 10)
@@ -609,7 +618,7 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		s := prepareServiceForListTest(t, serviceFactory)
 		defer s.Close()
 
-		filters := []Filter{nameFilter("B", OpLessThan)}
+		filters := []document.Filter{nameFilter("B", document.OpLessThan)}
 		it, err := s.List(ctx, filters)
 		require.NoError(t, err)
 		assertListResults(t, it, 2)
@@ -619,7 +628,7 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		s := prepareServiceForListTest(t, serviceFactory)
 		defer s.Close()
 
-		filters := []Filter{nameFilter("Bob", OpLessThanEqual)}
+		filters := []document.Filter{nameFilter("Bob", document.OpLessThanEqual)}
 		it, err := s.List(ctx, filters)
 		require.NoError(t, err)
 		assertListResults(t, it, 12)
@@ -629,17 +638,17 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		s := prepareServiceForListTest(t, serviceFactory)
 		defer s.Close()
 
-		filters := []Filter{
-			nameFilter("B", OpLessThan),
-			nameFilter("B", OpGreaterThanEqual),
+		filters := []document.Filter{
+			nameFilter("B", document.OpLessThan),
+			nameFilter("B", document.OpGreaterThanEqual),
 		}
 		it, err := s.List(ctx, filters)
 		require.NoError(t, err)
 		assertListResults(t, it, 0)
 
-		filters = []Filter{
-			nameFilter("A", OpGreaterThan),
-			nameFilter("Bob", OpLessThanEqual),
+		filters = []document.Filter{
+			nameFilter("A", document.OpGreaterThan),
+			nameFilter("Bob", document.OpLessThanEqual),
 		}
 		it, err = s.List(ctx, filters)
 		require.NoError(t, err)
@@ -650,7 +659,7 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		s := prepareServiceForListTest(t, serviceFactory)
 		defer s.Close()
 
-		filters := []Filter{traitFilter("fancy", true, OpEqual)}
+		filters := []document.Filter{traitFilter("fancy", true, document.OpEqual)}
 		it, err := s.List(ctx, filters)
 		require.NoError(t, err)
 		assertListResults(t, it, 10)
@@ -660,7 +669,7 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		s := prepareServiceForListTest(t, serviceFactory)
 		defer s.Close()
 
-		filters := []Filter{traitFilter("years", int(30), OpGreaterThanEqual)}
+		filters := []document.Filter{traitFilter("years", int(30), document.OpGreaterThanEqual)}
 		it, err := s.List(ctx, filters)
 		require.NoError(t, err)
 		assertListResults(t, it, 12)
@@ -670,7 +679,7 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		s := prepareServiceForListTest(t, serviceFactory)
 		defer s.Close()
 
-		filters := []Filter{traitFilter("years", "30", OpEqual)}
+		filters := []document.Filter{traitFilter("years", "30", document.OpEqual)}
 		it, err := s.List(ctx, filters)
 		require.NoError(t, err)
 		assertListResults(t, it, 0)
@@ -680,28 +689,29 @@ func testDatastoreList(t *testing.T, serviceFactory fnServiceFactory) {
 		s := prepareServiceForListTest(t, serviceFactory)
 		defer s.Close()
 
-		filters := []Filter{traitFilter("wtf", "PROLLY", OpEqual)}
+		filters := []document.Filter{traitFilter("wtf", "PROLLY", document.OpEqual)}
 		it, err := s.List(ctx, filters)
 		require.NoError(t, err)
 		assertListResults(t, it, 0)
 	})
 }
 
-func traitFilter(field string, value interface{}, op Op) Filter {
-	return Filter{Field: Field{
+func traitFilter(field string, value interface{}, op document.Op) document.Filter {
+	return document.Filter{Field: document.Field{
 		FieldPath: []string{"Traits", field},
 		Value:     value,
 	}, Op: op}
 }
 
-func nameFilter(value string, op Op) Filter {
-	return Filter{Field: Field{
+func nameFilter(value string, op document.Op) document.Filter {
+	return document.Filter{Field: document.Field{
 		FieldPath: []string{"Name"},
 		Value:     value,
 	}, Op: op}
 }
 
-func testDatastore(t *testing.T, serviceFactory fnServiceFactory) {
+// TestDocumentService runs an exhaustive suite of tests against a document.Service.
+func TestDocumentService(t *testing.T, serviceFactory FnServiceFactory) {
 	testDatastoreCreate(t, serviceFactory)
 	testDatastoreSet(t, serviceFactory)
 	testDatastoreGet(t, serviceFactory)
@@ -718,7 +728,7 @@ func testDatastore(t *testing.T, serviceFactory fnServiceFactory) {
 		var wg sync.WaitGroup
 		for i := 0; i < 10; i++ {
 			go func() {
-				var myBob segador
+				var myBob Segador
 				_ = s.Create(ctx, myID, bob)
 				_ = s.Get(ctx, myID, &myBob)
 				_ = s.Delete(ctx, myID)
@@ -731,8 +741,8 @@ func testDatastore(t *testing.T, serviceFactory fnServiceFactory) {
 		// wait for eventually consistent implementations
 		time.Sleep(500 * time.Millisecond)
 
-		var myBob segador
+		var myBob Segador
 		err := s.Get(ctx, myID, &myBob)
-		require.Equal(t, ErrNotFound, err)
+		require.Equal(t, document.ErrNotFound, err)
 	})
 }

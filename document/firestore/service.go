@@ -1,4 +1,4 @@
-package document
+package firestore
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/firestore"
+	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/logging"
 	"github.com/ernestrc/blue/logging/trace"
 	"google.golang.org/api/iterator"
@@ -22,9 +23,9 @@ type fireStore struct {
 	client *firestore.Client
 }
 
-// NewFireStore returns an instance of Service backed by GC's FireStore.
-func NewFireStore(projectID, collectionID, credsFile string) (
-	s Service, err error,
+// New returns an instance of Service backed by GC's FireStore.
+func New(projectID, collectionID, credsFile string) (
+	s document.Service, err error,
 ) {
 	ctx := context.Background()
 
@@ -74,7 +75,7 @@ func (f *fireStore) Create(
 }
 
 func (f *fireStore) Update(
-	ctx context.Context, docID string, updates []Update,
+	ctx context.Context, docID string, updates []document.Update,
 ) (err error) {
 	if len(updates) == 0 {
 		panic("Update: no paths to update")
@@ -88,7 +89,7 @@ func (f *fireStore) Update(
 		}
 
 		// use firestore.ServerTimestamp to update updated_at
-		if u.FieldPath[0] == DefaultUpdatedAtField {
+		if u.FieldPath[0] == document.DefaultUpdatedAtField {
 			continue
 		}
 
@@ -100,7 +101,7 @@ func (f *fireStore) Update(
 
 	fUpdates = append(fUpdates,
 		firestore.Update{
-			FieldPath: firestore.FieldPath{DefaultUpdatedAtField},
+			FieldPath: firestore.FieldPath{document.DefaultUpdatedAtField},
 			Value:     firestore.ServerTimestamp,
 		})
 
@@ -166,8 +167,8 @@ func (f *fireStoreIterator) Close() error {
 	return nil
 }
 
-func (f *fireStore) List(ctx context.Context, filters []Filter) (
-	Iterator, error,
+func (f *fireStore) List(ctx context.Context, filters []document.Filter) (
+	document.Iterator, error,
 ) {
 	coll := f.client.Collection(f.collID)
 
@@ -198,9 +199,9 @@ func (f *fireStore) Close() error {
 func convertError(err error) error {
 	switch status.Code(err) {
 	case codes.NotFound:
-		err = ErrNotFound
+		err = document.ErrNotFound
 	case codes.AlreadyExists:
-		err = ErrAlreadyExists
+		err = document.ErrAlreadyExists
 	}
 	return err
 }

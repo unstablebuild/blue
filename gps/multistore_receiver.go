@@ -6,7 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ernestrc/blue/datastore/document"
+	"github.com/ernestrc/blue/document"
+	"github.com/ernestrc/blue/document/bolt"
+	"github.com/ernestrc/blue/document/firestore"
 )
 
 var (
@@ -79,26 +81,26 @@ func NewMultiStore(config MultiStoreConfig) (m *MultiStore, err error) {
 	m = new(MultiStore)
 	var backend document.Service
 
-	backend, err = document.NewBolt(config.Bolt.DBPath, config.CacheCollection)
+	backend, err = bolt.New(config.Bolt.DBPath, config.CacheCollection)
 	if err != nil {
 		return
 	}
 	m.cache = NewCache(backend, cacheOpts...)
 
-	backend, err = document.NewBolt(config.Bolt.DBPath, config.MinuteCollection)
+	backend, err = bolt.New(config.Bolt.DBPath, config.MinuteCollection)
 	if err != nil {
 		return
 	}
 	m.minuteStore = NewStore(backend, minuteStoreOpts...)
 
-	backend, err = document.NewFireStore(config.Firestore.ProjectID,
+	backend, err = firestore.New(config.Firestore.ProjectID,
 		config.DayCollection, config.Firestore.CredsFile)
 	if err != nil {
 		return
 	}
 	m.dayStore = NewStore(backend, dayStoreOpts...)
 
-	backend, err = document.NewFireStore(config.Firestore.ProjectID,
+	backend, err = firestore.New(config.Firestore.ProjectID,
 		config.HourCollection, config.Firestore.CredsFile)
 	if err != nil {
 		return

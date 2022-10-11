@@ -9,7 +9,8 @@ import (
 	"github.com/ernestrc/blue/cmd/bluectl/gps"
 	packageCLI "github.com/ernestrc/blue/cmd/bluectl/package"
 	releaseCLI "github.com/ernestrc/blue/cmd/bluectl/release"
-	"github.com/ernestrc/blue/datastore/document"
+	"github.com/ernestrc/blue/document"
+	"github.com/ernestrc/blue/document/firestore"
 	"github.com/ernestrc/blue/logging"
 	"github.com/ernestrc/blue/release"
 )
@@ -85,7 +86,7 @@ func (c *blueCtl) initializeCli() error {
 		return err
 	}
 
-	db, err := document.NewFireStore(config.Auth.ProjectID,
+	db, err := firestore.New(config.Auth.ProjectID,
 		config.Release.Collection, config.Auth.CredentialsFile)
 	if err != nil {
 		return err
