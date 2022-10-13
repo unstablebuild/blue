@@ -95,10 +95,11 @@ func (c *blueCtl) initializeCli() error {
 	releaseManager := release.NewDocumentManager(db)
 
 	c.cmds = map[string]cli.CLI{
-		"init":    init,
-		"release": releaseCLI.NewCLI(releaseManager),
-		"package": packageCLI.NewCLI(releaseManager),
-		"gps":     gps.NewCLI(),
+		"init":     init,
+		"release":  releaseCLI.NewCLI(releaseManager),
+		"package":  packageCLI.NewCLI(releaseManager),
+		"gps":      gps.NewCLI(),
+		"analysis": newAnalysisCli(),
 	}
 	c.db = db
 
