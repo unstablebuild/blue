@@ -10,6 +10,7 @@ require (
 	github.com/ernestrc/go-multierror v1.1.2
 	github.com/ernestrc/logd-go v0.0.0-20180509171507-65871c1d5504
 	github.com/ernestrc/sensible v0.0.0-20170704153812-102a955adfdf
+	github.com/go-delve/delve v1.9.1
 	github.com/golang/mock v1.4.4
 	github.com/google/uuid v1.1.2
 	github.com/jacobsa/go-serial v0.0.0-20180131005756-15cf729a72d4
@@ -23,9 +24,8 @@ require (
 	github.com/willf/pad v0.0.0-20200313202418-172aa767f2a4
 	go.etcd.io/bbolt v1.3.4
 	go.uber.org/config v1.4.0
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 	golang.org/x/net v0.0.0-20220225172249-27dd8689420f // indirect
-	golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5 // indirect
 	google.golang.org/api v0.30.0
 	google.golang.org/genproto v0.0.0-20220314164441-57ef72a4c106 // indirect
 	google.golang.org/grpc v1.45.0
