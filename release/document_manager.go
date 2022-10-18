@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/ernestrc/blue/debug"
 	"github.com/ernestrc/blue/document"
@@ -381,7 +382,7 @@ func makeDocumentPackageFilter(
 		ret = append(ret,
 			document.Filter{
 				Field: document.Field{
-					FieldPath: []string{"Bundle", "Metadata", k},
+					FieldPath: []string{"Package", "Metadata", k},
 					Value:     v,
 				},
 				Op: document.OpEqual,
@@ -531,10 +532,12 @@ func makePanicReportFilters(
 		},
 	}
 	for k, v := range userFilters {
+		ks := strings.Split(k, ".")
+		path := append([]string{"PanicReport"}, ks...)
 		ret = append(ret,
 			document.Filter{
 				Field: document.Field{
-					FieldPath: []string{"PanicReport", k},
+					FieldPath: path,
 					Value:     v,
 				},
 				Op: document.OpEqual,
