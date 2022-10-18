@@ -191,6 +191,20 @@ func (mr *MockManagerMockRecorder) DeletePackage(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePackage", reflect.TypeOf((*MockManager)(nil).DeletePackage), arg0, arg1)
 }
 
+// DeletePanicReport mocks base method.
+func (m *MockManager) DeletePanicReport(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePanicReport", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeletePanicReport indicates an expected call of DeletePanicReport.
+func (mr *MockManagerMockRecorder) DeletePanicReport(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePanicReport", reflect.TypeOf((*MockManager)(nil).DeletePanicReport), arg0, arg1)
+}
+
 // Get mocks base method.
 func (m *MockManager) Get(arg0 context.Context, arg1 string, arg2 Version, arg3 ProgressWriter) (Bundle, error) {
 	m.ctrl.T.Helper()

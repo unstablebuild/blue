@@ -87,6 +87,9 @@ type Manager interface {
 	// GetPanicReport gets a panic report from its uuid.
 	GetPanicReport(context.Context, string) (debug.PanicReport, error)
 
+	// DeletePanicReport deletes a panic report with the given uuid.
+	DeletePanicReport(context.Context, string) error
+
 	// AddPanicReport stores the given panic report.
 	AddPanicReport(context.Context, debug.PanicReport) error
 
