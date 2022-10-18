@@ -1,4 +1,4 @@
-package release
+package panicreport
 
 import (
 	"context"
@@ -32,14 +32,14 @@ func (i *metaFilters) Set(value string) error {
 	return nil
 }
 
-type releaseList struct {
+type panicReportList struct {
 	m       release.Manager
 	fs      *cli.FlagSet
 	filters metaFilters
 }
 
-func newReleaseListCLI(m release.Manager) cli.CLI {
-	l := &releaseList{
+func newPanicReportListCLI(m release.Manager) cli.CLI {
+	l := &panicReportList{
 		m:       m,
 		filters: metaFilters(map[string]string{}),
 	}
@@ -48,44 +48,46 @@ func newReleaseListCLI(m release.Manager) cli.CLI {
 	return l
 }
 
-func (s *releaseList) Man() cli.Manual {
+func (s *panicReportList) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "list",
-		Summary:  "Print a package's release bundles to stdout",
-		Synopsis: "<package>",
+		Summary:  "Print all panic reports of a package and version to stdout",
 		Options:  *s.fs,
+		Synopsis: "<package> <version>",
 	}
 }
 
-func (s *releaseList) Run(ctx context.Context, args []string) error {
-	args, ok, err := cli.ParseUsage(s, s.fs, 1, args)
+func (s *panicReportList) Run(ctx context.Context, args []string) error {
+	args, ok, err := cli.ParseUsage(s, s.fs, 2, args)
 	if err != nil || !ok {
 		return err
 	}
-	pack := args[0]
-
-	log.Debugf("listing package %q releases with metadata filters: %v",
-		pack, s.filters)
-
 	ctx, cancel := context.WithTimeout(ctx, defaultListTimeout)
 	defer cancel()
 
-	bundles, err := s.m.List(ctx, pack, map[string]string(s.filters))
+	pkg, ver := args[0], args[1]
+
+	log.Debugf("listing reports of package %q version %q with metadata filters: %v",
+		pkg, ver, s.filters)
+
+	reports, err := s.m.ListPanicReports(ctx, pkg, ver, map[string]string(s.filters))
 	if err != nil {
 		return err
 	}
 
-	if len(bundles) == 0 {
-		fmt.Printf("No bundles found for package %q\n", pack)
+	if len(reports) == 0 {
+		fmt.Print("No reports found\n")
 		return nil
 	}
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Package", "Version", "Notes", "CreatedAt"})
-	for _, bundle := range bundles {
-		table.Append([]string{bundle.Package,
-			string(bundle.Version), bundle.Notes,
-			bundle.CreatedAt.String()})
+	table.SetHeader([]string{"UUID", "Error", "GoVersion", "Path", "CreatedAt"})
+	for _, report := range reports {
+		table.Append([]string{report.Metadata[release.PanicReportMetadataIDField],
+			fmt.Sprintf("%10s", report.Error),
+			report.Build.GoVersion,
+			report.Build.Path,
+			report.CreatedAt.String()})
 	}
 	table.Render()
 

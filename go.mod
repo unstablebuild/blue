@@ -9,7 +9,7 @@ require (
 	github.com/cheggaaa/pb/v3 v3.0.8
 	github.com/ernestrc/go-multierror v1.1.2
 	github.com/ernestrc/logd-go v0.0.0-20180509171507-65871c1d5504
-	github.com/ernestrc/sensible v0.1.0
+	github.com/ernestrc/sensible v0.1.1
 	github.com/go-delve/delve v1.9.1
 	github.com/golang/mock v1.4.4
 	github.com/google/uuid v1.3.0

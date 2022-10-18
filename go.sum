@@ -100,6 +100,8 @@ github.com/ernestrc/sensible v0.0.0-20170704153812-102a955adfdf h1:GkfzboQaNzGIy
 github.com/ernestrc/sensible v0.0.0-20170704153812-102a955adfdf/go.mod h1:8URznYhzYlQLd3VKEJvgyHCgjV7/S2nOC1QH8Yx7C/o=
 github.com/ernestrc/sensible v0.1.0 h1:fI/ujBFjp8m3purwMetFBsJzJvWeYEkeh+ngun6InSc=
 github.com/ernestrc/sensible v0.1.0/go.mod h1:n+ioOH1h+z/1GWdjrwTdZa5Fgcfsexnaws4P3zZbiVc=
+github.com/ernestrc/sensible v0.1.1 h1:WxWK58vxW67jNc6A0w+GY38PGSkzgYCYNorvkH07uRA=
+github.com/ernestrc/sensible v0.1.1/go.mod h1:n+ioOH1h+z/1GWdjrwTdZa5Fgcfsexnaws4P3zZbiVc=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
 github.com/fatih/color v1.10.0 h1:s36xzo75JdqLaaWoiEHk767eHiwo0598uUxyfiPkDsg=
 github.com/fatih/color v1.10.0/go.mod h1:ELkj/draVOlAH/xkhN6mQ50Qd0MPOk5AAr3maGEBuJM=
