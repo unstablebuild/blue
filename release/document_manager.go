@@ -492,6 +492,15 @@ func (m *documentManager) GetPanicReport(ctx context.Context, id string) (debug.
 	return doc.PanicReport, nil
 }
 
+func (d *documentManager) DeletePanicReport(ctx context.Context, id string) error {
+	var doc panicReportDocument
+	err := d.db.Get(ctx, id, &doc)
+	if err != nil {
+		return err
+	}
+	return d.db.Delete(ctx, id)
+}
+
 func makePanicReportFilters(
 	pkg, ver string, userFilters map[string]string,
 ) []document.Filter {

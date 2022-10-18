@@ -282,6 +282,13 @@ func TestDocumentManager(t *testing.T) {
 		r, err := m.GetPanicReport(context.Background(), id)
 		require.NoError(t, err)
 		assertReport(r)
+
+		err = m.DeletePanicReport(context.Background(), id)
+		require.NoError(t, err)
+
+		r, err = m.GetPanicReport(context.Background(), id)
+		require.Error(t, err)
+		assert.Equal(t, document.ErrNotFound, err)
 	})
 }
 

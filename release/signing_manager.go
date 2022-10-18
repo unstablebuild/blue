@@ -178,3 +178,7 @@ func (m *signingManager) ListPanicReports(ctx context.Context, pkg, ver string,
 func (m *signingManager) GetPanicReport(ctx context.Context, id string) (debug.PanicReport, error) {
 	return m.root.GetPanicReport(ctx, id)
 }
+
+func (m *signingManager) DeletePanicReport(ctx context.Context, id string) error {
+	return m.root.DeletePanicReport(ctx, id)
+}
