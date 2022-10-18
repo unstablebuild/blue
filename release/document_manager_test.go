@@ -218,7 +218,7 @@ func TestDocumentManager(t *testing.T) {
 			NopProgressReader(bytes.NewBuffer(fixtureLargeData)))
 		require.NoError(t, err)
 
-		filters := map[string]string{"repository": "blue"}
+		filters := map[string]string{"Metadata.repository": "blue"}
 		items, err := m.List(ctx, fixtureRelease.Package, filters)
 		require.NoError(t, err)
 

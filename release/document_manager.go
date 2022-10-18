@@ -330,10 +330,12 @@ func makeDocumentBundleFilter(
 		},
 	}
 	for k, v := range userFilters {
+		ks := strings.Split(k, ".")
+		path := append([]string{"Bundle"}, ks...)
 		ret = append(ret,
 			document.Filter{
 				Field: document.Field{
-					FieldPath: []string{"Bundle", "Metadata", k},
+					FieldPath: path,
 					Value:     v,
 				},
 				Op: document.OpEqual,
@@ -379,10 +381,12 @@ func makeDocumentPackageFilter(
 		},
 	}
 	for k, v := range userFilters {
+		ks := strings.Split(k, ".")
+		path := append([]string{"Package"}, ks...)
 		ret = append(ret,
 			document.Filter{
 				Field: document.Field{
-					FieldPath: []string{"Package", "Metadata", k},
+					FieldPath: path,
 					Value:     v,
 				},
 				Op: document.OpEqual,
