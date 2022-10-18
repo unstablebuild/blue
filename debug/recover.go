@@ -10,9 +10,9 @@ import (
 
 // PanicReport contains informatin about a panic
 type PanicReport struct {
-	Package string
-	Version string
-	debug.BuildInfo
+	Package   string
+	Version   string
+	Build     debug.BuildInfo
 	Error     string
 	Stack     string
 	CreatedAt time.Time
@@ -36,7 +36,7 @@ func CapturePanic(log *log.Logger, pkg, version string, f func()) (ok bool, repo
 		}
 		bi, ok := debug.ReadBuildInfo()
 		if ok {
-			report.BuildInfo = *bi
+			report.Build = *bi
 		}
 		switch x := r.(type) {
 		case string:

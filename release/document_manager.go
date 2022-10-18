@@ -462,11 +462,14 @@ func (d *documentManager) AddPanicReport(ctx context.Context, report debug.Panic
 func (d *documentManager) ListPanicReports(
 	ctx context.Context, pkg, ver string, filters map[string]string,
 ) ([]debug.PanicReport, error) {
-	it, err := d.db.List(ctx, makePanicReportFilters(pkg, ver, filters))
+	docFilters := makePanicReportFilters(pkg, ver, filters)
+	it, err := d.db.List(ctx, docFilters)
 	if err != nil {
 		return nil, fmt.Errorf("document.Service.Create: %v", err)
 	}
 	defer it.Close()
+
+	logrus.Debugf("calling List with filters: %#v", docFilters)
 
 	var ret []debug.PanicReport
 	var temp panicReportDocument

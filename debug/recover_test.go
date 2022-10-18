@@ -26,7 +26,7 @@ func TestCapturePanic(t *testing.T) {
 		})
 		assert.False(t, actualOk)
 		assert.NotNil(t, actualReport.Stack)
-		assert.NotZero(t, actualReport.BuildInfo)
+		assert.NotZero(t, actualReport.Build)
 		assert.NotZero(t, actualReport.CreatedAt)
 		require.NotNil(t, actualReport.Error)
 		assert.True(t, strings.Contains(actualReport.Error, "ralfing"))
