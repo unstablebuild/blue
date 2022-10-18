@@ -3,9 +3,9 @@ package release
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -253,16 +253,18 @@ func TestDocumentManager(t *testing.T) {
 		ll := log.New()
 		ll.Out = ioutil.Discard
 		for i := 0; i < 10; i++ {
-			ok, report := debug.CapturePanic(ll, "pkg", fmt.Sprintf("v%d.0.0", i), func() {
+			ok, report := debug.CapturePanic(ll, "pkg", "v1.0.0", func() {
 				panic("run!")
 			})
 			require.False(t, ok)
 			require.NotZero(t, report)
+			report.Metadata = make(map[string]string)
+			report.Metadata["i"] = strconv.Itoa(i)
 			err := m.AddPanicReport(context.Background(), report)
 			require.NoError(t, err)
 		}
 
-		reports, err := m.ListPanicReports(context.Background(), "pkg", "v1.0.0", nil)
+		reports, err := m.ListPanicReports(context.Background(), "pkg", "v1.0.0", map[string]string{"Metadata.i": "1"})
 		require.NoError(t, err)
 		require.Len(t, reports, 1)
 
