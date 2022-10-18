@@ -11,7 +11,7 @@ import (
 	"github.com/ernestrc/blue/cli"
 	"github.com/ernestrc/blue/cmd/bluectl/options"
 	"github.com/ernestrc/blue/config"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 const configFile = "config"
