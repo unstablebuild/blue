@@ -12,7 +12,7 @@ require (
 	github.com/ernestrc/sensible v0.0.0-20170704153812-102a955adfdf
 	github.com/go-delve/delve v1.9.1
 	github.com/golang/mock v1.4.4
-	github.com/google/uuid v1.1.2
+	github.com/google/uuid v1.3.0
 	github.com/jacobsa/go-serial v0.0.0-20180131005756-15cf729a72d4
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/mattn/go-runewidth v0.0.14 // indirect

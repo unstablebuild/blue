@@ -16,6 +16,7 @@ type PanicReport struct {
 	Error     string
 	Stack     string
 	CreatedAt time.Time
+	Metadata  map[string]string
 }
 
 // CapturePanic attempts to capture a panic during execution of f, logs it
