@@ -8,6 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	debug "github.com/ernestrc/blue/debug"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -134,6 +135,20 @@ func (m *MockManager) EXPECT() *MockManagerMockRecorder {
 	return m.recorder
 }
 
+// AddPanicReport mocks base method.
+func (m *MockManager) AddPanicReport(arg0 context.Context, arg1 debug.PanicReport) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddPanicReport", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddPanicReport indicates an expected call of AddPanicReport.
+func (mr *MockManagerMockRecorder) AddPanicReport(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPanicReport", reflect.TypeOf((*MockManager)(nil).AddPanicReport), arg0, arg1)
+}
+
 // Create mocks base method.
 func (m *MockManager) Create(arg0 context.Context, arg1 Package) error {
 	m.ctrl.T.Helper()
@@ -206,6 +221,21 @@ func (mr *MockManagerMockRecorder) GetPackage(arg0, arg1 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPackage", reflect.TypeOf((*MockManager)(nil).GetPackage), arg0, arg1)
 }
 
+// GetPanicReport mocks base method.
+func (m *MockManager) GetPanicReport(arg0 context.Context, arg1 string) (debug.PanicReport, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPanicReport", arg0, arg1)
+	ret0, _ := ret[0].(debug.PanicReport)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPanicReport indicates an expected call of GetPanicReport.
+func (mr *MockManagerMockRecorder) GetPanicReport(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPanicReport", reflect.TypeOf((*MockManager)(nil).GetPanicReport), arg0, arg1)
+}
+
 // List mocks base method.
 func (m *MockManager) List(arg0 context.Context, arg1 string, arg2 map[string]string) ([]Bundle, error) {
 	m.ctrl.T.Helper()
@@ -234,6 +264,21 @@ func (m *MockManager) ListPackages(arg0 context.Context, arg1 map[string]string)
 func (mr *MockManagerMockRecorder) ListPackages(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPackages", reflect.TypeOf((*MockManager)(nil).ListPackages), arg0, arg1)
+}
+
+// ListPanicReports mocks base method.
+func (m *MockManager) ListPanicReports(ctx context.Context, pkg, ver string, filters map[string]string) ([]debug.PanicReport, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPanicReports", ctx, pkg, ver, filters)
+	ret0, _ := ret[0].([]debug.PanicReport)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPanicReports indicates an expected call of ListPanicReports.
+func (mr *MockManagerMockRecorder) ListPanicReports(ctx, pkg, ver, filters interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPanicReports", reflect.TypeOf((*MockManager)(nil).ListPanicReports), ctx, pkg, ver, filters)
 }
 
 // Upload mocks base method.

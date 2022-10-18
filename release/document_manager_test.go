@@ -3,12 +3,15 @@ package release
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/ernestrc/blue/debug"
 	"github.com/ernestrc/blue/document"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -242,6 +245,43 @@ func TestDocumentManager(t *testing.T) {
 			fixtureRelease.Version, NopProgressWriter(&b))
 		require.Equal(t, ErrDataIntegrity, err)
 		require.Zero(t, manifest)
+	})
+
+	t.Run("stores reports into underlying document.Service", func(t *testing.T) {
+		m, _ := newTestingDocumentManager()
+
+		ll := log.New()
+		ll.Out = ioutil.Discard
+		for i := 0; i < 10; i++ {
+			ok, report := debug.CapturePanic(ll, "pkg", fmt.Sprintf("v%d.0.0", i), func() {
+				panic("run!")
+			})
+			require.False(t, ok)
+			require.NotZero(t, report)
+			err := m.AddPanicReport(context.Background(), report)
+			require.NoError(t, err)
+		}
+
+		reports, err := m.ListPanicReports(context.Background(), "pkg", "v1.0.0", nil)
+		require.NoError(t, err)
+		require.Len(t, reports, 1)
+
+		assertReport := func(report debug.PanicReport) {
+			assert.WithinDuration(t, report.CreatedAt, time.Now(), 1*time.Minute)
+			assert.NotZero(t, report.Stack)
+			assert.Contains(t, report.Error, "run")
+			assert.NotZero(t, report.BuildInfo)
+			assert.Equal(t, "pkg", report.Package)
+			assert.Equal(t, "v1.0.0", report.Version)
+		}
+		assertReport(reports[0])
+
+		require.NotNil(t, reports[0].Metadata)
+		id, ok := reports[0].Metadata["id"]
+		require.True(t, ok)
+		r, err := m.GetPanicReport(context.Background(), id)
+		require.NoError(t, err)
+		assertReport(r)
 	})
 }
 

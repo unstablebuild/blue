@@ -10,7 +10,10 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/ernestrc/blue/debug"
 	"github.com/ernestrc/blue/document"
+	"github.com/ernestrc/go-multierror"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -29,6 +32,12 @@ const (
 	documentTypeReleaseBundle
 	// package document
 	documentTypePackage
+	// panic report document
+	documentTypePanicReport
+
+	// PanicReportMetadataIDField represents the name of the PanicReport.Metadata field used
+	// to store the document ID.
+	PanicReportMetadataIDField = "id"
 )
 
 type documentManager struct {
@@ -51,6 +60,11 @@ type packageDocument struct {
 type releaseData struct {
 	Type documentType
 	Data []byte
+}
+
+type panicReportDocument struct {
+	Type        documentType
+	PanicReport debug.PanicReport
 }
 
 // NewDocumentManager returns a Manager backed by a document.Service.
@@ -83,8 +97,8 @@ func (d *documentManager) forceRemoveChunks(err error, releaseID string, ids []s
 	return err
 }
 
-func makeChunkID(pack string, ver Version, i int) string {
-	return fmt.Sprintf("%s:%s:chunk:%d", pack, ver, i)
+func makeChunkID(pkg string, ver Version, i int) string {
+	return fmt.Sprintf("%s:%s:chunk:%d", pkg, ver, i)
 }
 
 func (d *documentManager) createDataChunks(
@@ -171,12 +185,12 @@ func (d *documentManager) Create(
 	return nil
 }
 
-func makeReleaseDocID(pack string, ver Version) string {
-	return fmt.Sprintf("release:%s:%s", pack, ver)
+func makeReleaseDocID(pkg string, ver Version) string {
+	return fmt.Sprintf("release:%s:%s", pkg, ver)
 }
 
-func makePackageDocID(pack string) string {
-	return fmt.Sprintf("package:%s", pack)
+func makePackageDocID(pkg string) string {
+	return fmt.Sprintf("package:%s", pkg)
 }
 
 func (d *documentManager) Upload(
@@ -253,12 +267,12 @@ func (d *documentManager) writeChunks(
 }
 
 func (d *documentManager) Get(
-	ctx context.Context, pack string,
+	ctx context.Context, pkg string,
 	ver Version, out ProgressWriter,
 ) (Bundle, error) {
 	var doc releaseDocument
 
-	id := makeReleaseDocID(pack, ver)
+	id := makeReleaseDocID(pkg, ver)
 	err := d.db.Get(ctx, id, &doc)
 	if err != nil {
 		return Bundle{}, err
@@ -277,11 +291,11 @@ func (d *documentManager) Get(
 }
 
 func (d *documentManager) Delete(
-	ctx context.Context, pack string, ver Version,
+	ctx context.Context, pkg string, ver Version,
 ) error {
 	var doc releaseDocument
 
-	id := makeReleaseDocID(pack, ver)
+	id := makeReleaseDocID(pkg, ver)
 	err := d.db.Get(ctx, id, &doc)
 	if err != nil {
 		return err
@@ -296,7 +310,7 @@ func (d *documentManager) Delete(
 }
 
 func makeDocumentBundleFilter(
-	pack string, userFilters map[string]string,
+	pkg string, userFilters map[string]string,
 ) []document.Filter {
 	ret := []document.Filter{
 		{
@@ -309,7 +323,7 @@ func makeDocumentBundleFilter(
 		{
 			Field: document.Field{
 				FieldPath: []string{"Package"},
-				Value:     pack,
+				Value:     pkg,
 			},
 			Op: document.OpEqual,
 		},
@@ -328,13 +342,13 @@ func makeDocumentBundleFilter(
 }
 
 func (d *documentManager) List(
-	ctx context.Context, pack string,
+	ctx context.Context, pkg string,
 	filters map[string]string,
 ) (ret []Bundle, err error) {
 	var it document.Iterator
 	ret = make([]Bundle, 0)
 
-	it, err = d.db.List(ctx, makeDocumentBundleFilter(pack, filters))
+	it, err = d.db.List(ctx, makeDocumentBundleFilter(pkg, filters))
 	if err != nil {
 		return
 	}
@@ -400,10 +414,10 @@ func (d *documentManager) ListPackages(
 }
 
 func (d *documentManager) DeletePackage(
-	ctx context.Context, pack string,
+	ctx context.Context, pkg string,
 ) error {
-	id := makePackageDocID(pack)
-	_, err := d.GetPackage(ctx, pack)
+	id := makePackageDocID(pkg)
+	_, err := d.GetPackage(ctx, pkg)
 	if err != nil {
 		return err
 	}
@@ -411,15 +425,108 @@ func (d *documentManager) DeletePackage(
 }
 
 func (d *documentManager) GetPackage(
-	ctx context.Context, pack string,
+	ctx context.Context, pkg string,
 ) (Package, error) {
 	var doc packageDocument
 
-	id := makePackageDocID(pack)
+	id := makePackageDocID(pkg)
 	err := d.db.Get(ctx, id, &doc)
 	if err != nil {
 		return Package{}, err
 	}
 
 	return doc.Package, nil
+}
+
+// AddPanicReport stores the given report into the underlying document.Service. It also appends
+// it to the underlyin Package and Bundle Reports field.
+func (d *documentManager) AddPanicReport(ctx context.Context, report debug.PanicReport) error {
+	if report.Metadata == nil {
+		report.Metadata = make(map[string]string)
+	}
+	id := uuid.New().String()
+	report.Metadata[PanicReportMetadataIDField] = id
+
+	p := panicReportDocument{
+		Type:        documentTypePanicReport,
+		PanicReport: report,
+	}
+	err := d.db.Create(ctx, id, p)
+	if err != nil {
+		return fmt.Errorf("document.Service.Create: %v", err)
+	}
+	return nil
+}
+
+// ListPanicReports returns all the reports stored for a given release.
+func (d *documentManager) ListPanicReports(
+	ctx context.Context, pkg, ver string, filters map[string]string,
+) ([]debug.PanicReport, error) {
+	it, err := d.db.List(ctx, makePanicReportFilters(pkg, ver, filters))
+	if err != nil {
+		return nil, fmt.Errorf("document.Service.Create: %v", err)
+	}
+	defer it.Close()
+
+	var ret []debug.PanicReport
+	var temp panicReportDocument
+	for it.HasNext() {
+		if nextErr := it.NextTo(&temp); nextErr != nil {
+			err = multierror.Append(err, nextErr)
+			continue
+		}
+		ret = append(ret, temp.PanicReport)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ret, nil
+}
+
+func (m *documentManager) GetPanicReport(ctx context.Context, id string) (debug.PanicReport, error) {
+	var doc panicReportDocument
+	err := m.db.Get(ctx, id, &doc)
+	if err != nil {
+		return debug.PanicReport{}, err
+	}
+	return doc.PanicReport, nil
+}
+
+func makePanicReportFilters(
+	pkg, ver string, userFilters map[string]string,
+) []document.Filter {
+	ret := []document.Filter{
+		{
+			Field: document.Field{
+				FieldPath: []string{"Type"},
+				Value:     documentTypePanicReport,
+			},
+			Op: document.OpEqual,
+		},
+		{
+			Field: document.Field{
+				FieldPath: []string{"PanicReport", "Package"},
+				Value:     pkg,
+			},
+			Op: document.OpEqual,
+		},
+		{
+			Field: document.Field{
+				FieldPath: []string{"PanicReport", "Version"},
+				Value:     ver,
+			},
+			Op: document.OpEqual,
+		},
+	}
+	for k, v := range userFilters {
+		ret = append(ret,
+			document.Filter{
+				Field: document.Field{
+					FieldPath: []string{"PanicReport", k},
+					Value:     v,
+				},
+				Op: document.OpEqual,
+			})
+	}
+	return ret
 }

@@ -6,6 +6,8 @@ import (
 	"context"
 	"io"
 	"time"
+
+	"github.com/ernestrc/blue/debug"
 )
 
 // Package represents.. well, a package.
@@ -81,4 +83,14 @@ type Manager interface {
 
 	// List lists all bundles of a package.
 	List(context.Context, string, map[string]string) ([]Bundle, error)
+
+	// GetPanicReport gets a panic report from its uuid.
+	GetPanicReport(context.Context, string) (debug.PanicReport, error)
+
+	// AddPanicReport stores the given panic report.
+	AddPanicReport(context.Context, debug.PanicReport) error
+
+	// ListPanicReports lists all panic reports of a pkg and version.
+	ListPanicReports(ctx context.Context, pkg, ver string,
+		filters map[string]string) ([]debug.PanicReport, error)
 }
