@@ -8,7 +8,7 @@ import (
 	"github.com/ernestrc/blue/release"
 	"github.com/ernestrc/sensible/editor"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 const authorKey = "author"

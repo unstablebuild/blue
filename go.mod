@@ -9,7 +9,7 @@ require (
 	github.com/cheggaaa/pb/v3 v3.0.8
 	github.com/ernestrc/go-multierror v1.1.2
 	github.com/ernestrc/logd-go v0.0.0-20180509171507-65871c1d5504
-	github.com/ernestrc/sensible v0.0.0-20170704153812-102a955adfdf
+	github.com/ernestrc/sensible v0.1.0
 	github.com/go-delve/delve v1.9.1
 	github.com/golang/mock v1.4.4
 	github.com/google/uuid v1.3.0
@@ -31,6 +31,6 @@ require (
 	google.golang.org/grpc v1.45.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22
-	gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v3 v3.0.1
 	upspin.io v0.0.0-20220526012102-c626106d18af
 )
