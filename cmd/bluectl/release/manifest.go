@@ -16,10 +16,11 @@ const authorKey = "author"
 // manifest represents the structure that the author of the release
 // completes before uploading it.
 type manifest struct {
-	Package  string
-	Version  release.Version
-	Notes    string
-	Metadata map[string]string
+	Package   string
+	Version   release.Version
+	Notes     string
+	Metadata  map[string]string
+	CreatedAt string `yaml:"created_at,omitempty"`
 }
 
 func (m *manifest) fromModel(man release.Bundle) {
@@ -27,6 +28,7 @@ func (m *manifest) fromModel(man release.Bundle) {
 	m.Version = man.Version
 	m.Notes = man.Notes
 	m.Metadata = man.Metadata
+	m.CreatedAt = man.CreatedAt.Format("2006-01-02T15:04:05.999Z")
 }
 
 func (m manifest) validate() error {
@@ -45,6 +47,7 @@ func (m manifest) toModel() release.Bundle {
 		Version:  m.Version,
 		Notes:    m.Notes,
 		Metadata: m.Metadata,
+		// and CreatedAt should never be populated by the CLI
 	}
 }
 func (m manifest) toYAML() (string, error) {
