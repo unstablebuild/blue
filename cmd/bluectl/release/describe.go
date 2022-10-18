@@ -63,7 +63,7 @@ func (s releaseDescribe) Run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("\n---\n%+v\n", data)
+	fmt.Printf("\n---\n%s\n", data)
 
 	return nil
 }

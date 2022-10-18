@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/user"
 	"strings"
@@ -94,7 +93,6 @@ func (s *releaseCreate) Run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	log.Println(m)
 
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
