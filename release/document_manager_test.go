@@ -270,7 +270,7 @@ func TestDocumentManager(t *testing.T) {
 			assert.WithinDuration(t, report.CreatedAt, time.Now(), 1*time.Minute)
 			assert.NotZero(t, report.Stack)
 			assert.Contains(t, report.Error, "run")
-			assert.NotZero(t, report.BuildInfo)
+			assert.NotZero(t, report.Build)
 			assert.Equal(t, "pkg", report.Package)
 			assert.Equal(t, "v1.0.0", report.Version)
 		}
