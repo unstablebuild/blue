@@ -41,7 +41,7 @@ func (s *packageCLI) Man() cli.Manual {
 
 	return cli.Manual{
 		Name:     "package",
-		Summary:  "Manage blue package packages",
+		Summary:  "Manage blue packages",
 		Synopsis: "<cmd>",
 		Commands: cmds,
 		Options:  *s.fs,
