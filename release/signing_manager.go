@@ -166,19 +166,19 @@ func (m *signingManager) GetPackage(
 	return m.root.GetPackage(ctx, pack)
 }
 
-func (m *signingManager) AddPanicReport(ctx context.Context, r debug.PanicReport) error {
-	return m.root.AddPanicReport(ctx, r)
+func (m *signingManager) AddBugReport(ctx context.Context, r debug.Report) error {
+	return m.root.AddBugReport(ctx, r)
 }
 
-func (m *signingManager) ListPanicReports(ctx context.Context, pkg, ver string,
-	filters map[string]string) ([]debug.PanicReport, error) {
-	return m.root.ListPanicReports(ctx, pkg, ver, filters)
+func (m *signingManager) ListBugReports(ctx context.Context, pkg, ver string,
+	filters map[string]string) ([]debug.Report, error) {
+	return m.root.ListBugReports(ctx, pkg, ver, filters)
 }
 
-func (m *signingManager) GetPanicReport(ctx context.Context, id string) (debug.PanicReport, error) {
-	return m.root.GetPanicReport(ctx, id)
+func (m *signingManager) GetBugReport(ctx context.Context, id string) (debug.Report, error) {
+	return m.root.GetBugReport(ctx, id)
 }
 
-func (m *signingManager) DeletePanicReport(ctx context.Context, id string) error {
-	return m.root.DeletePanicReport(ctx, id)
+func (m *signingManager) DeleteBugReport(ctx context.Context, id string) error {
+	return m.root.DeleteBugReport(ctx, id)
 }

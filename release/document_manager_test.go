@@ -292,15 +292,15 @@ func TestDocumentManager(t *testing.T) {
 			require.NotZero(t, report)
 			report.Metadata = make(map[string]string)
 			report.Metadata["i"] = strconv.Itoa(i)
-			err := m.AddPanicReport(context.Background(), report)
+			err := m.AddBugReport(context.Background(), report)
 			require.NoError(t, err)
 		}
 
-		reports, err := m.ListPanicReports(context.Background(), "pkg", "v1.0.0", map[string]string{"Metadata.i": "1"})
+		reports, err := m.ListBugReports(context.Background(), "pkg", "v1.0.0", map[string]string{"Metadata.i": "1"})
 		require.NoError(t, err)
 		require.Len(t, reports, 1)
 
-		assertReport := func(report debug.PanicReport) {
+		assertReport := func(report debug.Report) {
 			assert.WithinDuration(t, report.CreatedAt, time.Now(), 1*time.Minute)
 			assert.NotZero(t, report.Stack)
 			assert.Contains(t, report.Error, "run")
@@ -313,14 +313,14 @@ func TestDocumentManager(t *testing.T) {
 		require.NotNil(t, reports[0].Metadata)
 		id, ok := reports[0].Metadata["id"]
 		require.True(t, ok)
-		r, err := m.GetPanicReport(context.Background(), id)
+		r, err := m.GetBugReport(context.Background(), id)
 		require.NoError(t, err)
 		assertReport(r)
 
-		err = m.DeletePanicReport(context.Background(), id)
+		err = m.DeleteBugReport(context.Background(), id)
 		require.NoError(t, err)
 
-		r, err = m.GetPanicReport(context.Background(), id)
+		r, err = m.GetBugReport(context.Background(), id)
 		require.Error(t, err)
 		assert.Equal(t, document.ErrNotFound, err)
 	})

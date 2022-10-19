@@ -84,16 +84,16 @@ type Manager interface {
 	// List lists all bundles of a package.
 	List(context.Context, string, map[string]string) ([]Bundle, error)
 
-	// GetPanicReport gets a panic report from its uuid.
-	GetPanicReport(context.Context, string) (debug.PanicReport, error)
+	// GetBugReport gets a bug report from its uuid.
+	GetBugReport(context.Context, string) (debug.Report, error)
 
-	// DeletePanicReport deletes a panic report with the given uuid.
-	DeletePanicReport(context.Context, string) error
+	// DeleteBugReport deletes a bug report with the given uuid.
+	DeleteBugReport(context.Context, string) error
 
-	// AddPanicReport stores the given panic report.
-	AddPanicReport(context.Context, debug.PanicReport) error
+	// AddBugReport stores the given bug report.
+	AddBugReport(context.Context, debug.Report) error
 
-	// ListPanicReports lists all panic reports of a pkg and version.
-	ListPanicReports(ctx context.Context, pkg, ver string,
-		filters map[string]string) ([]debug.PanicReport, error)
+	// ListBugReports lists all bug reports of a pkg and version.
+	ListBugReports(ctx context.Context, pkg, ver string,
+		filters map[string]string) ([]debug.Report, error)
 }

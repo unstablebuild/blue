@@ -34,11 +34,11 @@ const (
 	// package document
 	documentTypePackage
 	// panic report document
-	documentTypePanicReport
+	documentTypeBugReport
 
-	// PanicReportMetadataIDField represents the name of the PanicReport.Metadata field used
+	// BugReportMetadataIDField represents the name of the debug.Report.Metadata field used
 	// to store the document ID.
-	PanicReportMetadataIDField = "id"
+	BugReportMetadataIDField = "id"
 )
 
 type documentManager struct {
@@ -63,9 +63,9 @@ type releaseData struct {
 	Data []byte
 }
 
-type panicReportDocument struct {
-	Type        documentType
-	PanicReport debug.PanicReport
+type bugReportDocument struct {
+	Type      documentType
+	BugReport debug.Report
 }
 
 // NewDocumentManager returns a Manager backed by a document.Service.
@@ -442,18 +442,18 @@ func (d *documentManager) GetPackage(
 	return doc.Package, nil
 }
 
-// AddPanicReport stores the given report into the underlying document.Service. It also appends
+// AddBugReport stores the given report into the underlying document.Service. It also appends
 // it to the underlyin Package and Bundle Reports field.
-func (d *documentManager) AddPanicReport(ctx context.Context, report debug.PanicReport) error {
+func (d *documentManager) AddBugReport(ctx context.Context, report debug.Report) error {
 	if report.Metadata == nil {
 		report.Metadata = make(map[string]string)
 	}
 	id := uuid.New().String()
-	report.Metadata[PanicReportMetadataIDField] = id
+	report.Metadata[BugReportMetadataIDField] = id
 
-	p := panicReportDocument{
-		Type:        documentTypePanicReport,
-		PanicReport: report,
+	p := bugReportDocument{
+		Type:      documentTypeBugReport,
+		BugReport: report,
 	}
 	err := d.db.Create(ctx, id, p)
 	if err != nil {
@@ -462,11 +462,11 @@ func (d *documentManager) AddPanicReport(ctx context.Context, report debug.Panic
 	return nil
 }
 
-// ListPanicReports returns all the reports stored for a given release.
-func (d *documentManager) ListPanicReports(
+// ListBugReports returns all the reports stored for a given release.
+func (d *documentManager) ListBugReports(
 	ctx context.Context, pkg, ver string, filters map[string]string,
-) ([]debug.PanicReport, error) {
-	docFilters := makePanicReportFilters(pkg, ver, filters)
+) ([]debug.Report, error) {
+	docFilters := makeBugReportFilters(pkg, ver, filters)
 	it, err := d.db.List(ctx, docFilters)
 	if err != nil {
 		return nil, fmt.Errorf("document.Service.Create: %v", err)
@@ -475,14 +475,14 @@ func (d *documentManager) ListPanicReports(
 
 	logrus.Debugf("calling List with filters: %#v", docFilters)
 
-	var ret []debug.PanicReport
-	var temp panicReportDocument
+	var ret []debug.Report
+	var temp bugReportDocument
 	for it.HasNext() {
 		if nextErr := it.NextTo(&temp); nextErr != nil {
 			err = multierror.Append(err, nextErr)
 			continue
 		}
-		ret = append(ret, temp.PanicReport)
+		ret = append(ret, temp.BugReport)
 	}
 	if err != nil {
 		return nil, err
@@ -490,17 +490,17 @@ func (d *documentManager) ListPanicReports(
 	return ret, nil
 }
 
-func (m *documentManager) GetPanicReport(ctx context.Context, id string) (debug.PanicReport, error) {
-	var doc panicReportDocument
+func (m *documentManager) GetBugReport(ctx context.Context, id string) (debug.Report, error) {
+	var doc bugReportDocument
 	err := m.db.Get(ctx, id, &doc)
 	if err != nil {
-		return debug.PanicReport{}, err
+		return debug.Report{}, err
 	}
-	return doc.PanicReport, nil
+	return doc.BugReport, nil
 }
 
-func (d *documentManager) DeletePanicReport(ctx context.Context, id string) error {
-	var doc panicReportDocument
+func (d *documentManager) DeleteBugReport(ctx context.Context, id string) error {
+	var doc bugReportDocument
 	err := d.db.Get(ctx, id, &doc)
 	if err != nil {
 		return err
@@ -508,27 +508,27 @@ func (d *documentManager) DeletePanicReport(ctx context.Context, id string) erro
 	return d.db.Delete(ctx, id)
 }
 
-func makePanicReportFilters(
+func makeBugReportFilters(
 	pkg, ver string, userFilters map[string]string,
 ) []document.Filter {
 	ret := []document.Filter{
 		{
 			Field: document.Field{
 				FieldPath: []string{"Type"},
-				Value:     documentTypePanicReport,
+				Value:     documentTypeBugReport,
 			},
 			Op: document.OpEqual,
 		},
 		{
 			Field: document.Field{
-				FieldPath: []string{"PanicReport", "Package"},
+				FieldPath: []string{"BugReport", "Package"},
 				Value:     pkg,
 			},
 			Op: document.OpEqual,
 		},
 		{
 			Field: document.Field{
-				FieldPath: []string{"PanicReport", "Version"},
+				FieldPath: []string{"BugReport", "Version"},
 				Value:     ver,
 			},
 			Op: document.OpEqual,
@@ -536,7 +536,7 @@ func makePanicReportFilters(
 	}
 	for k, v := range userFilters {
 		ks := strings.Split(k, ".")
-		path := append([]string{"PanicReport"}, ks...)
+		path := append([]string{"BugReport"}, ks...)
 		ret = append(ret,
 			document.Filter{
 				Field: document.Field{

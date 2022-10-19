@@ -1,4 +1,4 @@
-package panicreport
+package bugreport
 
 import (
 	"context"
@@ -32,14 +32,14 @@ func (i *metaFilters) Set(value string) error {
 	return nil
 }
 
-type panicReportList struct {
+type bugReportList struct {
 	m       release.Manager
 	fs      *cli.FlagSet
 	filters metaFilters
 }
 
 func newPanicReportListCLI(m release.Manager) cli.CLI {
-	l := &panicReportList{
+	l := &bugReportList{
 		m:       m,
 		filters: metaFilters(map[string]string{}),
 	}
@@ -48,16 +48,16 @@ func newPanicReportListCLI(m release.Manager) cli.CLI {
 	return l
 }
 
-func (s *panicReportList) Man() cli.Manual {
+func (s *bugReportList) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "list",
-		Summary:  "Print all panic reports of a package and version to stdout",
+		Summary:  "Print all bug reports of a package and version to stdout",
 		Options:  *s.fs,
 		Synopsis: "<package> <version>",
 	}
 }
 
-func (s *panicReportList) Run(ctx context.Context, args []string) error {
+func (s *bugReportList) Run(ctx context.Context, args []string) error {
 	args, ok, err := cli.ParseUsage(s, s.fs, 2, args)
 	if err != nil || !ok {
 		return err
@@ -70,7 +70,7 @@ func (s *panicReportList) Run(ctx context.Context, args []string) error {
 	log.Debugf("listing reports of package %q version %q with metadata filters: %v",
 		pkg, ver, s.filters)
 
-	reports, err := s.m.ListPanicReports(ctx, pkg, ver, map[string]string(s.filters))
+	reports, err := s.m.ListBugReports(ctx, pkg, ver, map[string]string(s.filters))
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func (s *panicReportList) Run(ctx context.Context, args []string) error {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"UUID", "Error", "GoVersion", "Path", "CreatedAt"})
 	for _, report := range reports {
-		table.Append([]string{report.Metadata[release.PanicReportMetadataIDField],
+		table.Append([]string{report.Metadata[release.BugReportMetadataIDField],
 			fmt.Sprintf("%10s", report.Error),
 			report.Build.GoVersion,
 			report.Build.Path,
