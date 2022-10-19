@@ -8,8 +8,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// PanicReport contains informatin about a panic
-type PanicReport struct {
+// Report contains informatin about a suspected or confirmed bug.
+type Report struct {
 	Package   string
 	Version   string
 	Build     debug.BuildInfo
@@ -20,15 +20,15 @@ type PanicReport struct {
 }
 
 // CapturePanic attempts to capture a panic during execution of f, logs it
-// and returns a PanicReport and false, or returns true if f returned
+// and returns a Report and false, or returns true if f returned
 // successfully.
-func CapturePanic(log *log.Logger, pkg, version string, f func()) (ok bool, report PanicReport) {
+func CapturePanic(log *log.Logger, pkg, version string, f func()) (ok bool, report Report) {
 	defer func() {
 		r := recover()
 		if r == nil {
 			return
 		}
-		report = PanicReport{
+		report = Report{
 			Package:   pkg,
 			Version:   version,
 			Stack:     string(debug.Stack()),

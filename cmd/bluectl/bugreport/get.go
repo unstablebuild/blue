@@ -1,4 +1,4 @@
-package panicreport
+package bugreport
 
 import (
 	"bytes"
@@ -18,28 +18,28 @@ const (
 	defaultGetTimeout = 10 * time.Minute
 )
 
-type panicReportGet struct {
+type bugReportGet struct {
 	m  release.Manager
 	fs *cli.FlagSet
 }
 
 func newPanicReportGetCLI(m release.Manager) cli.CLI {
-	return panicReportGet{
+	return bugReportGet{
 		m:  m,
 		fs: cli.NewFlagSet("get"),
 	}
 }
 
-func (s panicReportGet) Man() cli.Manual {
+func (s bugReportGet) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "get",
-		Summary:  "Get a panic report",
+		Summary:  "Get a bug report",
 		Synopsis: "<uuid>",
 		Options:  *s.fs,
 	}
 }
 
-func printablePanicReport(r debug.PanicReport) (string, error) {
+func printablePanicReport(r debug.Report) (string, error) {
 	var buf bytes.Buffer
 	encoder := yaml.NewEncoder(&buf)
 	err := encoder.Encode(r)
@@ -49,7 +49,7 @@ func printablePanicReport(r debug.PanicReport) (string, error) {
 	return buf.String(), nil
 }
 
-func (s panicReportGet) Run(ctx context.Context, args []string) error {
+func (s bugReportGet) Run(ctx context.Context, args []string) error {
 	args, ok, err := cli.ParseUsage(s, s.fs, 1, args)
 	if err != nil || !ok {
 		return err
@@ -60,7 +60,7 @@ func (s panicReportGet) Run(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, defaultGetTimeout)
 	defer cancel()
 
-	report, err := s.m.GetPanicReport(ctx, id)
+	report, err := s.m.GetBugReport(ctx, id)
 	if err != nil {
 		return err
 	}

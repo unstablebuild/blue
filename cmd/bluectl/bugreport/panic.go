@@ -1,4 +1,4 @@
-package panicreport
+package bugreport
 
 import (
 	"context"
@@ -32,7 +32,7 @@ func newPanicReportPanicCLI(version string, m release.Manager) cli.CLI {
 func (s *panicReportPanic) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "panic",
-		Summary:  "Create a PanicReport by auto-panicking",
+		Summary:  "Create a bug report by capturing a simulated panic",
 		Synopsis: "",
 		Options:  *s.fs,
 	}
@@ -55,5 +55,5 @@ func (s *panicReportPanic) Run(ctx context.Context, args []string) error {
 	if ok {
 		log.Fatal("expected panic report")
 	}
-	return s.m.AddPanicReport(ctx, report)
+	return s.m.AddBugReport(ctx, report)
 }

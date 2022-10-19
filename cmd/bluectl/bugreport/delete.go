@@ -1,4 +1,4 @@
-package panicreport
+package bugreport
 
 import (
 	"context"
@@ -12,28 +12,28 @@ const (
 	deleteTimeout = 30 * time.Second
 )
 
-type panicReportDelete struct {
+type bugReportDelete struct {
 	m  release.Manager
 	fs *cli.FlagSet
 }
 
 func newPanicReportDeleteCLI(m release.Manager) cli.CLI {
-	return panicReportDelete{
+	return bugReportDelete{
 		m:  m,
 		fs: cli.NewFlagSet("delete"),
 	}
 }
 
-func (s panicReportDelete) Man() cli.Manual {
+func (s bugReportDelete) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "delete",
-		Summary:  "Delete a panic report",
+		Summary:  "Delete a bug report",
 		Synopsis: "<uuid>",
 		Options:  *s.fs,
 	}
 }
 
-func (s panicReportDelete) Run(ctx context.Context, args []string) error {
+func (s bugReportDelete) Run(ctx context.Context, args []string) error {
 	args, ok, err := cli.ParseUsage(s, s.fs, 1, args)
 	if err != nil || !ok {
 		return err
@@ -42,5 +42,5 @@ func (s panicReportDelete) Run(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), deleteTimeout)
 	defer cancel()
 
-	return s.m.DeletePanicReport(ctx, args[0])
+	return s.m.DeleteBugReport(ctx, args[0])
 }
