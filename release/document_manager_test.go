@@ -125,7 +125,9 @@ func TestDocumentManager(t *testing.T) {
 
 	t.Run("uploads a new release bundle and uploads data", func(t *testing.T) {
 		m, svc := newTestingDocumentManager()
-		err := m.Upload(ctx, fixtureRelease,
+		err := m.Create(ctx, Package{Name: fixtureRelease.Package})
+		require.NoError(t, err)
+		err = m.Upload(ctx, fixtureRelease,
 			NopProgressReader(bytes.NewBuffer(fixtureSmallData)))
 		require.NoError(t, err)
 		// add another release to make sure we download only from one
@@ -150,11 +152,25 @@ func TestDocumentManager(t *testing.T) {
 		assert.Equal(t, fixtureSmallData, b.Bytes())
 	})
 
-	t.Run("uploads a new release bundle and updates latest package version, even if package doesn't exist", func(t *testing.T) {
+	t.Run("uploads fails if package has not been created yet", func(t *testing.T) {
 		m, _ := newTestingDocumentManager()
 		bundle := fixtureRelease
 		bundle.Version = "0.1.2"
 		err := m.Upload(ctx, bundle,
+			NopProgressReader(bytes.NewBuffer([]byte(""))))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "does not exist")
+	})
+
+	t.Run("uploads a new release bundle and updates latest package version", func(t *testing.T) {
+		m, _ := newTestingDocumentManager()
+		bundle := fixtureRelease
+		bundle.Version = "0.1.2"
+		err := m.Create(ctx,
+			Package{Name: bundle.Package, Notes: "blabla",
+				Metadata: map[string]string{"1": "1"}})
+		require.NoError(t, err)
+		err = m.Upload(ctx, bundle,
 			NopProgressReader(bytes.NewBuffer([]byte(""))))
 		require.NoError(t, err)
 
@@ -164,8 +180,18 @@ func TestDocumentManager(t *testing.T) {
 		assert.Equal(t, Package{
 			Name:     fixtureRelease.Package,
 			Latest:   Version("0.1.2"),
-			Metadata: map[string]string{},
+			Notes:    "blabla",
+			Metadata: map[string]string{"1": "1"},
 		}, packages[0])
+
+		pkg, err := m.GetPackage(ctx, bundle.Package)
+		require.NoError(t, err)
+		assert.Equal(t, Package{
+			Name:     fixtureRelease.Package,
+			Latest:   Version("0.1.2"),
+			Notes:    "blabla",
+			Metadata: map[string]string{"1": "1"},
+		}, pkg)
 	})
 
 	t.Run("creates a new manifest and uploads chunkified release data with progress", func(t *testing.T) {
@@ -180,7 +206,9 @@ func TestDocumentManager(t *testing.T) {
 			},
 			statDelegate: &createProgress,
 		}
-		err := m.Upload(ctx, fixtureRelease, read)
+		err := m.Create(ctx, Package{Name: fixtureRelease.Package})
+		require.NoError(t, err)
+		err = m.Upload(ctx, fixtureRelease, read)
 		assert.NoError(t, err)
 
 		var b bytes.Buffer
@@ -211,7 +239,9 @@ func TestDocumentManager(t *testing.T) {
 
 	t.Run("list filters out by metadata", func(t *testing.T) {
 		m, _ := newTestingDocumentManager()
-		err := m.Upload(ctx, fixtureRelease,
+		err := m.Create(ctx, Package{Name: fixtureRelease.Package})
+		require.NoError(t, err)
+		err = m.Upload(ctx, fixtureRelease,
 			NopProgressReader(bytes.NewBuffer(fixtureSmallData)))
 		require.NoError(t, err)
 		err = m.Upload(ctx, fixtureRelease2,
@@ -228,7 +258,9 @@ func TestDocumentManager(t *testing.T) {
 
 	t.Run("get fails if data has been altered since point of manifest creation", func(t *testing.T) {
 		m, svc := newTestingDocumentManager()
-		err := m.Upload(ctx, fixtureRelease,
+		err := m.Create(ctx, Package{Name: fixtureRelease.Package})
+		require.NoError(t, err)
+		err = m.Upload(ctx, fixtureRelease,
 			NopProgressReader(bytes.NewBuffer(fixtureSmallData)))
 		assert.NoError(t, err)
 

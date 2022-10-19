@@ -224,16 +224,15 @@ func (d *documentManager) Upload(
 
 	// update latest version of package structure
 	// if it doesn't exist, then create one
-	p := packageDocument{
-		Type: documentTypePackage,
-		Package: Package{
-			Name:   m.Package,
-			Latest: m.Version,
-		},
+	updates := []document.Update{
+		{FieldPath: []string{"Package", "Latest"}, Value: m.Version},
 	}
 	packageDocID := makePackageDocID(m.Package)
-	err = d.db.Set(ctx, packageDocID, p)
+	err = d.db.Update(ctx, packageDocID, updates)
 	if err != nil {
+		if err == document.ErrNotFound {
+			err = fmt.Errorf("Package %q does not exist", m.Package)
+		}
 		return d.forceDelete(err, id)
 	}
 
