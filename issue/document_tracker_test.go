@@ -56,7 +56,27 @@ func TestDocumentTracker(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	reports, err := m.ListVersionReports(context.Background(), "pkg", "UNKNOWNVERSION", nil)
+	// should not be returned as its closed
+	closedReport := Report{
+		Author:    "test.capturePanic",
+		Subject:   "bummers",
+		Package:   "pkg",
+		Version:   "v1.0.0",
+		CreatedAt: time.Now(),
+	}
+	closedReport.Metadata = make(map[string]string)
+	closedReport.Metadata["i"] = "closing"
+	err := m.AddReport(context.Background(), closedReport)
+	require.NoError(t, err)
+
+	reports, err := m.ListPackageReports(context.Background(), "pkg", map[string]string{"Metadata.i": "closing"})
+	require.NoError(t, err)
+	require.Len(t, reports, 1)
+
+	err = m.CloseReport(context.Background(), reports[0].Metadata[ReportMetadataIDField])
+	require.NoError(t, err)
+
+	reports, err = m.ListVersionReports(context.Background(), "pkg", "UNKNOWNVERSION", nil)
 	require.NoError(t, err)
 	require.Len(t, reports, 0)
 
@@ -92,4 +112,11 @@ func TestDocumentTracker(t *testing.T) {
 	r, err = m.GetReport(context.Background(), id)
 	require.Error(t, err)
 	assert.Equal(t, document.ErrNotFound, err)
+
+	// test that we are able to list closed reports
+	reports, err = m.ListPackageReports(context.Background(), "pkg", map[string]string{"Closed": "true"})
+	require.NoError(t, err)
+	require.Len(t, reports, 1)
+	assertReport(reports[0])
+	assert.True(t, reports[0].Closed)
 }

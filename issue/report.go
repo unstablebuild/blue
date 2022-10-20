@@ -15,6 +15,8 @@ type Report struct {
 	Notes     string
 	Build     debug.BuildInfo
 	CreatedAt time.Time
+	Closed    bool
+	ClosedAt  time.Time
 	Metadata  map[string]string
 }
 

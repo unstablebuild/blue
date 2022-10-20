@@ -49,9 +49,10 @@ func newReleaseListCLI(m release.Manager) cli.CLI {
 
 func (s *releaseList) Man() cli.Manual {
 	return cli.Manual{
-		Name:    "list",
-		Summary: "Print all packages to stdout",
-		Options: *s.fs,
+		Name:     "list",
+		Summary:  "Print all packages to stdout",
+		Options:  *s.fs,
+		Synopsis: "[options]",
 	}
 }
 

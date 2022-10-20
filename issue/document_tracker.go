@@ -178,6 +178,21 @@ func (d *documentTracker) DeleteReport(ctx context.Context, id string) error {
 	return d.db.Delete(ctx, id)
 }
 
+func (d *documentTracker) CloseReport(ctx context.Context, id string) error {
+	updates := []document.Update{
+		{FieldPath: []string{"Report", "Closed"}, Value: true},
+		{FieldPath: []string{"Report", "ClosedAt"}, Value: time.Now()},
+	}
+	err := d.db.Update(ctx, id, updates)
+	if err != nil {
+		if err == document.ErrNotFound {
+			err = fmt.Errorf("Issue %q does not exist", id)
+		}
+		return err
+	}
+	return nil
+}
+
 func addVersionFilter(ret []document.Filter, ver string) []document.Filter {
 	ret = append(ret,
 		document.Filter{
@@ -193,6 +208,12 @@ func addVersionFilter(ret []document.Filter, ver string) []document.Filter {
 func makeReportFilters(
 	pkg string, userFilters map[string]string,
 ) []document.Filter {
+	if _, ok := userFilters["Closed"]; !ok {
+		if userFilters == nil {
+			userFilters = make(map[string]string)
+		}
+		userFilters["Closed"] = "false"
+	}
 	ret := []document.Filter{
 		{
 			Field: document.Field{
@@ -211,15 +232,25 @@ func makeReportFilters(
 	}
 	for k, v := range userFilters {
 		ks := strings.Split(k, ".")
+		// convert string to other values
 		path := append([]string{"Report"}, ks...)
-		ret = append(ret,
-			document.Filter{
-				Field: document.Field{
-					FieldPath: path,
-					Value:     v,
-				},
-				Op: document.OpEqual,
-			})
+		filter := document.Filter{
+			Field: document.Field{
+				FieldPath: path,
+				Value:     v,
+			},
+			Op: document.OpEqual,
+		}
+		// best effort convert string Closed value to bool
+		if len(ks) == 1 && ks[0] == "Closed" {
+			switch v {
+			case "True", "true", "TRUE":
+				filter.Field.Value = true
+			case "False", "false", "FALSE":
+				filter.Field.Value = false
+			}
+		}
+		ret = append(ret, filter)
 	}
 	return ret
 }

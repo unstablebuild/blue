@@ -15,6 +15,7 @@ import (
 
 const (
 	defaultListTimeout = 30 * time.Second
+	dateTimeFormat     = "2006-01-02T15:04:05.999"
 )
 
 type metaFilters map[string]string
@@ -53,8 +54,15 @@ func (s *reportList) Man() cli.Manual {
 		Name:     "list",
 		Summary:  "Print all issue reports of a package and optionally version to stdout",
 		Options:  *s.fs,
-		Synopsis: "<package> [<version>]",
+		Synopsis: "[options] <package> [<version>]",
 	}
+}
+
+func getReportClosedAt(report issue.Report) string {
+	if report.ClosedAt.IsZero() {
+		return ""
+	}
+	return report.ClosedAt.Format(dateTimeFormat)
 }
 
 func (s *reportList) Run(ctx context.Context, args []string) error {
@@ -95,7 +103,7 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 	}
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"ID", "Subject", "Author", "Labels", "CreatedAt"})
+	table.SetHeader([]string{"ID", "Subject", "Author", "Labels", "CreatedAt", "ClosedAt"})
 	for _, report := range reports {
 		var labels []string
 		for k := range report.Metadata {
@@ -103,11 +111,14 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 				labels = append(labels, k)
 			}
 		}
-		table.Append([]string{report.Metadata[issue.ReportMetadataIDField],
+		table.Append([]string{
+			report.Metadata[issue.ReportMetadataIDField],
 			fmt.Sprintf("%10s", report.Subject),
 			report.Author,
 			strings.Join(labels, ", "),
-			report.CreatedAt.String()})
+			report.CreatedAt.Format(dateTimeFormat),
+			getReportClosedAt(report),
+		})
 	}
 	table.Render()
 

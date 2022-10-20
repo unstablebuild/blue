@@ -52,7 +52,7 @@ func (s *releaseList) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "list",
 		Summary:  "Print a package's release bundles to stdout",
-		Synopsis: "<package>",
+		Synopsis: "[options] <package>",
 		Options:  *s.fs,
 	}
 }
