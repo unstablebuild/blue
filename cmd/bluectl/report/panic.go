@@ -1,4 +1,4 @@
-package bugreport
+package report
 
 import (
 	"context"
@@ -16,14 +16,14 @@ const (
 )
 
 type panicReportPanic struct {
-	m       release.Manager
+	t       release.Tracker
 	fs      *cli.FlagSet
 	version string
 }
 
-func newPanicReportPanicCLI(version string, m release.Manager) cli.CLI {
+func newPanicReportPanicCLI(version string, t release.Tracker) cli.CLI {
 	c := &panicReportPanic{
-		m: m,
+		t: t,
 	}
 	c.fs = cli.NewFlagSet("panic")
 	return c
@@ -55,5 +55,5 @@ func (s *panicReportPanic) Run(ctx context.Context, args []string) error {
 	if ok {
 		log.Fatal("expected panic report")
 	}
-	return s.m.AddBugReport(ctx, report)
+	return s.t.AddReport(ctx, report)
 }

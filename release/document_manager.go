@@ -34,11 +34,11 @@ const (
 	// package document
 	documentTypePackage
 	// panic report document
-	documentTypeBugReport
+	documentTypeReport
 
-	// BugReportMetadataIDField represents the name of the debug.Report.Metadata field used
+	// ReportMetadataIDField represents the name of the debug.Report.Metadata field used
 	// to store the document ID.
-	BugReportMetadataIDField = "id"
+	ReportMetadataIDField = "id"
 )
 
 type documentManager struct {
@@ -63,13 +63,20 @@ type releaseData struct {
 	Data []byte
 }
 
-type bugReportDocument struct {
-	Type      documentType
-	BugReport debug.Report
+type reportDocument struct {
+	Type   documentType
+	Report debug.Report
 }
 
 // NewDocumentManager returns a Manager backed by a document.Service.
 func NewDocumentManager(db document.Service) Manager {
+	ret := new(documentManager)
+	ret.db = db
+	return ret
+}
+
+// NewDocumentTracker returns a Tracker backed by a document.Service.
+func NewDocumentTracker(db document.Service) Tracker {
 	ret := new(documentManager)
 	ret.db = db
 	return ret
@@ -442,18 +449,18 @@ func (d *documentManager) GetPackage(
 	return doc.Package, nil
 }
 
-// AddBugReport stores the given report into the underlying document.Service. It also appends
+// AddReport stores the given report into the underlying document.Service. It also appends
 // it to the underlyin Package and Bundle Reports field.
-func (d *documentManager) AddBugReport(ctx context.Context, report debug.Report) error {
+func (d *documentManager) AddReport(ctx context.Context, report debug.Report) error {
 	if report.Metadata == nil {
 		report.Metadata = make(map[string]string)
 	}
 	id := uuid.New().String()
-	report.Metadata[BugReportMetadataIDField] = id
+	report.Metadata[ReportMetadataIDField] = id
 
-	p := bugReportDocument{
-		Type:      documentTypeBugReport,
-		BugReport: report,
+	p := reportDocument{
+		Type:   documentTypeReport,
+		Report: report,
 	}
 	err := d.db.Create(ctx, id, p)
 	if err != nil {
@@ -462,11 +469,11 @@ func (d *documentManager) AddBugReport(ctx context.Context, report debug.Report)
 	return nil
 }
 
-// ListBugReports returns all the reports stored for a given release.
-func (d *documentManager) ListBugReports(
+// ListReports returns all the reports stored for a given release.
+func (d *documentManager) ListReports(
 	ctx context.Context, pkg, ver string, filters map[string]string,
 ) ([]debug.Report, error) {
-	docFilters := makeBugReportFilters(pkg, ver, filters)
+	docFilters := makeReportFilters(pkg, ver, filters)
 	it, err := d.db.List(ctx, docFilters)
 	if err != nil {
 		return nil, fmt.Errorf("document.Service.Create: %v", err)
@@ -476,13 +483,13 @@ func (d *documentManager) ListBugReports(
 	logrus.Debugf("calling List with filters: %#v", docFilters)
 
 	var ret []debug.Report
-	var temp bugReportDocument
+	var temp reportDocument
 	for it.HasNext() {
 		if nextErr := it.NextTo(&temp); nextErr != nil {
 			err = multierror.Append(err, nextErr)
 			continue
 		}
-		ret = append(ret, temp.BugReport)
+		ret = append(ret, temp.Report)
 	}
 	if err != nil {
 		return nil, err
@@ -490,17 +497,17 @@ func (d *documentManager) ListBugReports(
 	return ret, nil
 }
 
-func (m *documentManager) GetBugReport(ctx context.Context, id string) (debug.Report, error) {
-	var doc bugReportDocument
+func (m *documentManager) GetReport(ctx context.Context, id string) (debug.Report, error) {
+	var doc reportDocument
 	err := m.db.Get(ctx, id, &doc)
 	if err != nil {
 		return debug.Report{}, err
 	}
-	return doc.BugReport, nil
+	return doc.Report, nil
 }
 
-func (d *documentManager) DeleteBugReport(ctx context.Context, id string) error {
-	var doc bugReportDocument
+func (d *documentManager) DeleteReport(ctx context.Context, id string) error {
+	var doc reportDocument
 	err := d.db.Get(ctx, id, &doc)
 	if err != nil {
 		return err
@@ -508,27 +515,27 @@ func (d *documentManager) DeleteBugReport(ctx context.Context, id string) error 
 	return d.db.Delete(ctx, id)
 }
 
-func makeBugReportFilters(
+func makeReportFilters(
 	pkg, ver string, userFilters map[string]string,
 ) []document.Filter {
 	ret := []document.Filter{
 		{
 			Field: document.Field{
 				FieldPath: []string{"Type"},
-				Value:     documentTypeBugReport,
+				Value:     documentTypeReport,
 			},
 			Op: document.OpEqual,
 		},
 		{
 			Field: document.Field{
-				FieldPath: []string{"BugReport", "Package"},
+				FieldPath: []string{"Report", "Package"},
 				Value:     pkg,
 			},
 			Op: document.OpEqual,
 		},
 		{
 			Field: document.Field{
-				FieldPath: []string{"BugReport", "Version"},
+				FieldPath: []string{"Report", "Version"},
 				Value:     ver,
 			},
 			Op: document.OpEqual,
@@ -536,7 +543,7 @@ func makeBugReportFilters(
 	}
 	for k, v := range userFilters {
 		ks := strings.Split(k, ".")
-		path := append([]string{"BugReport"}, ks...)
+		path := append([]string{"Report"}, ks...)
 		ret = append(ret,
 			document.Filter{
 				Field: document.Field{

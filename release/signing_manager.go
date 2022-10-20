@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/ernestrc/blue/crypto"
-	"github.com/ernestrc/blue/debug"
 )
 
 // ErrEncryptedKey is returned when provided key is encrypted and needs decrypting first.
@@ -164,21 +163,4 @@ func (m *signingManager) GetPackage(
 	ctx context.Context, pack string,
 ) (Package, error) {
 	return m.root.GetPackage(ctx, pack)
-}
-
-func (m *signingManager) AddBugReport(ctx context.Context, r debug.Report) error {
-	return m.root.AddBugReport(ctx, r)
-}
-
-func (m *signingManager) ListBugReports(ctx context.Context, pkg, ver string,
-	filters map[string]string) ([]debug.Report, error) {
-	return m.root.ListBugReports(ctx, pkg, ver, filters)
-}
-
-func (m *signingManager) GetBugReport(ctx context.Context, id string) (debug.Report, error) {
-	return m.root.GetBugReport(ctx, id)
-}
-
-func (m *signingManager) DeleteBugReport(ctx context.Context, id string) error {
-	return m.root.DeleteBugReport(ctx, id)
 }

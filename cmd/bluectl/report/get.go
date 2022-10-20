@@ -1,4 +1,4 @@
-package bugreport
+package report
 
 import (
 	"bytes"
@@ -18,19 +18,19 @@ const (
 	defaultGetTimeout = 10 * time.Minute
 )
 
-type bugReportGet struct {
-	m  release.Manager
+type reportGet struct {
+	t  release.Tracker
 	fs *cli.FlagSet
 }
 
-func newPanicReportGetCLI(m release.Manager) cli.CLI {
-	return bugReportGet{
-		m:  m,
+func newPanicReportGetCLI(t release.Tracker) cli.CLI {
+	return reportGet{
+		t:  t,
 		fs: cli.NewFlagSet("get"),
 	}
 }
 
-func (s bugReportGet) Man() cli.Manual {
+func (s reportGet) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "get",
 		Summary:  "Get a bug report",
@@ -49,7 +49,7 @@ func printablePanicReport(r debug.Report) (string, error) {
 	return buf.String(), nil
 }
 
-func (s bugReportGet) Run(ctx context.Context, args []string) error {
+func (s reportGet) Run(ctx context.Context, args []string) error {
 	args, ok, err := cli.ParseUsage(s, s.fs, 1, args)
 	if err != nil || !ok {
 		return err
@@ -60,7 +60,7 @@ func (s bugReportGet) Run(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, defaultGetTimeout)
 	defer cancel()
 
-	report, err := s.m.GetBugReport(ctx, id)
+	report, err := s.t.GetReport(ctx, id)
 	if err != nil {
 		return err
 	}

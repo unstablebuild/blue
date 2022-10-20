@@ -52,7 +52,7 @@ type ProgressWriter interface {
 	Progress(progress, total int64, units string)
 }
 
-// Manager represents the behaviour to manage package releases.
+// Manager abstracts the ability to manage packages and releases.
 type Manager interface {
 	// Create creates or updates a package.
 	Create(context.Context, Package) error
@@ -83,17 +83,20 @@ type Manager interface {
 
 	// List lists all bundles of a package.
 	List(context.Context, string, map[string]string) ([]Bundle, error)
+}
 
-	// GetBugReport gets a bug report from its uuid.
-	GetBugReport(context.Context, string) (debug.Report, error)
+// Tracker abstracts the ability to manage bug and feature reports.
+type Tracker interface {
+	// GetReport gets a debug.Report from its uuid.
+	GetReport(context.Context, string) (debug.Report, error)
 
-	// DeleteBugReport deletes a bug report with the given uuid.
-	DeleteBugReport(context.Context, string) error
+	// DeleteReport deletes a debug.Report with the given uuid.
+	DeleteReport(context.Context, string) error
 
-	// AddBugReport stores the given bug report.
-	AddBugReport(context.Context, debug.Report) error
+	// AddReport stores the given debug.Report.
+	AddReport(context.Context, debug.Report) error
 
-	// ListBugReports lists all bug reports of a pkg and version.
-	ListBugReports(ctx context.Context, pkg, ver string,
+	// ListReports lists all debug.Reports of a pkg and version.
+	ListReports(ctx context.Context, pkg, ver string,
 		filters map[string]string) ([]debug.Report, error)
 }
