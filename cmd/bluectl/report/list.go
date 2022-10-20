@@ -1,4 +1,4 @@
-package bugreport
+package report
 
 import (
 	"context"
@@ -32,15 +32,15 @@ func (i *metaFilters) Set(value string) error {
 	return nil
 }
 
-type bugReportList struct {
-	m       release.Manager
+type reportList struct {
+	t       release.Tracker
 	fs      *cli.FlagSet
 	filters metaFilters
 }
 
-func newPanicReportListCLI(m release.Manager) cli.CLI {
-	l := &bugReportList{
-		m:       m,
+func newPanicReportListCLI(t release.Tracker) cli.CLI {
+	l := &reportList{
+		t:       t,
 		filters: metaFilters(map[string]string{}),
 	}
 	l.fs = cli.NewFlagSet("list")
@@ -48,7 +48,7 @@ func newPanicReportListCLI(m release.Manager) cli.CLI {
 	return l
 }
 
-func (s *bugReportList) Man() cli.Manual {
+func (s *reportList) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "list",
 		Summary:  "Print all bug reports of a package and version to stdout",
@@ -57,7 +57,7 @@ func (s *bugReportList) Man() cli.Manual {
 	}
 }
 
-func (s *bugReportList) Run(ctx context.Context, args []string) error {
+func (s *reportList) Run(ctx context.Context, args []string) error {
 	args, ok, err := cli.ParseUsage(s, s.fs, 2, args)
 	if err != nil || !ok {
 		return err
@@ -70,7 +70,7 @@ func (s *bugReportList) Run(ctx context.Context, args []string) error {
 	log.Debugf("listing reports of package %q version %q with metadata filters: %v",
 		pkg, ver, s.filters)
 
-	reports, err := s.m.ListBugReports(ctx, pkg, ver, map[string]string(s.filters))
+	reports, err := s.t.ListReports(ctx, pkg, ver, map[string]string(s.filters))
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func (s *bugReportList) Run(ctx context.Context, args []string) error {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"UUID", "Error", "GoVersion", "Path", "CreatedAt"})
 	for _, report := range reports {
-		table.Append([]string{report.Metadata[release.BugReportMetadataIDField],
+		table.Append([]string{report.Metadata[release.ReportMetadataIDField],
 			fmt.Sprintf("%10s", report.Error),
 			report.Build.GoVersion,
 			report.Build.Path,

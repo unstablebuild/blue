@@ -6,10 +6,10 @@ import (
 	"os"
 
 	"github.com/ernestrc/blue/cli"
-	bugreportCLI "github.com/ernestrc/blue/cmd/bluectl/bugreport"
 	"github.com/ernestrc/blue/cmd/bluectl/gps"
 	packageCLI "github.com/ernestrc/blue/cmd/bluectl/package"
 	releaseCLI "github.com/ernestrc/blue/cmd/bluectl/release"
+	reportCLI "github.com/ernestrc/blue/cmd/bluectl/report"
 	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/document/firestore"
 	"github.com/ernestrc/blue/logging"
@@ -94,14 +94,15 @@ func (c *blueCtl) initializeCli() error {
 	}
 
 	releaseManager := release.NewDocumentManager(db)
+	issueTracker := release.NewDocumentTracker(db)
 
 	c.cmds = map[string]cli.CLI{
-		"init":      init,
-		"release":   releaseCLI.NewCLI(releaseManager),
-		"package":   packageCLI.NewCLI(releaseManager),
-		"gps":       gps.NewCLI(),
-		"analysis":  newAnalysisCli(),
-		"bugreport": bugreportCLI.NewCLI(releaseManager, Tag),
+		"init":     init,
+		"release":  releaseCLI.NewCLI(releaseManager),
+		"package":  packageCLI.NewCLI(releaseManager),
+		"gps":      gps.NewCLI(),
+		"analysis": newAnalysisCli(),
+		"report":   reportCLI.NewCLI(issueTracker, Tag),
 	}
 	c.db = db
 

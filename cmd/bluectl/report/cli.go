@@ -1,4 +1,4 @@
-package bugreport
+package report
 
 import (
 	"context"
@@ -14,40 +14,40 @@ var (
 	actionList   string = "list"
 )
 
-type bugreportCLI struct {
+type reportCLI struct {
 	cmds map[string]cli.CLI
 	fs   *cli.FlagSet
 }
 
-// NewCLI allocatest storage for a new bugreport cli.CLI and
+// NewCLI allocatest storage for a new report cli.CLI and
 // initializes it with the given release.Manager.
-func NewCLI(m release.Manager, version string) cli.CLI {
-	return &bugreportCLI{
+func NewCLI(t release.Tracker, version string) cli.CLI {
+	return &reportCLI{
 		cmds: map[string]cli.CLI{
-			actionPanic:  newPanicReportPanicCLI(version, m),
-			actionDelete: newPanicReportDeleteCLI(m),
-			actionGet:    newPanicReportGetCLI(m),
-			actionList:   newPanicReportListCLI(m),
+			actionPanic:  newPanicReportPanicCLI(version, t),
+			actionDelete: newPanicReportDeleteCLI(t),
+			actionGet:    newPanicReportGetCLI(t),
+			actionList:   newPanicReportListCLI(t),
 		},
-		fs: cli.NewFlagSet("bugreport"),
+		fs: cli.NewFlagSet("report"),
 	}
 }
 
-func (s *bugreportCLI) Man() cli.Manual {
+func (s *reportCLI) Man() cli.Manual {
 	var cmds []cli.Manual
 	for _, cmd := range s.cmds {
 		cmds = append(cmds, cmd.Man())
 	}
 
 	return cli.Manual{
-		Name:     "bugreport",
-		Summary:  "Manage blue panic reports",
+		Name:     "report",
+		Summary:  "Manage blue's issue tracker",
 		Synopsis: "<cmd>",
 		Commands: cmds,
 		Options:  *s.fs,
 	}
 }
 
-func (s *bugreportCLI) Run(ctx context.Context, args []string) error {
+func (s *reportCLI) Run(ctx context.Context, args []string) error {
 	return cli.ParseAndRunCommand(ctx, s, s.fs, s.cmds, args)
 }

@@ -82,9 +82,10 @@ func init() {
 	}
 }
 
-func newTestingDocumentManager() (m Manager, svc document.Service) {
+func newTestingDocumentManager() (m *documentManager, svc document.Service) {
 	svc = document.NewInMemoryCache()
-	m = NewDocumentManager(svc)
+	m = new(documentManager)
+	m.db = svc
 	return
 }
 
@@ -292,11 +293,11 @@ func TestDocumentManager(t *testing.T) {
 			require.NotZero(t, report)
 			report.Metadata = make(map[string]string)
 			report.Metadata["i"] = strconv.Itoa(i)
-			err := m.AddBugReport(context.Background(), report)
+			err := m.AddReport(context.Background(), report)
 			require.NoError(t, err)
 		}
 
-		reports, err := m.ListBugReports(context.Background(), "pkg", "v1.0.0", map[string]string{"Metadata.i": "1"})
+		reports, err := m.ListReports(context.Background(), "pkg", "v1.0.0", map[string]string{"Metadata.i": "1"})
 		require.NoError(t, err)
 		require.Len(t, reports, 1)
 
@@ -313,14 +314,14 @@ func TestDocumentManager(t *testing.T) {
 		require.NotNil(t, reports[0].Metadata)
 		id, ok := reports[0].Metadata["id"]
 		require.True(t, ok)
-		r, err := m.GetBugReport(context.Background(), id)
+		r, err := m.GetReport(context.Background(), id)
 		require.NoError(t, err)
 		assertReport(r)
 
-		err = m.DeleteBugReport(context.Background(), id)
+		err = m.DeleteReport(context.Background(), id)
 		require.NoError(t, err)
 
-		r, err = m.GetBugReport(context.Background(), id)
+		r, err = m.GetReport(context.Background(), id)
 		require.Error(t, err)
 		assert.Equal(t, document.ErrNotFound, err)
 	})
