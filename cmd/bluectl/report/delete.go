@@ -27,8 +27,8 @@ func newPanicReportDeleteCLI(t issue.Tracker) cli.CLI {
 func (s reportDelete) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "delete",
-		Summary:  "Delete a report from the issue tracker",
-		Synopsis: "<uuid>",
+		Summary:  "Delete an issue from the issue tracker",
+		Synopsis: "<id>",
 		Options:  *s.fs,
 	}
 }

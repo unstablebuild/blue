@@ -12,6 +12,7 @@ var (
 	actionDelete string = "delete"
 	actionGet    string = "get"
 	actionList   string = "list"
+	actionClose  string = "close"
 )
 
 type reportCLI struct {
@@ -25,6 +26,7 @@ func NewCLI(t issue.Tracker, version string) cli.CLI {
 	return &reportCLI{
 		cmds: map[string]cli.CLI{
 			actionPanic:  newPanicReportPanicCLI(version, t),
+			actionClose:  newPanicReportCloseCLI(t),
 			actionDelete: newPanicReportDeleteCLI(t),
 			actionGet:    newPanicReportGetCLI(t),
 			actionList:   newPanicReportListCLI(t),

@@ -33,7 +33,7 @@ func (s reportGet) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "get",
 		Summary:  "Get an issue report from the tracker",
-		Synopsis: "<uuid>",
+		Synopsis: "<id>",
 		Options:  *s.fs,
 	}
 }
