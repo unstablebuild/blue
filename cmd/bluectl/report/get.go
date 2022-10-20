@@ -22,7 +22,7 @@ type reportGet struct {
 	fs *cli.FlagSet
 }
 
-func newPanicReportGetCLI(t issue.Tracker) cli.CLI {
+func newReportGetCLI(t issue.Tracker) cli.CLI {
 	return reportGet{
 		t:  t,
 		fs: cli.NewFlagSet("get"),
@@ -38,7 +38,7 @@ func (s reportGet) Man() cli.Manual {
 	}
 }
 
-func printablePanicReport(r issue.Report) (string, error) {
+func printableReport(r issue.Report) (string, error) {
 	var buf bytes.Buffer
 	encoder := yaml.NewEncoder(&buf)
 	err := encoder.Encode(r)
@@ -64,7 +64,7 @@ func (s reportGet) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	data, err := printablePanicReport(report)
+	data, err := printableReport(report)
 	if err != nil {
 		return err
 	}

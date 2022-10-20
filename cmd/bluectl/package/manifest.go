@@ -100,10 +100,12 @@ func tempPackage(
 	err = f.Sync()
 	if err != nil {
 		err = fmt.Errorf("failed to sync temp file: %v", err)
+		return
 	}
 	err = f.Close()
 	if err != nil {
 		err = fmt.Errorf("failed to close temp file: %v", err)
+		return
 	}
 
 	data, err := ioutil.ReadFile(f.Name())

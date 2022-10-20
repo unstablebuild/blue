@@ -17,7 +17,7 @@ type reportDelete struct {
 	fs *cli.FlagSet
 }
 
-func newPanicReportDeleteCLI(t issue.Tracker) cli.CLI {
+func newReportDeleteCLI(t issue.Tracker) cli.CLI {
 	return reportDelete{
 		t:  t,
 		fs: cli.NewFlagSet("delete"),
