@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ernestrc/blue/cli"
-	"github.com/ernestrc/blue/release"
+	"github.com/ernestrc/blue/issue"
 	"github.com/olekukonko/tablewriter"
 	log "github.com/sirupsen/logrus"
 )
@@ -33,12 +33,12 @@ func (i *metaFilters) Set(value string) error {
 }
 
 type reportList struct {
-	t       release.Tracker
+	t       issue.Tracker
 	fs      *cli.FlagSet
 	filters metaFilters
 }
 
-func newPanicReportListCLI(t release.Tracker) cli.CLI {
+func newPanicReportListCLI(t issue.Tracker) cli.CLI {
 	l := &reportList{
 		t:       t,
 		filters: metaFilters(map[string]string{}),
@@ -51,29 +51,43 @@ func newPanicReportListCLI(t release.Tracker) cli.CLI {
 func (s *reportList) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "list",
-		Summary:  "Print all bug reports of a package and version to stdout",
+		Summary:  "Print all issue reports of a package and optionally version to stdout",
 		Options:  *s.fs,
-		Synopsis: "<package> <version>",
+		Synopsis: "<package> [<version>]",
 	}
 }
 
 func (s *reportList) Run(ctx context.Context, args []string) error {
-	args, ok, err := cli.ParseUsage(s, s.fs, 2, args)
+	args, ok, err := cli.ParseUsage(s, s.fs, 1, args)
 	if err != nil || !ok {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(ctx, defaultListTimeout)
 	defer cancel()
 
-	pkg, ver := args[0], args[1]
+	var ver string
+	pkg := args[0]
+	if len(args) > 1 {
+		ver = args[1]
+	}
 
 	log.Debugf("listing reports of package %q version %q with metadata filters: %v",
 		pkg, ver, s.filters)
 
-	reports, err := s.t.ListReports(ctx, pkg, ver, map[string]string(s.filters))
-	if err != nil {
-		return err
+	var reports []issue.Report
+	if ver == "" {
+		reports, err = s.t.ListPackageReports(ctx, pkg, map[string]string(s.filters))
+		if err != nil {
+			return err
+		}
+	} else {
+		reports, err = s.t.ListVersionReports(ctx, pkg, ver, map[string]string(s.filters))
+		if err != nil {
+			return err
+		}
 	}
+
+	log.Debugf("received reports: %#v", reports)
 
 	if len(reports) == 0 {
 		fmt.Print("No reports found\n")
@@ -81,12 +95,18 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 	}
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"UUID", "Error", "GoVersion", "Path", "CreatedAt"})
+	table.SetHeader([]string{"ID", "Subject", "Author", "Labels", "CreatedAt"})
 	for _, report := range reports {
-		table.Append([]string{report.Metadata[release.ReportMetadataIDField],
-			fmt.Sprintf("%10s", report.Error),
-			report.Build.GoVersion,
-			report.Build.Path,
+		var labels []string
+		for k := range report.Metadata {
+			if !issue.IsInternalLabel(k) {
+				labels = append(labels, k)
+			}
+		}
+		table.Append([]string{report.Metadata[issue.ReportMetadataIDField],
+			fmt.Sprintf("%10s", report.Subject),
+			report.Author,
+			strings.Join(labels, ", "),
 			report.CreatedAt.String()})
 	}
 	table.Render()

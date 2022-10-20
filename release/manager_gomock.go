@@ -8,7 +8,6 @@ import (
 	context "context"
 	reflect "reflect"
 
-	debug "github.com/ernestrc/blue/debug"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -135,20 +134,6 @@ func (m *MockManager) EXPECT() *MockManagerMockRecorder {
 	return m.recorder
 }
 
-// AddReport mocks base method.
-func (m *MockManager) AddReport(arg0 context.Context, arg1 debug.Report) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddReport", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddReport indicates an expected call of AddReport.
-func (mr *MockManagerMockRecorder) AddReport(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddReport", reflect.TypeOf((*MockManager)(nil).AddReport), arg0, arg1)
-}
-
 // Create mocks base method.
 func (m *MockManager) Create(arg0 context.Context, arg1 Package) error {
 	m.ctrl.T.Helper()
@@ -175,20 +160,6 @@ func (m *MockManager) Delete(arg0 context.Context, arg1 string, arg2 Version) er
 func (mr *MockManagerMockRecorder) Delete(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockManager)(nil).Delete), arg0, arg1, arg2)
-}
-
-// DeleteReport mocks base method.
-func (m *MockManager) DeleteReport(arg0 context.Context, arg1 string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteReport", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteReport indicates an expected call of DeleteReport.
-func (mr *MockManagerMockRecorder) DeleteReport(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteReport", reflect.TypeOf((*MockManager)(nil).DeleteReport), arg0, arg1)
 }
 
 // DeletePackage mocks base method.
@@ -220,21 +191,6 @@ func (mr *MockManagerMockRecorder) Get(arg0, arg1, arg2, arg3 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockManager)(nil).Get), arg0, arg1, arg2, arg3)
 }
 
-// GetReport mocks base method.
-func (m *MockManager) GetReport(arg0 context.Context, arg1 string) (debug.Report, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetReport", arg0, arg1)
-	ret0, _ := ret[0].(debug.Report)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetReport indicates an expected call of GetReport.
-func (mr *MockManagerMockRecorder) GetReport(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReport", reflect.TypeOf((*MockManager)(nil).GetReport), arg0, arg1)
-}
-
 // GetPackage mocks base method.
 func (m *MockManager) GetPackage(arg0 context.Context, arg1 string) (Package, error) {
 	m.ctrl.T.Helper()
@@ -263,21 +219,6 @@ func (m *MockManager) List(arg0 context.Context, arg1 string, arg2 map[string]st
 func (mr *MockManagerMockRecorder) List(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockManager)(nil).List), arg0, arg1, arg2)
-}
-
-// ListReports mocks base method.
-func (m *MockManager) ListReports(ctx context.Context, pkg, ver string, filters map[string]string) ([]debug.Report, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListReports", ctx, pkg, ver, filters)
-	ret0, _ := ret[0].([]debug.Report)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListReports indicates an expected call of ListReports.
-func (mr *MockManagerMockRecorder) ListReports(ctx, pkg, ver, filters interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReports", reflect.TypeOf((*MockManager)(nil).ListReports), ctx, pkg, ver, filters)
 }
 
 // ListPackages mocks base method.

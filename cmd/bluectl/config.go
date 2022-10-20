@@ -8,6 +8,8 @@ auth:
   credentials-file: 
 release:
   collection: blue-release
+issue:
+  collection: blue-issue
 `
 
 type authConfig struct {
@@ -15,13 +17,14 @@ type authConfig struct {
 	CredentialsFile string `yaml:"credentials-file"`
 }
 
-type releaseConfig struct {
+type collectionConfig struct {
 	Collection string `yaml:"collection"`
 }
 
 type cliConfig struct {
-	Auth    authConfig    `yaml:"auth"`
-	Release releaseConfig `yaml:"release"`
+	Auth    authConfig       `yaml:"auth"`
+	Release collectionConfig `yaml:"release"`
+	Issue   collectionConfig `yaml:"issue"`
 }
 
 func sourceConfig(overridesConfigPath string) (
@@ -43,6 +46,7 @@ func sourceConfigFromProvider(provider config.Provider) (
 	err = config.ProviderGetSections(provider,
 		config.Section{Name: "auth", Target: &c.Auth},
 		config.Section{Name: "release", Target: &c.Release},
+		config.Section{Name: "issue", Target: &c.Issue},
 	)
 	return
 }

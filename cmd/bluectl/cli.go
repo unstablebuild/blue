@@ -12,15 +12,17 @@ import (
 	reportCLI "github.com/ernestrc/blue/cmd/bluectl/report"
 	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/document/firestore"
+	"github.com/ernestrc/blue/issue"
 	"github.com/ernestrc/blue/logging"
 	"github.com/ernestrc/blue/release"
+	multierr "github.com/ernestrc/go-multierror"
 )
 
 type blueCtl struct {
 	configFolder string
 	cmds         map[string]cli.CLI
 	fs           *cli.FlagSet
-	db           document.Service
+	dbs          []document.Service
 	debug        bool
 	version      bool
 }
@@ -87,14 +89,19 @@ func (c *blueCtl) initializeCli() error {
 		return err
 	}
 
-	db, err := firestore.New(config.Auth.ProjectID,
+	docDB, err := firestore.New(config.Auth.ProjectID,
 		config.Release.Collection, config.Auth.CredentialsFile)
 	if err != nil {
 		return err
 	}
+	trackerDB, err := firestore.New(config.Auth.ProjectID,
+		config.Issue.Collection, config.Auth.CredentialsFile)
+	if err != nil {
+		return err
+	}
 
-	releaseManager := release.NewDocumentManager(db)
-	issueTracker := release.NewDocumentTracker(db)
+	releaseManager := release.NewDocumentManager(docDB)
+	issueTracker := issue.NewDocumentTracker(trackerDB)
 
 	c.cmds = map[string]cli.CLI{
 		"init":     init,
@@ -104,7 +111,7 @@ func (c *blueCtl) initializeCli() error {
 		"analysis": newAnalysisCli(),
 		"report":   reportCLI.NewCLI(issueTracker, Tag),
 	}
-	c.db = db
+	c.dbs = []document.Service{docDB, trackerDB}
 
 	logging.SetDefaults(c.debug)
 
@@ -140,9 +147,11 @@ func (c *blueCtl) Run(ctx context.Context, args []string) error {
 	return cli.RunCommand(ctx, rest, c.cmds)
 }
 
-func (c *blueCtl) Close() error {
-	if c.db != nil {
-		return c.db.Close()
+func (c *blueCtl) Close() (ret error) {
+	for _, db := range c.dbs {
+		if err := db.Close(); err != nil {
+			ret = multierr.Append(ret, err)
+		}
 	}
-	return nil
+	return ret
 }

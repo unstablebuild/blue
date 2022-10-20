@@ -5,49 +5,51 @@ import (
 	"runtime/debug"
 	"time"
 
+	"github.com/ernestrc/blue/issue"
 	log "github.com/sirupsen/logrus"
 )
 
-// Report contains informatin about a suspected or confirmed bug.
-type Report struct {
-	Package   string
-	Version   string
-	Build     debug.BuildInfo
-	Error     string
-	Stack     string
-	CreatedAt time.Time
-	Metadata  map[string]string
-}
+const (
+	ReportMetadataErrorField      = "error"
+	ReportMetadataStackTraceField = "stack"
+)
 
 // CapturePanic attempts to capture a panic during execution of f, logs it
 // and returns a Report and false, or returns true if f returned
 // successfully.
-func CapturePanic(log *log.Logger, pkg, version string, f func()) (ok bool, report Report) {
+func CapturePanic(log *log.Logger, pkg, version string, f func()) (ok bool, report issue.Report) {
 	defer func() {
 		r := recover()
 		if r == nil {
 			return
 		}
-		report = Report{
+		report = issue.Report{
+			Author:    "debug.CapturePanic",
 			Package:   pkg,
 			Version:   version,
-			Stack:     string(debug.Stack()),
 			CreatedAt: time.Now(),
+			Metadata:  make(map[string]string),
 		}
+
 		bi, ok := debug.ReadBuildInfo()
 		if ok {
 			report.Build = *bi
 		}
+
+		var errStr string
 		switch x := r.(type) {
 		case string:
-			report.Error = x
+			errStr = x
 		case error:
-			report.Error = x.Error()
+			errStr = x.Error()
 		default:
-			report.Error = fmt.Sprintf("unknown: %v", r)
+			errStr = fmt.Sprintf("unknown: %v", r)
 		}
+		report.Metadata[ReportMetadataStackTraceField] = string(debug.Stack())
+		report.Subject = fmt.Sprintf("%20s", errStr)
+		report.Metadata[ReportMetadataErrorField] = errStr
 
-		log.Errorf("CapturePanic: panic: %v", report.Error)
+		log.Errorf("CapturePanic: panic: %v", report.Metadata[ReportMetadataErrorField])
 		ok = false
 	}()
 

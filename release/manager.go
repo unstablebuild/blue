@@ -6,8 +6,6 @@ import (
 	"context"
 	"io"
 	"time"
-
-	"github.com/ernestrc/blue/debug"
 )
 
 // Package represents.. well, a package.
@@ -83,20 +81,4 @@ type Manager interface {
 
 	// List lists all bundles of a package.
 	List(context.Context, string, map[string]string) ([]Bundle, error)
-}
-
-// Tracker abstracts the ability to manage bug and feature reports.
-type Tracker interface {
-	// GetReport gets a debug.Report from its uuid.
-	GetReport(context.Context, string) (debug.Report, error)
-
-	// DeleteReport deletes a debug.Report with the given uuid.
-	DeleteReport(context.Context, string) error
-
-	// AddReport stores the given debug.Report.
-	AddReport(context.Context, debug.Report) error
-
-	// ListReports lists all debug.Reports of a pkg and version.
-	ListReports(ctx context.Context, pkg, ver string,
-		filters map[string]string) ([]debug.Report, error)
 }

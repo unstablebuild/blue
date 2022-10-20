@@ -8,8 +8,7 @@ import (
 	"time"
 
 	"github.com/ernestrc/blue/cli"
-	"github.com/ernestrc/blue/debug"
-	"github.com/ernestrc/blue/release"
+	"github.com/ernestrc/blue/issue"
 	"github.com/ernestrc/sensible/pager"
 	"gopkg.in/yaml.v3"
 )
@@ -19,11 +18,11 @@ const (
 )
 
 type reportGet struct {
-	t  release.Tracker
+	t  issue.Tracker
 	fs *cli.FlagSet
 }
 
-func newPanicReportGetCLI(t release.Tracker) cli.CLI {
+func newPanicReportGetCLI(t issue.Tracker) cli.CLI {
 	return reportGet{
 		t:  t,
 		fs: cli.NewFlagSet("get"),
@@ -33,13 +32,13 @@ func newPanicReportGetCLI(t release.Tracker) cli.CLI {
 func (s reportGet) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "get",
-		Summary:  "Get a bug report",
+		Summary:  "Get an issue report from the tracker",
 		Synopsis: "<uuid>",
 		Options:  *s.fs,
 	}
 }
 
-func printablePanicReport(r debug.Report) (string, error) {
+func printablePanicReport(r issue.Report) (string, error) {
 	var buf bytes.Buffer
 	encoder := yaml.NewEncoder(&buf)
 	err := encoder.Encode(r)

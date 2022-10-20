@@ -7,7 +7,7 @@ import (
 
 	"github.com/ernestrc/blue/cli"
 	"github.com/ernestrc/blue/debug"
-	"github.com/ernestrc/blue/release"
+	"github.com/ernestrc/blue/issue"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -16,12 +16,12 @@ const (
 )
 
 type panicReportPanic struct {
-	t       release.Tracker
+	t       issue.Tracker
 	fs      *cli.FlagSet
 	version string
 }
 
-func newPanicReportPanicCLI(version string, t release.Tracker) cli.CLI {
+func newPanicReportPanicCLI(version string, t issue.Tracker) cli.CLI {
 	c := &panicReportPanic{
 		t: t,
 	}
