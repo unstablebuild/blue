@@ -140,8 +140,8 @@ func (s *Server) Delete(
 }
 
 func streamList(list proto.DocumentStore_ListServer, it document.Iterator) (err error) {
-	var pr map[string]interface{}
 	for it.HasNext() {
+		var pr map[string]interface{}
 		err = it.NextTo(&pr)
 		res := proto.ListDocumentResponse{}
 		if err != nil {

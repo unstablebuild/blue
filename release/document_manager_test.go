@@ -5,13 +5,10 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
-	"github.com/ernestrc/blue/debug"
 	"github.com/ernestrc/blue/document"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -82,10 +79,9 @@ func init() {
 	}
 }
 
-func newTestingDocumentManager() (m *documentManager, svc document.Service) {
+func newTestingDocumentManager() (m Manager, svc document.Service) {
 	svc = document.NewInMemoryCache()
-	m = new(documentManager)
-	m.db = svc
+	m = NewDocumentManager(svc)
 	return
 }
 
@@ -278,52 +274,6 @@ func TestDocumentManager(t *testing.T) {
 			fixtureRelease.Version, NopProgressWriter(&b))
 		require.Equal(t, ErrDataIntegrity, err)
 		require.Zero(t, manifest)
-	})
-
-	t.Run("stores reports into underlying document.Service", func(t *testing.T) {
-		m, _ := newTestingDocumentManager()
-
-		ll := log.New()
-		ll.Out = ioutil.Discard
-		for i := 0; i < 10; i++ {
-			ok, report := debug.CapturePanic(ll, "pkg", "v1.0.0", func() {
-				panic("run!")
-			})
-			require.False(t, ok)
-			require.NotZero(t, report)
-			report.Metadata = make(map[string]string)
-			report.Metadata["i"] = strconv.Itoa(i)
-			err := m.AddReport(context.Background(), report)
-			require.NoError(t, err)
-		}
-
-		reports, err := m.ListReports(context.Background(), "pkg", "v1.0.0", map[string]string{"Metadata.i": "1"})
-		require.NoError(t, err)
-		require.Len(t, reports, 1)
-
-		assertReport := func(report debug.Report) {
-			assert.WithinDuration(t, report.CreatedAt, time.Now(), 1*time.Minute)
-			assert.NotZero(t, report.Stack)
-			assert.Contains(t, report.Error, "run")
-			assert.NotZero(t, report.Build)
-			assert.Equal(t, "pkg", report.Package)
-			assert.Equal(t, "v1.0.0", report.Version)
-		}
-		assertReport(reports[0])
-
-		require.NotNil(t, reports[0].Metadata)
-		id, ok := reports[0].Metadata["id"]
-		require.True(t, ok)
-		r, err := m.GetReport(context.Background(), id)
-		require.NoError(t, err)
-		assertReport(r)
-
-		err = m.DeleteReport(context.Background(), id)
-		require.NoError(t, err)
-
-		r, err = m.GetReport(context.Background(), id)
-		require.Error(t, err)
-		assert.Equal(t, document.ErrNotFound, err)
 	})
 }
 

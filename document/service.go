@@ -100,7 +100,10 @@ type DroppableService interface {
 // When HasNext returns false, a call to NextTo will panic.
 //
 // NextTo marshals the next document into the provided argument.
-// It returns an error if marshaling fails.
+// It returns an error if marshaling fails. Once marshaled, the
+// given document should not be re-used in the next call to NextTo
+// otherwise map or slice fields could be overriden, depending on the
+// implementation.
 type Iterator interface {
 	HasNext() bool
 	NextTo(doc interface{}) error

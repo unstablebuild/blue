@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/ernestrc/blue/cli"
-	"github.com/ernestrc/blue/release"
+	"github.com/ernestrc/blue/issue"
 )
 
 var (
@@ -21,7 +21,7 @@ type reportCLI struct {
 
 // NewCLI allocatest storage for a new report cli.CLI and
 // initializes it with the given release.Manager.
-func NewCLI(t release.Tracker, version string) cli.CLI {
+func NewCLI(t issue.Tracker, version string) cli.CLI {
 	return &reportCLI{
 		cmds: map[string]cli.CLI{
 			actionPanic:  newPanicReportPanicCLI(version, t),

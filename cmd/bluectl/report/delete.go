@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/ernestrc/blue/cli"
-	"github.com/ernestrc/blue/release"
+	"github.com/ernestrc/blue/issue"
 )
 
 const (
@@ -13,11 +13,11 @@ const (
 )
 
 type reportDelete struct {
-	t  release.Tracker
+	t  issue.Tracker
 	fs *cli.FlagSet
 }
 
-func newPanicReportDeleteCLI(t release.Tracker) cli.CLI {
+func newPanicReportDeleteCLI(t issue.Tracker) cli.CLI {
 	return reportDelete{
 		t:  t,
 		fs: cli.NewFlagSet("delete"),
