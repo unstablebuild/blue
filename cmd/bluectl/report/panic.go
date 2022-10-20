@@ -21,7 +21,7 @@ type panicReportPanic struct {
 	version string
 }
 
-func newPanicReportPanicCLI(version string, t issue.Tracker) cli.CLI {
+func newReportPanicCLI(version string, t issue.Tracker) cli.CLI {
 	c := &panicReportPanic{
 		t: t,
 	}

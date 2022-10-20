@@ -13,10 +13,10 @@ type Report struct {
 	Author    string
 	Subject   string
 	Notes     string
-	Build     debug.BuildInfo
-	CreatedAt time.Time
-	Closed    bool
-	ClosedAt  time.Time
+	Build     debug.BuildInfo `yaml:"build,omitempty"`
+	CreatedAt time.Time       `yaml:"created_at,omitempty"`
+	Closed    bool            `yaml:"closed,omitempty"`
+	ClosedAt  time.Time       `yaml:"closed_at,omitempty"`
 	Metadata  map[string]string
 }
 

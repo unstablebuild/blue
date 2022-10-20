@@ -39,7 +39,7 @@ type reportList struct {
 	filters metaFilters
 }
 
-func newPanicReportListCLI(t issue.Tracker) cli.CLI {
+func newReportListCLI(t issue.Tracker) cli.CLI {
 	l := &reportList{
 		t:       t,
 		filters: metaFilters(map[string]string{}),

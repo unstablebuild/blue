@@ -17,7 +17,7 @@ type reportClose struct {
 	fs *cli.FlagSet
 }
 
-func newPanicReportCloseCLI(t issue.Tracker) cli.CLI {
+func newReportCloseCLI(t issue.Tracker) cli.CLI {
 	return reportClose{
 		t:  t,
 		fs: cli.NewFlagSet("close"),

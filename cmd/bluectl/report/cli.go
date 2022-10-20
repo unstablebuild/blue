@@ -9,6 +9,7 @@ import (
 
 var (
 	actionPanic  string = "panic"
+	actionCreate string = "create"
 	actionDelete string = "delete"
 	actionGet    string = "get"
 	actionList   string = "list"
@@ -25,11 +26,12 @@ type reportCLI struct {
 func NewCLI(t issue.Tracker, version string) cli.CLI {
 	return &reportCLI{
 		cmds: map[string]cli.CLI{
-			actionPanic:  newPanicReportPanicCLI(version, t),
-			actionClose:  newPanicReportCloseCLI(t),
-			actionDelete: newPanicReportDeleteCLI(t),
-			actionGet:    newPanicReportGetCLI(t),
-			actionList:   newPanicReportListCLI(t),
+			actionPanic:  newReportPanicCLI(version, t),
+			actionCreate: newReportCreateCLI(t),
+			actionClose:  newReportCloseCLI(t),
+			actionDelete: newReportDeleteCLI(t),
+			actionGet:    newReportGetCLI(t),
+			actionList:   newReportListCLI(t),
 		},
 		fs: cli.NewFlagSet("report"),
 	}
