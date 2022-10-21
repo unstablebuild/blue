@@ -2,6 +2,7 @@ package issue
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"time"
 
@@ -55,5 +56,10 @@ func (s *panicReportPanic) Run(ctx context.Context, args []string) error {
 	if ok {
 		log.Fatal("expected panic report")
 	}
-	return s.t.AddReport(ctx, report)
+	id, err := s.t.CreateReport(ctx, report)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Created issue %q", id)
+	return nil
 }

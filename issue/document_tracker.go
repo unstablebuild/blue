@@ -78,13 +78,15 @@ func (d *documentTracker) fetchLastIssueNumber(ctx context.Context, pkg string) 
 	return nil
 }
 
-// AddReport stores the given report into the underlying document.Service. It also appends
+// CreateReport  stores the given report into the underlying document.Service. It also appends
 // it to the underlyin Package and Bundle Reports field.
-func (d *documentTracker) AddReport(ctx context.Context, report Report) error {
+func (d *documentTracker) CreateReport(
+	ctx context.Context, report Report,
+) (string, error) {
 	if report.Package == "" ||
 		report.Author == "" ||
 		report.Subject == "" {
-		return errors.New("invalid report: missing package, author, subject")
+		return "", errors.New("invalid report: missing package, author, subject")
 	}
 	if report.Metadata == nil {
 		report.Metadata = make(map[string]string)
@@ -98,15 +100,16 @@ func (d *documentTracker) AddReport(ctx context.Context, report Report) error {
 		// initialize last issue ptr
 		err := d.fetchLastIssueNumber(ctx, report.Package)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
-	return retry.Retry(ctx, autoIncrementRetryStrategy, func(ctx context.Context) (bool, error) {
+	var id string
+	err := retry.Retry(ctx, autoIncrementRetryStrategy, func(ctx context.Context) (bool, error) {
 		lastIssueNumber++
 		d.lastIssueNumber[report.Package] = lastIssueNumber
 
-		id := makeID(report.Package, lastIssueNumber)
+		id = makeID(report.Package, lastIssueNumber)
 		report.Metadata[ReportMetadataIDField] = id
 		report.Metadata[reportMetadataIssueNumberField] = strconv.Itoa(lastIssueNumber)
 
@@ -117,6 +120,10 @@ func (d *documentTracker) AddReport(ctx context.Context, report Report) error {
 		err := d.db.Create(ctx, id, p)
 		return err == document.ErrAlreadyExists, err
 	})
+	if err != nil {
+		return "", err
+	}
+	return id, nil
 }
 
 func (d *documentTracker) list(ctx context.Context, filters []document.Filter) ([]Report, error) {

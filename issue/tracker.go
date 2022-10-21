@@ -16,7 +16,7 @@ type Tracker interface {
 
 	// AddReport stores the given Report. Implementation must return an erro
 	// if Report.Package, Report.Author or Report.Subject are not defined.
-	AddReport(context.Context, Report) error
+	CreateReport(context.Context, Report) (string, error)
 
 	// ListVersionReports lists open reports of a package version, unless
 	// "Closed": "true" is passed as a filter, in which case all closed reports
