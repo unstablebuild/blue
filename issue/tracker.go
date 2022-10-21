@@ -1,6 +1,9 @@
 package issue
 
-import "context"
+import (
+	"context"
+	"github.com/ernestrc/blue/iterator"
+)
 
 // Tracker abstracts the ability to manage bug and feature reports.
 type Tracker interface {
@@ -22,13 +25,13 @@ type Tracker interface {
 	// "Closed": "true" is passed as a filter, in which case all closed reports
 	// are returned.
 	ListVersionReports(ctx context.Context, pkg, ver string,
-		filters map[string]string) ([]Report, error)
+		filters map[string]string) (iterator.Iterator[Report], error)
 
 	// ListPackageReports lists open reports of a package, unless
 	// "Closed": "true" is passed as a filter, in which case all closed reports
 	// are returned.
 	ListPackageReports(ctx context.Context, pkg string,
-		filters map[string]string) ([]Report, error)
+		filters map[string]string) (iterator.Iterator[Report], error)
 
 	// UpdateReport overrides the given Report.
 	UpdateReport(ctx context.Context, id string, r Report) error
