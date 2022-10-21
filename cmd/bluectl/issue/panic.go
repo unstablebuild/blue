@@ -40,7 +40,7 @@ func (s *panicReportPanic) Man() cli.Manual {
 }
 
 func (s *panicReportPanic) Run(ctx context.Context, args []string) error {
-	args, ok, err := cli.ParseUsage(s, s.fs, 0, args)
+	args, _, ok, err := cli.ParseUsage(s, s.fs, 0, args)
 	if err != nil || !ok {
 		return err
 	}

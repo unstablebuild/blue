@@ -176,7 +176,7 @@ func (s *releaseUpload) parseMetadataFlag() (map[string]string, error) {
 }
 
 func (s *releaseUpload) Run(ctx context.Context, args []string) error {
-	args, ok, err := cli.ParseUsage(s, s.fs, 3, args)
+	args, _, ok, err := cli.ParseUsage(s, s.fs, 3, args)
 	if err != nil || !ok {
 		return err
 	}

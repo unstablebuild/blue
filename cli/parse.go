@@ -2,7 +2,6 @@ package cli
 
 import (
 	"flag"
-	"fmt"
 )
 
 func isBoolFlag(fs *FlagSet, name string) (is bool) {
@@ -81,16 +80,12 @@ func Parse(fs *FlagSet, expectedArgs int, args []string) (
 // ParseUsage calls Parse and handles ErrHelp by returning false. If flags are parsed with no
 // errors and usage flag is not passed, then this function returns true.
 func ParseUsage(cli CLI, fs *FlagSet, expectedArgs int, args []string) (
-	rargs []string, ok bool, err error,
+	rargs, rest []string, ok bool, err error,
 ) {
-	args, _, err = Parse(fs, expectedArgs, args)
+
+	args, rest, err = Parse(fs, expectedArgs, args)
 	if err != nil {
-		switch err {
-		case ErrInvalidArgs:
-			fmt.Printf("%s\n\n", err)
-			fallthrough
-		case ErrHelp:
-			Usage(cli)
+		if handleCommonErrors(cli, err) {
 			err = nil
 		}
 		return

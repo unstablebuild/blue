@@ -42,7 +42,7 @@ func printableBundle(man release.Bundle) (string, error) {
 }
 
 func (s releaseDescribe) Run(ctx context.Context, args []string) error {
-	args, ok, err := cli.ParseUsage(s, s.fs, 2, args)
+	args, _, ok, err := cli.ParseUsage(s, s.fs, 2, args)
 	if err != nil || !ok {
 		return err
 	}
