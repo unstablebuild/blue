@@ -29,4 +29,7 @@ type Tracker interface {
 	// are returned.
 	ListPackageReports(ctx context.Context, pkg string,
 		filters map[string]string) ([]Report, error)
+
+	// UpdateReport overrides the given Report.
+	UpdateReport(ctx context.Context, id string, r Report) error
 }
