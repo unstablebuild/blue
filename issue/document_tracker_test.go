@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ernestrc/blue/document"
+	"github.com/ernestrc/blue/iterator"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,6 +36,24 @@ func capturePanic(log *log.Logger, pkg, version string, f func()) (ok bool, repo
 
 func TestIsInternal(t *testing.T) {
 	assert.True(t, IsInternalLabel(ReportMetadataIDField))
+}
+
+func listPackageReports(m Tracker, pkg string,
+	filters map[string]string) ([]Report, error) {
+	iter, err := m.ListPackageReports(context.Background(), pkg, filters)
+	if err != nil {
+		return nil, err
+	}
+	return iterator.ToSlice(iter)
+}
+
+func listVersionReports(m Tracker, pkg, ver string,
+	filters map[string]string) ([]Report, error) {
+	iter, err := m.ListVersionReports(context.Background(), pkg, ver, filters)
+	if err != nil {
+		return nil, err
+	}
+	return iterator.ToSlice(iter)
 }
 
 func TestDocumentTracker(t *testing.T) {
@@ -70,7 +89,7 @@ func TestDocumentTracker(t *testing.T) {
 	_, err := m.CreateReport(context.Background(), closedReport)
 	require.NoError(t, err)
 
-	reports, err := m.ListPackageReports(context.Background(), "pkg", map[string]string{"Metadata.i": "closing"})
+	reports, err := listPackageReports(m, "pkg", map[string]string{"Metadata.i": "closing"})
 	require.NoError(t, err)
 	require.Len(t, reports, 1)
 
@@ -78,7 +97,7 @@ func TestDocumentTracker(t *testing.T) {
 	err = m.CloseReport(context.Background(), closedIssueID)
 	require.NoError(t, err)
 
-	reports, err = m.ListVersionReports(context.Background(), "pkg", "UNKNOWNVERSION", nil)
+	reports, err = listVersionReports(m, "pkg", "UNKNOWNVERSION", nil)
 	require.NoError(t, err)
 	require.Len(t, reports, 0)
 
@@ -89,12 +108,12 @@ func TestDocumentTracker(t *testing.T) {
 		assert.Equal(t, "v1.0.0", report.Version)
 	}
 
-	reports, err = m.ListVersionReports(context.Background(), "pkg", "v1.0.0", map[string]string{"Metadata.i": "1"})
+	reports, err = listVersionReports(m, "pkg", "v1.0.0", map[string]string{"Metadata.i": "1"})
 	require.NoError(t, err)
 	require.Len(t, reports, 1)
 	assertReport(reports[0])
 
-	reports, err = m.ListPackageReports(context.Background(), "pkg", map[string]string{"Metadata.i": "1"})
+	reports, err = listPackageReports(m, "pkg", map[string]string{"Metadata.i": "1"})
 	require.NoError(t, err)
 	require.Len(t, reports, 1)
 	assertReport(reports[0])
@@ -114,7 +133,7 @@ func TestDocumentTracker(t *testing.T) {
 	assert.Equal(t, document.ErrNotFound, err)
 
 	// test that we are able to list closed reports
-	reports, err = m.ListPackageReports(context.Background(), "pkg", map[string]string{"Closed": "true"})
+	reports, err = listPackageReports(m, "pkg", map[string]string{"Closed": "true"})
 	require.NoError(t, err)
 	require.Len(t, reports, 1)
 	assertReport(reports[0])
@@ -130,7 +149,7 @@ func TestDocumentTracker(t *testing.T) {
 	}
 
 	require.NoError(t, m.UpdateReport(context.Background(), closedIssueID, update))
-	reports, err = m.ListPackageReports(context.Background(), "pkg", map[string]string{"Subject": "reopened"})
+	reports, err = listPackageReports(m, "pkg", map[string]string{"Subject": "reopened"})
 	require.NoError(t, err)
 	require.Len(t, reports, 1)
 	assertReport(reports[0])

@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/ernestrc/blue/document"
+	"github.com/ernestrc/blue/iterator"
 	"github.com/ernestrc/blue/retry"
-	"github.com/ernestrc/go-multierror"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 )
@@ -54,12 +54,20 @@ func (d *documentTracker) fetchLastIssueNumber(ctx context.Context, pkg string) 
 	// NOTE if the number of issues is ever large, this could be a bit smarter by
 	// trying to sort limit 1. It would require adding sorting capability to document.Service.List.
 	// It only happens once the service is started.
-	reports, err := d.ListPackageReports(ctx, pkg, nil)
+	it, err := d.ListPackageReports(ctx, pkg, nil)
 	if err != nil {
 		return fmt.Errorf("fetch last issue number: %d", err)
 	}
+
 	var maxIssueNumber int
-	for _, report := range reports {
+	for {
+		report, ok, err := it.Next()
+		if err != nil {
+			return err
+		}
+		if !ok {
+			break
+		}
 		str, ok := report.Metadata[reportMetadataIssueNumberField]
 		if !ok {
 			log.Warningf("Found report with no metadata issue number: %#v", report.Metadata)
@@ -126,34 +134,27 @@ func (d *documentTracker) CreateReport(
 	return id, nil
 }
 
-func (d *documentTracker) list(ctx context.Context, filters []document.Filter) ([]Report, error) {
+func (d *documentTracker) list(ctx context.Context, filters []document.Filter) (
+	iterator.Iterator[Report], error,
+) {
 	logrus.Debugf("calling List with filters: %#v", filters)
 
 	it, err := d.db.List(ctx, filters)
 	if err != nil {
 		return nil, fmt.Errorf("document.Service.Create: %v", err)
 	}
-	defer it.Close()
 
-	var ret []Report
-	for it.HasNext() {
-		var temp reportDocument
-		if nextErr := it.NextTo(&temp); nextErr != nil {
-			err = multierror.Append(err, nextErr)
-			continue
-		}
-		ret = append(ret, temp.Report)
-	}
-	if err != nil {
-		return nil, err
-	}
-	return ret, nil
+	docIter := iterator.FromDocumentIterator[reportDocument](it)
+	reportIter := iterator.Map[reportDocument, Report](docIter, func(doc reportDocument) Report {
+		return doc.Report
+	})
+	return reportIter, nil
 }
 
 // ListVersionReports returns all the reports stored for a given release.
 func (d *documentTracker) ListVersionReports(
 	ctx context.Context, pkg, ver string, filters map[string]string,
-) ([]Report, error) {
+) (iterator.Iterator[Report], error) {
 	docFilters := makeReportFilters(pkg, filters)
 	docFilters = addVersionFilter(docFilters, ver)
 	return d.list(ctx, docFilters)
@@ -162,7 +163,7 @@ func (d *documentTracker) ListVersionReports(
 // ListPackageReports returns all the reports stored for a given package.
 func (d *documentTracker) ListPackageReports(
 	ctx context.Context, pkg string, filters map[string]string,
-) ([]Report, error) {
+) (iterator.Iterator[Report], error) {
 	docFilters := makeReportFilters(pkg, filters)
 	return d.list(ctx, docFilters)
 }

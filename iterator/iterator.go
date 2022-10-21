@@ -44,6 +44,7 @@ func FromFunc[T any](fn func() (T, bool, error)) Iterator[T] {
 func FromDocumentIterator[T any](it document.Iterator) Iterator[T] {
 	return FromFunc(func() (ret T, ok bool, err error) {
 		if !it.HasNext() {
+			err = it.Close()
 			return
 		}
 		ok = true

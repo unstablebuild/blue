@@ -8,8 +8,9 @@ import (
 	"time"
 
 	"github.com/ernestrc/blue/cli"
+	"github.com/ernestrc/blue/cli/format"
 	"github.com/ernestrc/blue/issue"
-	"github.com/olekukonko/tablewriter"
+	"github.com/ernestrc/blue/iterator"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -82,7 +83,7 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 	log.Debugf("listing reports of package %q version %q with metadata filters: %v",
 		pkg, ver, s.filters)
 
-	var reports []issue.Report
+	var reports iterator.Iterator[issue.Report]
 	if ver == "" {
 		reports, err = s.t.ListPackageReports(ctx, pkg, map[string]string(s.filters))
 		if err != nil {
@@ -97,30 +98,31 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 
 	log.Debugf("received reports: %#v", reports)
 
-	if len(reports) == 0 {
-		fmt.Print("No reports found\n")
-		return nil
+	type outIssue struct {
+		ID        string
+		Subject   string
+		Author    string
+		Labels    string
+		CreatedAt string
+		ClosedAt  string
 	}
 
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"ID", "Subject", "Author", "Labels", "CreatedAt", "ClosedAt"})
-	for _, report := range reports {
-		var labels []string
-		for k := range report.Metadata {
-			if !issue.IsInternalLabel(k) {
-				labels = append(labels, k)
+	table := format.Table[outIssue]([]string{"ID", "Subject", "Author", "Labels", "CreatedAt", "ClosedAt"})
+	return table.Format(os.Stdout, iterator.Map[issue.Report, outIssue](reports,
+		func(report issue.Report) outIssue {
+			var labels []string
+			for k := range report.Metadata {
+				if !issue.IsInternalLabel(k) {
+					labels = append(labels, k)
+				}
 			}
-		}
-		table.Append([]string{
-			report.Metadata[issue.ReportMetadataIDField],
-			fmt.Sprintf("%10s", report.Subject),
-			report.Author,
-			strings.Join(labels, ", "),
-			report.CreatedAt.Format(dateTimeFormat),
-			getReportClosedAt(report),
-		})
-	}
-	table.Render()
-
-	return nil
+			return outIssue{
+				ID:        report.Metadata[issue.ReportMetadataIDField],
+				Subject:   fmt.Sprintf("%10s", report.Subject),
+				Author:    report.Author,
+				Labels:    strings.Join(labels, ", "),
+				CreatedAt: report.CreatedAt.Format(dateTimeFormat),
+				ClosedAt:  getReportClosedAt(report),
+			}
+		}))
 }
