@@ -106,7 +106,7 @@ func (d *documentTracker) AddReport(ctx context.Context, report Report) error {
 		lastIssueNumber++
 		d.lastIssueNumber[report.Package] = lastIssueNumber
 
-		id := fmt.Sprintf("%s-%d", strings.ToUpper(report.Package), lastIssueNumber)
+		id := makeID(report.Package, lastIssueNumber)
 		report.Metadata[ReportMetadataIDField] = id
 		report.Metadata[reportMetadataIssueNumberField] = strconv.Itoa(lastIssueNumber)
 
@@ -193,6 +193,44 @@ func (d *documentTracker) CloseReport(ctx context.Context, id string) error {
 	return nil
 }
 
+func (d *documentTracker) UpdateReport(
+	ctx context.Context, id string, report Report,
+) error {
+	if report.Package == "" ||
+		report.Author == "" ||
+		report.Subject == "" {
+		return errors.New("invalid report: missing package, author, subject")
+	}
+	if report.Metadata == nil {
+		report.Metadata = make(map[string]string)
+	}
+	// user is being naughty, prevent zero created_at field
+	if report.CreatedAt.IsZero() {
+		report.CreatedAt = time.Now()
+	}
+	if !report.Closed {
+		report.ClosedAt = time.Time{}
+	} else if report.ClosedAt.IsZero() {
+		report.ClosedAt = time.Now()
+	}
+
+	lastIssueNumber, ok := parseID(id)
+	if !ok {
+		return errors.New("invalid request: extraneous issue id")
+	}
+
+	// make sure these fields are always present, even if client didn't
+	// include them in report request
+	report.Metadata[ReportMetadataIDField] = id
+	report.Metadata[reportMetadataIssueNumberField] = strconv.Itoa(lastIssueNumber)
+
+	p := reportDocument{
+		Type:   documentTypeReport,
+		Report: report,
+	}
+	return d.db.Set(ctx, id, p)
+}
+
 func addVersionFilter(ret []document.Filter, ver string) []document.Filter {
 	ret = append(ret,
 		document.Filter{
@@ -253,4 +291,20 @@ func makeReportFilters(
 		ret = append(ret, filter)
 	}
 	return ret
+}
+
+func parseID(id string) (int, bool) {
+	tokens := strings.Split(id, "-")
+	if len(tokens) != 2 {
+		return 0, false
+	}
+	seq, err := strconv.Atoi(tokens[1])
+	if err != nil {
+		return 0, false
+	}
+	return seq, true
+}
+
+func makeID(pkg string, seq int) string {
+	return fmt.Sprintf("%s-%d", strings.ToUpper(pkg), seq)
 }

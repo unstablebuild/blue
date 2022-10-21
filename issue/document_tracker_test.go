@@ -73,7 +73,8 @@ func TestDocumentTracker(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, reports, 1)
 
-	err = m.CloseReport(context.Background(), reports[0].Metadata[ReportMetadataIDField])
+	closedIssueID := reports[0].Metadata[ReportMetadataIDField]
+	err = m.CloseReport(context.Background(), closedIssueID)
 	require.NoError(t, err)
 
 	reports, err = m.ListVersionReports(context.Background(), "pkg", "UNKNOWNVERSION", nil)
@@ -87,13 +88,11 @@ func TestDocumentTracker(t *testing.T) {
 		assert.Equal(t, "v1.0.0", report.Version)
 	}
 
-	// ListVersionReports sut
 	reports, err = m.ListVersionReports(context.Background(), "pkg", "v1.0.0", map[string]string{"Metadata.i": "1"})
 	require.NoError(t, err)
 	require.Len(t, reports, 1)
 	assertReport(reports[0])
 
-	// ListPackageReports sut
 	reports, err = m.ListPackageReports(context.Background(), "pkg", map[string]string{"Metadata.i": "1"})
 	require.NoError(t, err)
 	require.Len(t, reports, 1)
@@ -119,4 +118,20 @@ func TestDocumentTracker(t *testing.T) {
 	require.Len(t, reports, 1)
 	assertReport(reports[0])
 	assert.True(t, reports[0].Closed)
+
+	update := Report{
+		Author:    "test.capturePanic",
+		Subject:   "reopened",
+		Package:   "pkg",
+		Version:   "v1.0.0",
+		Closed:    false,
+		CreatedAt: time.Now(),
+	}
+
+	require.NoError(t, m.UpdateReport(context.Background(), closedIssueID, update))
+	reports, err = m.ListPackageReports(context.Background(), "pkg", map[string]string{"Subject": "reopened"})
+	require.NoError(t, err)
+	require.Len(t, reports, 1)
+	assertReport(reports[0])
+	assert.False(t, reports[0].Closed)
 }

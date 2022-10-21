@@ -10,6 +10,7 @@ import (
 var (
 	actionPanic  string = "panic"
 	actionCreate string = "create"
+	actionEdit   string = "edit"
 	actionDelete string = "delete"
 	actionGet    string = "get"
 	actionList   string = "list"
@@ -28,6 +29,7 @@ func NewCLI(t issue.Tracker, version string) cli.CLI {
 		cmds: map[string]cli.CLI{
 			actionPanic:  newReportPanicCLI(version, t),
 			actionCreate: newReportCreateCLI(t),
+			actionEdit:   newReportEditCLI(t),
 			actionClose:  newReportCloseCLI(t),
 			actionDelete: newReportDeleteCLI(t),
 			actionGet:    newReportGetCLI(t),
