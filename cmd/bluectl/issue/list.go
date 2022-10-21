@@ -38,6 +38,7 @@ type reportList struct {
 	t       issue.Tracker
 	fs      *cli.FlagSet
 	filters metaFilters
+	format  string
 }
 
 func newReportListCLI(t issue.Tracker) cli.CLI {
@@ -47,6 +48,7 @@ func newReportListCLI(t issue.Tracker) cli.CLI {
 	}
 	l.fs = cli.NewFlagSet("list")
 	l.fs.Var(&l.filters, "f", "Add metadata filter with format 'key=value'")
+	l.fs.StringVar(&l.format, "F", "table", "Choose output format. Options: table, json")
 	return l
 }
 
@@ -98,31 +100,40 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 
 	log.Debugf("received reports: %#v", reports)
 
-	type outIssue struct {
-		ID        string
-		Subject   string
-		Author    string
-		Labels    string
-		CreatedAt string
-		ClosedAt  string
+	switch strings.ToLower(s.format) {
+	case "json":
+		t := format.JSON[issue.Report]()
+		return t.Format(os.Stdout, reports)
+	case "table":
+		type outIssue struct {
+			ID        string
+			Subject   string
+			Author    string
+			Labels    string
+			CreatedAt string
+			ClosedAt  string
+		}
+
+		table := format.Table[outIssue]([]string{"ID", "Subject", "Author", "Labels", "CreatedAt", "ClosedAt"})
+		return table.Format(os.Stdout, iterator.Map[issue.Report, outIssue](reports,
+			func(report issue.Report) outIssue {
+				var labels []string
+				for k := range report.Metadata {
+					if !issue.IsInternalLabel(k) {
+						labels = append(labels, k)
+					}
+				}
+				return outIssue{
+					ID:        report.Metadata[issue.ReportMetadataIDField],
+					Subject:   fmt.Sprintf("%10s", report.Subject),
+					Author:    report.Author,
+					Labels:    strings.Join(labels, ", "),
+					CreatedAt: report.CreatedAt.Format(dateTimeFormat),
+					ClosedAt:  getReportClosedAt(report),
+				}
+			}))
+	default:
+		return cli.ErrInvalidArgs
 	}
 
-	table := format.Table[outIssue]([]string{"ID", "Subject", "Author", "Labels", "CreatedAt", "ClosedAt"})
-	return table.Format(os.Stdout, iterator.Map[issue.Report, outIssue](reports,
-		func(report issue.Report) outIssue {
-			var labels []string
-			for k := range report.Metadata {
-				if !issue.IsInternalLabel(k) {
-					labels = append(labels, k)
-				}
-			}
-			return outIssue{
-				ID:        report.Metadata[issue.ReportMetadataIDField],
-				Subject:   fmt.Sprintf("%10s", report.Subject),
-				Author:    report.Author,
-				Labels:    strings.Join(labels, ", "),
-				CreatedAt: report.CreatedAt.Format(dateTimeFormat),
-				ClosedAt:  getReportClosedAt(report),
-			}
-		}))
 }

@@ -36,6 +36,7 @@ type releaseList struct {
 	m       release.Manager
 	fs      *cli.FlagSet
 	filters metaFilters
+	format  string
 }
 
 func newReleaseListCLI(m release.Manager) cli.CLI {
@@ -45,6 +46,7 @@ func newReleaseListCLI(m release.Manager) cli.CLI {
 	}
 	l.fs = cli.NewFlagSet("list")
 	l.fs.Var(&l.filters, "f", "Add metadata filter with format 'key=value'")
+	l.fs.StringVar(&l.format, "F", "table", "Choose output format. Options: table, json")
 	return l
 }
 
@@ -74,7 +76,15 @@ func (s *releaseList) Run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	switch strings.ToLower(s.format) {
+	case "json":
+		t := format.JSON[release.Bundle]()
+		return t.Format(os.Stdout, bundles)
+	case "table":
+		t := format.Table[release.Bundle]([]string{"Package", "Version", "Notes", "CreatedAt"})
+		return t.Format(os.Stdout, bundles)
+	default:
+		return cli.ErrInvalidArgs
+	}
 
-	t := format.Table[release.Bundle]([]string{"Package", "Version", "Notes", "CreatedAt"})
-	return t.Format(os.Stdout, bundles)
 }
