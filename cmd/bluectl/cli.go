@@ -7,9 +7,9 @@ import (
 
 	"github.com/ernestrc/blue/cli"
 	"github.com/ernestrc/blue/cmd/bluectl/gps"
+	issueCLI "github.com/ernestrc/blue/cmd/bluectl/issue"
 	packageCLI "github.com/ernestrc/blue/cmd/bluectl/package"
 	releaseCLI "github.com/ernestrc/blue/cmd/bluectl/release"
-	reportCLI "github.com/ernestrc/blue/cmd/bluectl/report"
 	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/document/firestore"
 	"github.com/ernestrc/blue/issue"
@@ -109,7 +109,7 @@ func (c *blueCtl) initializeCli() error {
 		"package":  packageCLI.NewCLI(releaseManager),
 		"gps":      gps.NewCLI(),
 		"analysis": newAnalysisCli(),
-		"report":   reportCLI.NewCLI(issueTracker, Tag),
+		"issue":    issueCLI.NewCLI(issueTracker, Tag),
 	}
 	c.dbs = []document.Service{docDB, trackerDB}
 

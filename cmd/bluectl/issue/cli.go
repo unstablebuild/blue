@@ -1,4 +1,4 @@
-package report
+package issue
 
 import (
 	"context"
@@ -21,7 +21,7 @@ type reportCLI struct {
 	fs   *cli.FlagSet
 }
 
-// NewCLI allocatest storage for a new report cli.CLI and
+// NewCLI allocatest storage for a new issue cli.CLI and
 // initializes it with the given release.Manager.
 func NewCLI(t issue.Tracker, version string) cli.CLI {
 	return &reportCLI{
@@ -33,7 +33,7 @@ func NewCLI(t issue.Tracker, version string) cli.CLI {
 			actionGet:    newReportGetCLI(t),
 			actionList:   newReportListCLI(t),
 		},
-		fs: cli.NewFlagSet("report"),
+		fs: cli.NewFlagSet("issue"),
 	}
 }
 
@@ -44,7 +44,7 @@ func (s *reportCLI) Man() cli.Manual {
 	}
 
 	return cli.Manual{
-		Name:     "report",
+		Name:     "issue",
 		Summary:  "Manage blue's issue tracker",
 		Synopsis: "<cmd>",
 		Commands: cmds,
