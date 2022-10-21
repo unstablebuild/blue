@@ -2,6 +2,7 @@ package issue
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ernestrc/blue/cli"
 	"github.com/ernestrc/blue/issue"
@@ -44,5 +45,10 @@ func (s *issueCreate) Run(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	return s.t.AddReport(ctx, r)
+	id, err := s.t.CreateReport(ctx, r)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Created issue %q", id)
+	return nil
 }

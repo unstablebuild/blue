@@ -52,8 +52,9 @@ func TestDocumentTracker(t *testing.T) {
 		}
 		report.Metadata = make(map[string]string)
 		report.Metadata["i"] = strconv.Itoa(i)
-		err := m.AddReport(context.Background(), report)
+		id, err := m.CreateReport(context.Background(), report)
 		require.NoError(t, err)
+		assert.NotZero(t, id)
 	}
 
 	// should not be returned as its closed
@@ -66,7 +67,7 @@ func TestDocumentTracker(t *testing.T) {
 	}
 	closedReport.Metadata = make(map[string]string)
 	closedReport.Metadata["i"] = "closing"
-	err := m.AddReport(context.Background(), closedReport)
+	_, err := m.CreateReport(context.Background(), closedReport)
 	require.NoError(t, err)
 
 	reports, err := m.ListPackageReports(context.Background(), "pkg", map[string]string{"Metadata.i": "closing"})
