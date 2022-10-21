@@ -39,11 +39,7 @@ func main() {
 
 	err = cli.Run(context.Background(), ctl)
 	if err != nil {
-		if err == cli.ErrInvalidArgs {
-			cli.Usage(ctl)
-		} else {
-			fmt.Fprint(os.Stderr, err)
-		}
+		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
 }

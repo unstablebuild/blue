@@ -33,7 +33,7 @@ func (s *issueEdit) Man() cli.Manual {
 }
 
 func (s *issueEdit) Run(ctx context.Context, args []string) error {
-	args, ok, err := cli.ParseUsage(s, s.fs, 1, args)
+	args, _, ok, err := cli.ParseUsage(s, s.fs, 1, args)
 	if err != nil || !ok {
 		return err
 	}

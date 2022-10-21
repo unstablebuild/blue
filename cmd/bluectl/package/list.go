@@ -57,7 +57,7 @@ func (s *releaseList) Man() cli.Manual {
 }
 
 func (s *releaseList) Run(ctx context.Context, args []string) error {
-	_, ok, err := cli.ParseUsage(s, s.fs, 0, args)
+	_, _, ok, err := cli.ParseUsage(s, s.fs, 0, args)
 	if err != nil || !ok {
 		return err
 	}

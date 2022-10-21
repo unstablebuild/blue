@@ -123,12 +123,12 @@ func (c *blueCtl) printVersion() {
 }
 
 func (c *blueCtl) Run(ctx context.Context, args []string) error {
-	_, rest, perr := cli.Parse(c.fs, 0, args)
-	if perr != nil && perr != cli.ErrHelp {
-		return perr
+	args, rest, ok, err := cli.ParseUsage(c, c.fs, 0, args)
+	if err != nil || !ok {
+		return err
 	}
 
-	err := c.initializeCli()
+	err = c.initializeCli()
 	if err != nil {
 		return err
 	}
@@ -138,13 +138,18 @@ func (c *blueCtl) Run(ctx context.Context, args []string) error {
 		return nil
 	}
 
-	if perr == cli.ErrHelp {
+	ctx = cli.ContextWithOptions(ctx, c.fs)
+	err = cli.RunCommand(ctx, rest, c.cmds)
+	switch err {
+	case cli.ErrInvalidArgs:
+		fmt.Printf("%s\n\n", err)
+		fallthrough
+	case cli.ErrHelp:
 		cli.Usage(c)
 		return nil
+	default:
+		return err
 	}
-
-	ctx = cli.ContextWithOptions(ctx, c.fs)
-	return cli.RunCommand(ctx, rest, c.cmds)
 }
 
 func (c *blueCtl) Close() (ret error) {

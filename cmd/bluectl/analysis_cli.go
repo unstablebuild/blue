@@ -37,7 +37,7 @@ func (c *analysisCli) Man() cli.Manual {
 }
 
 func (c *analysisCli) Run(ctx context.Context, args []string) error {
-	args, ok, err := cli.ParseUsage(c, c.fs, 1, args)
+	args, _, ok, err := cli.ParseUsage(c, c.fs, 1, args)
 	if err != nil || !ok {
 		return err
 	}

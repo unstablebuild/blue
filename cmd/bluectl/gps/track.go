@@ -71,7 +71,7 @@ func (c trackCLI) track(ctx context.Context, deviceID string) (pos []gps.Coordin
 }
 
 func (c trackCLI) Run(ctx context.Context, args []string) error {
-	args, ok, err := cli.ParseUsage(c, c.fs, 1, args)
+	args, _, ok, err := cli.ParseUsage(c, c.fs, 1, args)
 	if err != nil || !ok {
 		return err
 	}

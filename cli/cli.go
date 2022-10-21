@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 )
 
@@ -66,6 +67,19 @@ func RunCommand(ctx context.Context, args []string, cmds map[string]CLI) error {
 	return ErrInvalidArgs
 }
 
+func handleCommonErrors(c CLI, err error) bool {
+	switch err {
+	case ErrInvalidArgs:
+		fmt.Printf("%s\n\n", err)
+		fallthrough
+	case ErrHelp:
+		Usage(c)
+		return true
+	default:
+		return false
+	}
+}
+
 // ParseAndRunCommand is a helper to run CLI implementations
 // that expect no arguments and simply run a sub-command CLI.
 //
@@ -76,16 +90,21 @@ func ParseAndRunCommand(
 ) error {
 	_, rest, err := Parse(fs, 0, args)
 	if err != nil {
-		if err == ErrHelp {
-			Usage(c)
-			err = nil
+		if handleCommonErrors(c, err) {
+			return nil
 		}
 		return err
 	}
 
 	ctx = ContextWithOptions(ctx, fs)
-
-	return RunCommand(ctx, rest, cmds)
+	err = RunCommand(ctx, rest, cmds)
+	if err != nil {
+		if handleCommonErrors(c, err) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 // NewFlagSet is a helper around flag.NewFlagSet that sets sane defaults.
