@@ -48,7 +48,7 @@ func newReportListCLI(t issue.Tracker) cli.CLI {
 	}
 	l.fs = cli.NewFlagSet("list")
 	l.fs.Var(&l.filters, "f", "Add metadata filter with format 'key=value'")
-	l.fs.StringVar(&l.format, "F", "table", "Choose output format. Options: table, json")
+	l.fs.StringVar(&l.format, "F", "table", "Choose output format. Options: 'table', 'json' or a Go text/template.")
 	return l
 }
 
@@ -133,6 +133,10 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 				}
 			}))
 	default:
+		t, err := format.Template[issue.Report](s.format)
+		if err == nil {
+			return t.Format(os.Stdout, reports)
+		}
 		return cli.ErrInvalidArgs
 	}
 

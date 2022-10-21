@@ -45,7 +45,7 @@ func newReleaseListCLI(m release.Manager) cli.CLI {
 	}
 	l.fs = cli.NewFlagSet("list")
 	l.fs.Var(&l.filters, "f", "Add metadata filter with format 'key=value'")
-	l.fs.StringVar(&l.format, "F", "table", "Choose output format. Options: table, json")
+	l.fs.StringVar(&l.format, "F", "table", "Choose output format. Options: 'table', 'json' or a Go text/template.")
 	return l
 }
 
@@ -80,6 +80,10 @@ func (s *releaseList) Run(ctx context.Context, args []string) error {
 		t := format.Table[release.Package]([]string{"Name", "Notes", "Latest", "CreatedAt"})
 		return t.Format(os.Stdout, packages)
 	default:
+		t, err := format.Template[release.Package](s.format)
+		if err == nil {
+			return t.Format(os.Stdout, packages)
+		}
 		return cli.ErrInvalidArgs
 	}
 }
