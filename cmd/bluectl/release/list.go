@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/ernestrc/blue/cli"
+	"github.com/ernestrc/blue/cli/format"
 	"github.com/ernestrc/blue/release"
-	"github.com/olekukonko/tablewriter"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -75,19 +75,6 @@ func (s *releaseList) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if len(bundles) == 0 {
-		fmt.Printf("No bundles found for package %q\n", pack)
-		return nil
-	}
-
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Package", "Version", "Notes", "CreatedAt"})
-	for _, bundle := range bundles {
-		table.Append([]string{bundle.Package,
-			string(bundle.Version), bundle.Notes,
-			bundle.CreatedAt.String()})
-	}
-	table.Render()
-
-	return nil
+	t := format.Table[release.Bundle]([]string{"Package", "Version", "Notes", "CreatedAt"})
+	return t.Format(os.Stdout, bundles)
 }

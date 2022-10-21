@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/ernestrc/blue/document"
+	"github.com/ernestrc/blue/iterator"
 	"github.com/sirupsen/logrus"
 )
 
@@ -336,25 +337,17 @@ func makeDocumentBundleFilter(
 func (d *documentManager) List(
 	ctx context.Context, pkg string,
 	filters map[string]string,
-) (ret []Bundle, err error) {
-	var it document.Iterator
-	ret = make([]Bundle, 0)
-
-	it, err = d.db.List(ctx, makeDocumentBundleFilter(pkg, filters))
+) (iterator.Iterator[Bundle], error) {
+	it, err := d.db.List(ctx, makeDocumentBundleFilter(pkg, filters))
 	if err != nil {
-		return
+		return nil, err
 	}
-
-	for it.HasNext() {
-		var doc releaseDocument
-		err = it.NextTo(&doc)
-		if err != nil {
-			return
-		}
-		ret = append(ret, doc.Bundle)
-	}
-
-	return
+	docIter := iterator.FromDocumentIterator[releaseDocument](it)
+	bundleIter := iterator.Map[releaseDocument, Bundle](docIter,
+		func(doc releaseDocument) Bundle {
+			return doc.Bundle
+		})
+	return bundleIter, nil
 }
 
 func makeDocumentPackageFilter(
@@ -386,25 +379,17 @@ func makeDocumentPackageFilter(
 
 func (d *documentManager) ListPackages(
 	ctx context.Context, filters map[string]string,
-) (ret []Package, err error) {
-	ret = make([]Package, 0)
-
-	var it document.Iterator
-	it, err = d.db.List(ctx, makeDocumentPackageFilter(filters))
+) (iterator.Iterator[Package], error) {
+	it, err := d.db.List(ctx, makeDocumentPackageFilter(filters))
 	if err != nil {
-		return
+		return nil, err
 	}
-
-	for it.HasNext() {
-		var doc packageDocument
-		err = it.NextTo(&doc)
-		if err != nil {
-			return
-		}
-		ret = append(ret, doc.Package)
-	}
-
-	return
+	pkgDocIter := iterator.FromDocumentIterator[packageDocument](it)
+	pkgIter := iterator.Map[packageDocument, Package](pkgDocIter,
+		func(doc packageDocument) Package {
+			return doc.Package
+		})
+	return pkgIter, nil
 }
 
 func (d *documentManager) DeletePackage(

@@ -7,6 +7,6 @@ import (
 )
 
 // IteratorFormatter defines the basic Iterator formatting method Format.
-type IteratorFormatter interface {
-	Format(io.Writer, iterator.Iterator) error
+type IteratorFormatter[T any] interface {
+	Format(io.Writer, iterator.Iterator[T]) error
 }

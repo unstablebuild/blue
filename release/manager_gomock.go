@@ -8,6 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	"github.com/ernestrc/blue/iterator"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -207,10 +208,10 @@ func (mr *MockManagerMockRecorder) GetPackage(arg0, arg1 interface{}) *gomock.Ca
 }
 
 // List mocks base method.
-func (m *MockManager) List(arg0 context.Context, arg1 string, arg2 map[string]string) ([]Bundle, error) {
+func (m *MockManager) List(arg0 context.Context, arg1 string, arg2 map[string]string) (iterator.Iterator[Bundle], error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "List", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]Bundle)
+	ret0, _ := ret[0].(iterator.Iterator[Bundle])
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -222,10 +223,10 @@ func (mr *MockManagerMockRecorder) List(arg0, arg1, arg2 interface{}) *gomock.Ca
 }
 
 // ListPackages mocks base method.
-func (m *MockManager) ListPackages(arg0 context.Context, arg1 map[string]string) ([]Package, error) {
+func (m *MockManager) ListPackages(arg0 context.Context, arg1 map[string]string) (iterator.Iterator[Package], error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListPackages", arg0, arg1)
-	ret0, _ := ret[0].([]Package)
+	ret0, _ := ret[0].(iterator.Iterator[Package])
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

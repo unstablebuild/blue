@@ -5,54 +5,71 @@ import (
 )
 
 // Iterator represents a dynamic collection of elements.
-type Iterator interface {
+type Iterator[T any] interface {
 	// Next returns the next element and true or nil and false
 	// if there's no more elements in this Iterator.
-	Next() (interface{}, bool, error)
+	Next() (T, bool, error)
 }
 
-// Slice returns an iterator backed by the given slice of elements.
-func Slice(els []interface{}) Iterator {
-	return &sliceIter{els: els}
-}
-
-// Func returns an Iterator backed by the provided function.
-func Func(fn func() (interface{}, bool, error)) Iterator {
-	return fnIter{fn: fn}
-}
-
-// FromDocumentIterator maps a document.Iterator to
-func FromDocumentIterator[T interface{}](it document.Iterator) Iterator {
-	return Func(func() (interface{}, bool, error) {
-		if !it.HasNext() {
-			return nil, false, nil
+// Map maps an iterator of type T and returns another iterator that will
+// apply fn to each of the elements produced.
+func Map[T any, V any](it Iterator[T], fn func(T) V) Iterator[V] {
+	return FromFunc[V](func() (ret V, ok bool, err error) {
+		for {
+			var t T
+			t, ok, err = it.Next()
+			if err != nil {
+				return
+			}
+			if !ok {
+				return
+			}
+			ret = fn(t)
+			return
 		}
-		var temp T
-		err := it.NextTo(&temp)
-		if err != nil {
-			return nil, false, err
-		}
-		return temp, false, nil
 	})
 }
 
-type fnIter struct {
-	fn func() (interface{}, bool, error)
+// FromSlice returns an iterator backed by the given slice of elements.
+func FromSlice[T any](els []T) Iterator[T] {
+	return &sliceIter[T]{els: els}
 }
 
-func (f fnIter) Next() (interface{}, bool, error) {
+// FromFunc returns an Iterator backed by the provided function.
+func FromFunc[T any](fn func() (T, bool, error)) Iterator[T] {
+	return fnIter[T]{fn: fn}
+}
+
+// FromDocumentIterator maps a document.Iterator to
+func FromDocumentIterator[T any](it document.Iterator) Iterator[T] {
+	return FromFunc(func() (ret T, ok bool, err error) {
+		if !it.HasNext() {
+			return
+		}
+		ok = true
+		err = it.NextTo(&ret)
+		return
+	})
+}
+
+type fnIter[T any] struct {
+	fn func() (T, bool, error)
+}
+
+func (f fnIter[T]) Next() (T, bool, error) {
 	return f.fn()
 }
 
-type sliceIter struct {
-	els []interface{}
+type sliceIter[T any] struct {
+	els []T
 }
 
-func (i *sliceIter) Next() (interface{}, bool, error) {
+func (i *sliceIter[T]) Next() (ret T, ok bool, err error) {
 	if len(i.els) == 0 {
-		return nil, false, nil
+		return
 	}
-	el := i.els[0]
+	ok = true
+	ret = i.els[0]
 	i.els = i.els[1:]
-	return el, true, nil
+	return
 }

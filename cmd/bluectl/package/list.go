@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/ernestrc/blue/cli"
+	"github.com/ernestrc/blue/cli/format"
 	"github.com/ernestrc/blue/release"
-	"github.com/olekukonko/tablewriter"
 )
 
 const (
@@ -69,19 +69,6 @@ func (s *releaseList) Run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-
-	if len(packages) == 0 {
-		fmt.Print("No packages found\n")
-		return nil
-	}
-
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "Notes", "Latest", "CreatedAt"})
-	for _, pack := range packages {
-		table.Append([]string{pack.Name, pack.Notes,
-			string(pack.Latest), pack.CreatedAt.String()})
-	}
-	table.Render()
-
-	return nil
+	t := format.Table[release.Package]([]string{"Name", "Notes", "Latest", "CreatedAt"})
+	return t.Format(os.Stdout, packages)
 }

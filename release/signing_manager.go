@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ernestrc/blue/crypto"
+	"github.com/ernestrc/blue/iterator"
 )
 
 // ErrEncryptedKey is returned when provided key is encrypted and needs decrypting first.
@@ -143,13 +144,13 @@ func (m *signingManager) Delete(
 
 func (m *signingManager) List(
 	ctx context.Context, pack string, filters map[string]string,
-) ([]Bundle, error) {
+) (iterator.Iterator[Bundle], error) {
 	return m.root.List(ctx, pack, filters)
 }
 
 func (m *signingManager) ListPackages(
 	ctx context.Context, filters map[string]string,
-) ([]Package, error) {
+) (iterator.Iterator[Package], error) {
 	return m.root.ListPackages(ctx, filters)
 }
 
