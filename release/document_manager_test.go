@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ernestrc/blue/document"
+	"github.com/ernestrc/blue/iterator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -114,7 +115,9 @@ func TestDocumentManager(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.NoError(t, m.DeletePackage(ctx, "hopper"))
-		packages, err := m.ListPackages(ctx, nil)
+		pkgIter, err := m.ListPackages(ctx, nil)
+		require.NoError(t, err)
+		packages, err := iterator.ToSlice(pkgIter)
 		require.NoError(t, err)
 
 		require.Len(t, packages, 0)
@@ -171,7 +174,9 @@ func TestDocumentManager(t *testing.T) {
 			NopProgressReader(bytes.NewBuffer([]byte(""))))
 		require.NoError(t, err)
 
-		packages, err := m.ListPackages(ctx, nil)
+		pkgIter, err := m.ListPackages(ctx, nil)
+		require.NoError(t, err)
+		packages, err := iterator.ToSlice(pkgIter)
 		require.NoError(t, err)
 		require.Len(t, packages, 1)
 		assert.Equal(t, Package{
@@ -246,7 +251,9 @@ func TestDocumentManager(t *testing.T) {
 		require.NoError(t, err)
 
 		filters := map[string]string{"Metadata.repository": "blue"}
-		items, err := m.List(ctx, fixtureRelease.Package, filters)
+		it, err := m.List(ctx, fixtureRelease.Package, filters)
+		require.NoError(t, err)
+		items, err := iterator.ToSlice(it)
 		require.NoError(t, err)
 
 		require.Len(t, items, 1)

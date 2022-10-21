@@ -117,10 +117,10 @@ func TestTable(t *testing.T) {
 
 	for _, tcase := range tsuite {
 		t.Run(tcase.desc, func(t *testing.T) {
-			table := Table(tcase.inFields)
+			table := Table[interface{}](tcase.inFields)
 			var buf bytes.Buffer
 			buf.WriteString("\n") // make test cases easier to write
-			it := iterator.Slice(tcase.inEls)
+			it := iterator.FromSlice[any](tcase.inEls)
 			err := table.Format(&buf, it)
 			if tcase.expectedErr {
 				assert.Error(t, err)

@@ -6,6 +6,8 @@ import (
 	"context"
 	"io"
 	"time"
+
+	"github.com/ernestrc/blue/iterator"
 )
 
 // Package represents.. well, a package.
@@ -65,7 +67,7 @@ type Manager interface {
 	GetPackage(context.Context, string) (Package, error)
 
 	// ListPackages lists all packages.
-	ListPackages(context.Context, map[string]string) ([]Package, error)
+	ListPackages(context.Context, map[string]string) (iterator.Iterator[Package], error)
 
 	// Upload uploads a package bundle and reports progress via ProgressReader.
 	// It updates the Latest field of the Package.
@@ -80,5 +82,5 @@ type Manager interface {
 	Delete(context.Context, string, Version) error
 
 	// List lists all bundles of a package.
-	List(context.Context, string, map[string]string) ([]Bundle, error)
+	List(context.Context, string, map[string]string) (iterator.Iterator[Bundle], error)
 }

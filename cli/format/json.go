@@ -8,14 +8,14 @@ import (
 )
 
 // JSON returns an IteratorFormatter that formats elements into JSON objects.
-func JSON() IteratorFormatter {
-	return jsonFormatter{}
+func JSON[T any]() IteratorFormatter[T] {
+	return jsonFormatter[T]{}
 }
 
-type jsonFormatter struct {
+type jsonFormatter[T any] struct {
 }
 
-func (j jsonFormatter) Format(w io.Writer, it iterator.Iterator) error {
+func (j jsonFormatter[T]) Format(w io.Writer, it iterator.Iterator[T]) error {
 	e := json.NewEncoder(w)
 	for {
 		t, ok, err := it.Next()

@@ -12,15 +12,15 @@ import (
 
 // Table returns an IteratorFormatter that formats elements
 // into a table of the given fields.
-func Table(fields []string) IteratorFormatter {
+func Table[T any](fields []string) IteratorFormatter[T] {
 	set := make(map[string]int)
 	for i, f := range fields {
 		set[f] = i
 	}
-	return tableFormatter{fields: fields, set: set}
+	return tableFormatter[T]{fields: fields, set: set}
 }
 
-type tableFormatter struct {
+type tableFormatter[T any] struct {
 	fields []string
 	set    map[string]int
 }
@@ -42,7 +42,7 @@ func isEncodeable(t interface{}) (reflect.Value, bool) {
 	}
 }
 
-func (f tableFormatter) Format(w io.Writer, it iterator.Iterator) error {
+func (f tableFormatter[T]) Format(w io.Writer, it iterator.Iterator[T]) error {
 	table := tablewriter.NewWriter(w)
 	table.SetHeader(f.fields)
 
