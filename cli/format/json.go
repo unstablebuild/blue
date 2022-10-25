@@ -18,14 +18,14 @@ type jsonFormatter[T any] struct {
 func (j jsonFormatter[T]) Format(w io.Writer, it iterator.Iterator[T]) error {
 	e := json.NewEncoder(w)
 	for {
-		t, ok, err := it.Next()
-		if err != nil {
-			return err
-		}
+		t, ok := it.Next()
 		if !ok {
+			if err := it.Err(); err != nil {
+				return err
+			}
 			return nil
 		}
-		err = e.Encode(t)
+		err := e.Encode(t)
 		if err != nil {
 			return err
 		}

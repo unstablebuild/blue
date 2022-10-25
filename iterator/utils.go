@@ -5,11 +5,11 @@ package iterator
 func ToSlice[T any](it Iterator[T]) ([]T, error) {
 	ret := make([]T, 0)
 	for {
-		t, ok, err := it.Next()
-		if err != nil {
-			return nil, err
-		}
+		t, ok := it.Next()
 		if !ok {
+			if err := it.Err(); err != nil {
+				return nil, err
+			}
 			return ret, nil
 		}
 		ret = append(ret, t)

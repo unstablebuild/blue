@@ -61,11 +61,11 @@ func (d *documentTracker) fetchLastIssueNumber(ctx context.Context, pkg string) 
 
 	var maxIssueNumber int
 	for {
-		report, ok, err := it.Next()
-		if err != nil {
-			return err
-		}
+		report, ok := it.Next()
 		if !ok {
+			if err := it.Err(); err != nil {
+				return err
+			}
 			break
 		}
 		str, ok := report.Metadata[reportMetadataIssueNumberField]

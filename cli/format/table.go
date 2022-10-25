@@ -47,16 +47,16 @@ func (f tableFormatter[T]) Format(w io.Writer, it iterator.Iterator[T]) error {
 	table.SetHeader(f.fields)
 
 	for {
-		t, ok, err := it.Next()
-		if err != nil {
-			return err
-		}
+		t, ok := it.Next()
 		if !ok {
+			if err := it.Err(); err != nil {
+				return err
+			}
 			break
 		}
 		v, ok := isEncodeable(t)
 		if !ok {
-			err = fmt.Errorf("iterator returned value that cannot be formatted: %v", t)
+			err := fmt.Errorf("iterator returned value that cannot be formatted: %v", t)
 			return err
 		}
 		row := make([]string, len(f.set))
