@@ -9,6 +9,6 @@ import (
 
 func TestLoggingWithLogging(t *testing.T) {
 	test.TestDocumentService(t, func(t *testing.T) document.Service {
-		return WithLogging(document.NewInMemoryCache())
+		return WithLogging(document.NewInMemoryService())
 	})
 }

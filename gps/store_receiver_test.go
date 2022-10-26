@@ -28,7 +28,7 @@ func assertIterCount(t *testing.T, it document.Iterator, expected int) []Coordin
 
 func newTestingStore(t *testing.T, opts ...Option) *Store {
 	ctx := context.Background()
-	b := document.NewInMemoryCache()
+	b := document.NewInMemoryService()
 	s := NewStore(b, opts...)
 
 	err := s.Receive(ctx, c1)

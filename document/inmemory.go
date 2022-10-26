@@ -6,32 +6,32 @@ import (
 	"sync"
 )
 
-type inMemoryCache struct {
+type inMemoryService struct {
 	m       sync.Mutex
 	storage map[string][]byte
 }
 
-// NewInMemoryCache returns an instance of Service backed
+// NewInMemoryService returns an instance of Service backed
 // by an in-memory map.
-func NewInMemoryCache() DroppableService {
-	return &inMemoryCache{
+func NewInMemoryService() DroppableService {
+	return &inMemoryService{
 		storage: make(map[string][]byte),
 	}
 }
 
-func (c *inMemoryCache) Set(
+func (c *inMemoryService) Set(
 	ctx context.Context, ID string, data interface{},
 ) error {
 	return c.set(ctx, ID, data, false)
 }
 
-func (c *inMemoryCache) Create(
+func (c *inMemoryService) Create(
 	ctx context.Context, ID string, data interface{},
 ) error {
 	return c.set(ctx, ID, data, true)
 }
 
-func (c *inMemoryCache) set(
+func (c *inMemoryService) set(
 	ctx context.Context, ID string, data interface{},
 	errAlreadyExists bool,
 ) (err error) {
@@ -56,7 +56,7 @@ func (c *inMemoryCache) set(
 	return
 }
 
-func (c *inMemoryCache) getValue(ID string, doc interface{}) (
+func (c *inMemoryService) getValue(ID string, doc interface{}) (
 	err error,
 ) {
 	var ok bool
@@ -74,7 +74,7 @@ func (c *inMemoryCache) getValue(ID string, doc interface{}) (
 	return SafeDecode(doc, raw)
 }
 
-func (c *inMemoryCache) Get(
+func (c *inMemoryService) Get(
 	ctx context.Context, ID string, to interface{},
 ) (err error) {
 	err = c.getValue(ID, to)
@@ -84,7 +84,7 @@ func (c *inMemoryCache) Get(
 	return
 }
 
-func (c *inMemoryCache) Update(
+func (c *inMemoryService) Update(
 	ctx context.Context, ID string, updates []Update,
 ) error {
 	if len(updates) == 0 {
@@ -107,11 +107,11 @@ func (c *inMemoryCache) Update(
 	return nil
 }
 
-func (c *inMemoryCache) Close() error {
+func (c *inMemoryService) Close() error {
 	return nil
 }
 
-func (c *inMemoryCache) Delete(ctx context.Context, ID string) error {
+func (c *inMemoryService) Delete(ctx context.Context, ID string) error {
 	c.m.Lock()
 	defer c.m.Unlock()
 
@@ -119,7 +119,7 @@ func (c *inMemoryCache) Delete(ctx context.Context, ID string) error {
 	return nil
 }
 
-func (c *inMemoryCache) List(ctx context.Context, filters []Filter) (
+func (c *inMemoryService) List(ctx context.Context, filters []Filter) (
 	it Iterator, err error,
 ) {
 	iter := NewListIterator()
@@ -134,7 +134,7 @@ func (c *inMemoryCache) List(ctx context.Context, filters []Filter) (
 	return iter, nil
 }
 
-func (c *inMemoryCache) Drop(ctx context.Context) error {
+func (c *inMemoryService) Drop(ctx context.Context) error {
 	c.m.Lock()
 	defer c.m.Unlock()
 

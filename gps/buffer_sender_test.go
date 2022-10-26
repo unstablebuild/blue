@@ -42,7 +42,7 @@ func TestBufferSender(t *testing.T) {
 	ctx := context.Background()
 	t.Run("should send positions via underlying Sender", func(t *testing.T) {
 		s := testingSender{err: nil}
-		buf := WithBufferFallback(&s, document.NewInMemoryCache())
+		buf := WithBufferFallback(&s, document.NewInMemoryService())
 		err := buf.Send(ctx, fixtureCoords)
 		require.NoError(t, err)
 
@@ -51,7 +51,7 @@ func TestBufferSender(t *testing.T) {
 
 	t.Run("should buffer positions if underlying Sender fails", func(t *testing.T) {
 		s := testingSender{err: errors.New("sup")}
-		cache := document.NewInMemoryCache()
+		cache := document.NewInMemoryService()
 		buf := WithBufferFallback(&s, cache)
 
 		err := buf.Send(ctx, fixtureCoords)
