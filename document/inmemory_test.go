@@ -4,6 +4,7 @@ import (
 	"testing"
 )
 
-// tested in logging package
-func TestInMemoryCache(t *testing.T) {
+// tested in via document/logging package
+// to avoid import cycles with document/test.
+func TestInMemoryService(t *testing.T) {
 }

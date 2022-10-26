@@ -7,7 +7,7 @@ import (
 )
 
 type inMemoryService struct {
-	m       sync.Mutex
+	m       sync.Locker
 	storage map[string][]byte
 }
 
@@ -15,6 +15,7 @@ type inMemoryService struct {
 // by an in-memory map.
 func NewInMemoryService() DroppableService {
 	return &inMemoryService{
+		m:       new(sync.Mutex),
 		storage: make(map[string][]byte),
 	}
 }
