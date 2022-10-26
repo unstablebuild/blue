@@ -731,8 +731,9 @@ func TestDocumentService(t *testing.T, serviceFactory FnServiceFactory) {
 				var myBob Segador
 				_ = s.Create(ctx, myID, bob)
 				_ = s.Get(ctx, myID, &myBob)
+				_ = s.Update(ctx, myID, []document.Update{{FieldPath: []string{"Name"}, Value: "value"}})
 				_ = s.Delete(ctx, myID)
-				// TODO add List
+				_, _ = s.List(ctx, nil)
 			}()
 		}
 
