@@ -14,10 +14,10 @@ import (
 
 func newEmptyMultiStore(t *testing.T) *MultiStore {
 	return &MultiStore{
-		cache:       NewCache(document.NewInMemoryCache()),
-		dayStore:    NewStore(document.NewInMemoryCache(), dayStoreOpts...),
-		hourlyStore: NewStore(document.NewInMemoryCache(), hourStoreOpts...),
-		minuteStore: NewStore(document.NewInMemoryCache(), minuteStoreOpts...),
+		cache:       NewCache(document.NewInMemoryService()),
+		dayStore:    NewStore(document.NewInMemoryService(), dayStoreOpts...),
+		hourlyStore: NewStore(document.NewInMemoryService(), hourStoreOpts...),
+		minuteStore: NewStore(document.NewInMemoryService(), minuteStoreOpts...),
 	}
 }
 

@@ -81,7 +81,7 @@ func init() {
 }
 
 func newTestingDocumentManager() (m Manager, svc document.Service) {
-	svc = document.NewInMemoryCache()
+	svc = document.NewInMemoryService()
 	m = NewDocumentManager(svc)
 	return
 }

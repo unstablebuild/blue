@@ -15,7 +15,7 @@ import (
 )
 
 func newTestingDocumentTracker() (m Tracker, svc document.Service) {
-	svc = document.NewInMemoryCache()
+	svc = document.NewInMemoryService()
 	m = NewDocumentTracker(svc)
 	return
 }
@@ -159,7 +159,7 @@ func TestDocumentTracker(t *testing.T) {
 
 	t.Run("should be able to create issues past max number of retries", func(t *testing.T) {
 		m, _ := newTestingDocumentTracker()
-		svc := document.NewInMemoryCache()
+		svc := document.NewInMemoryService()
 		for i := 0; i < int(10+1); i++ {
 			m = NewDocumentTracker(svc)
 			report := Report{

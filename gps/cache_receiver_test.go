@@ -11,7 +11,7 @@ import (
 
 func TestCacheReceiver(t *testing.T) {
 	coords := fixtureCoords
-	b := document.NewInMemoryCache()
+	b := document.NewInMemoryService()
 	c := NewCache(b)
 
 	ctx := context.Background()

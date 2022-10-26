@@ -42,7 +42,7 @@ func testRPCDatastoreOverListener(t *testing.T, listener func() (net.Listener, e
 	teardowns := []func(){}
 
 	documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
-		cache := document.NewInMemoryCache()
+		cache := document.NewInMemoryService()
 		addr, teardown := runDatastoreServerOverListener(t, cache, listener)
 		teardowns = append(teardowns, teardown)
 
@@ -136,7 +136,7 @@ func TestRPCInterop(t *testing.T) {
 
 	t.Run("writes by client/server are readable by underlying service", func(t *testing.T) {
 		documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
-			cache := document.NewInMemoryCache()
+			cache := document.NewInMemoryService()
 			addr, teardown := runDatastoreServer(t, cache)
 			teardowns = append(teardowns, teardown)
 
@@ -149,7 +149,7 @@ func TestRPCInterop(t *testing.T) {
 
 	t.Run("writes by underlying service are readable by client/server", func(t *testing.T) {
 		documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
-			cache := document.NewInMemoryCache()
+			cache := document.NewInMemoryService()
 			addr, teardown := runDatastoreServer(t, cache)
 			teardowns = append(teardowns, teardown)
 
