@@ -39,7 +39,7 @@ func SafeDecode(rcv interface{}, raw []byte) error {
 	return nil
 }
 
-// IsEncodable returns true if doc is a structure that can be safely
+// IsEncodeable returns true if doc is a structure that can be safely
 // decoded via Decode.
 func IsEncodeable(doc interface{}) bool {
 	v := reflect.ValueOf(doc)
