@@ -284,7 +284,8 @@ func doMatchFilter(value interface{}, f Filter) bool {
 	return matches
 }
 
-func matchFilter(proto map[string]interface{}, f Filter) bool {
+// MatchFilter returns true if proto satisfies the filter condition of f.
+func MatchFilter(proto map[string]interface{}, f Filter) bool {
 	if len(f.FieldPath) == 1 {
 		return doMatchFilter(proto[f.FieldPath[0]], f)
 	}
@@ -294,13 +295,9 @@ func matchFilter(proto map[string]interface{}, f Filter) bool {
 		return false
 	}
 
-	m, ok := field.(map[string]interface{})
-	if !ok {
-		panic("corrupted record: field node is not a map")
-	}
-
+	m := field.(map[string]interface{})
 	f.FieldPath = f.FieldPath[1:]
-	return matchFilter(m, f)
+	return MatchFilter(m, f)
 }
 
 func matchesAllFilters(proto map[string]interface{}, filters []Filter) bool {
@@ -312,7 +309,7 @@ func matchesAllFilters(proto map[string]interface{}, filters []Filter) bool {
 		}
 		f.FieldPath = lower
 
-		if !matchFilter(proto, f) {
+		if !MatchFilter(proto, f) {
 			return false
 		}
 	}
