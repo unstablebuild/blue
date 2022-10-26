@@ -10,19 +10,42 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-// Encode encodes data into a reversible format (via Decode)
+// UpdateUpdatedAtField updates the default UpdatedAt field in the given document.
+func UpdateUpdatedAtField(doc interface{}) interface{} {
+	now := time.Now()
+	m, ok := doc.(map[string]interface{})
+	if ok {
+		doc = setField(m, DefaultUpdatedAtField, now)
+	} else {
+		dst := clone(doc)
+		reflectSetTimeField(dst, DefaultUpdatedAtField, now)
+		doc = dst.Elem().Interface()
+	}
+	return doc
+}
+
+// UpdateCreatedAtField updates the default CreatedAt field in the given document
+// and the default UpdatedAt field.
+func UpdateCreatedAtField(doc interface{}) interface{} {
+	m, ok := doc.(map[string]interface{})
+	if ok {
+		doc = setMapUpdatedAtFields(m)
+	} else {
+		doc = setStructUpdatedAtFields(doc)
+	}
+	return doc
+}
+
+// Encode encodes doc into a reversible format (via Decode)
 // and returns the data in bytes.
-func Encode(data interface{}, addCreatedAt bool) []byte {
+func Encode(doc interface{}, addCreatedAt bool) []byte {
 	if addCreatedAt {
-		m, ok := data.(map[string]interface{})
-		if ok {
-			data = setMapUpdatedAtFields(m)
-		} else {
-			data = setStructUpdatedAtFields(data)
-		}
+		doc = UpdateCreatedAtField(doc)
+	} else {
+		doc = UpdateUpdatedAtField(doc)
 	}
 
-	b, err := bson.Marshal(data)
+	b, err := bson.Marshal(doc)
 	if err != nil {
 		panic(err)
 	}
@@ -175,15 +198,20 @@ func clone(data interface{}) reflect.Value {
 	return dst
 }
 
-func setMapUpdatedAtFields(m map[string]interface{}) map[string]interface{} {
+func setField(m map[string]interface{}, key string, value interface{}) map[string]interface{} {
 	ret := make(map[string]interface{})
 	for k, v := range m {
 		ret[k] = v
 	}
-	now := time.Now()
-	ret[DefaultCreatedAtField] = now
-	ret[DefaultUpdatedAtField] = now
+	ret[key] = value
 	return ret
+}
+
+func setMapUpdatedAtFields(m map[string]interface{}) map[string]interface{} {
+	now := time.Now()
+	m = setField(m, DefaultUpdatedAtField, now)
+	m = setField(m, DefaultCreatedAtField, now)
+	return m
 }
 
 func setStructUpdatedAtFields(data interface{}) interface{} {
