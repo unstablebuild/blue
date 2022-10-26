@@ -57,101 +57,119 @@ func listVersionReports(m Tracker, pkg, ver string,
 }
 
 func TestDocumentTracker(t *testing.T) {
-	m, _ := newTestingDocumentTracker()
+	t.Run("issue workflow", func(t *testing.T) {
+		m, _ := newTestingDocumentTracker()
 
-	ll := log.New()
-	ll.Out = ioutil.Discard
-	for i := 0; i < 10; i++ {
-		report := Report{
+		ll := log.New()
+		ll.Out = ioutil.Discard
+		for i := 0; i < 10; i++ {
+			report := Report{
+				Author:    "test.capturePanic",
+				Subject:   "bummers",
+				Package:   "pkg",
+				Version:   "v1.0.0",
+				CreatedAt: time.Now(),
+			}
+			report.Metadata = make(map[string]string)
+			report.Metadata["i"] = strconv.Itoa(i)
+			id, err := m.CreateReport(context.Background(), report)
+			require.NoError(t, err)
+			assert.NotZero(t, id)
+		}
+
+		// should not be returned as its closed
+		closedReport := Report{
 			Author:    "test.capturePanic",
 			Subject:   "bummers",
 			Package:   "pkg",
 			Version:   "v1.0.0",
 			CreatedAt: time.Now(),
 		}
-		report.Metadata = make(map[string]string)
-		report.Metadata["i"] = strconv.Itoa(i)
-		id, err := m.CreateReport(context.Background(), report)
+		closedReport.Metadata = make(map[string]string)
+		closedReport.Metadata["i"] = "closing"
+		_, err := m.CreateReport(context.Background(), closedReport)
 		require.NoError(t, err)
-		assert.NotZero(t, id)
-	}
 
-	// should not be returned as its closed
-	closedReport := Report{
-		Author:    "test.capturePanic",
-		Subject:   "bummers",
-		Package:   "pkg",
-		Version:   "v1.0.0",
-		CreatedAt: time.Now(),
-	}
-	closedReport.Metadata = make(map[string]string)
-	closedReport.Metadata["i"] = "closing"
-	_, err := m.CreateReport(context.Background(), closedReport)
-	require.NoError(t, err)
+		reports, err := listPackageReports(m, "pkg", map[string]string{"Metadata.i": "closing"})
+		require.NoError(t, err)
+		require.Len(t, reports, 1)
 
-	reports, err := listPackageReports(m, "pkg", map[string]string{"Metadata.i": "closing"})
-	require.NoError(t, err)
-	require.Len(t, reports, 1)
+		closedIssueID := reports[0].Metadata[ReportMetadataIDField]
+		err = m.CloseReport(context.Background(), closedIssueID)
+		require.NoError(t, err)
 
-	closedIssueID := reports[0].Metadata[ReportMetadataIDField]
-	err = m.CloseReport(context.Background(), closedIssueID)
-	require.NoError(t, err)
+		reports, err = listVersionReports(m, "pkg", "UNKNOWNVERSION", nil)
+		require.NoError(t, err)
+		require.Len(t, reports, 0)
 
-	reports, err = listVersionReports(m, "pkg", "UNKNOWNVERSION", nil)
-	require.NoError(t, err)
-	require.Len(t, reports, 0)
+		assertReport := func(report Report) {
+			assert.WithinDuration(t, report.CreatedAt, time.Now(), 1*time.Minute)
+			assert.NotZero(t, report.Build)
+			assert.Equal(t, "pkg", report.Package)
+			assert.Equal(t, "v1.0.0", report.Version)
+		}
 
-	assertReport := func(report Report) {
-		assert.WithinDuration(t, report.CreatedAt, time.Now(), 1*time.Minute)
-		assert.NotZero(t, report.Build)
-		assert.Equal(t, "pkg", report.Package)
-		assert.Equal(t, "v1.0.0", report.Version)
-	}
+		reports, err = listVersionReports(m, "pkg", "v1.0.0", map[string]string{"Metadata.i": "1"})
+		require.NoError(t, err)
+		require.Len(t, reports, 1)
+		assertReport(reports[0])
 
-	reports, err = listVersionReports(m, "pkg", "v1.0.0", map[string]string{"Metadata.i": "1"})
-	require.NoError(t, err)
-	require.Len(t, reports, 1)
-	assertReport(reports[0])
+		reports, err = listPackageReports(m, "pkg", map[string]string{"Metadata.i": "1"})
+		require.NoError(t, err)
+		require.Len(t, reports, 1)
+		assertReport(reports[0])
 
-	reports, err = listPackageReports(m, "pkg", map[string]string{"Metadata.i": "1"})
-	require.NoError(t, err)
-	require.Len(t, reports, 1)
-	assertReport(reports[0])
+		require.NotNil(t, reports[0].Metadata)
+		id, ok := reports[0].Metadata[ReportMetadataIDField]
+		require.True(t, ok)
+		r, err := m.GetReport(context.Background(), id)
+		require.NoError(t, err)
+		assertReport(r)
 
-	require.NotNil(t, reports[0].Metadata)
-	id, ok := reports[0].Metadata[ReportMetadataIDField]
-	require.True(t, ok)
-	r, err := m.GetReport(context.Background(), id)
-	require.NoError(t, err)
-	assertReport(r)
+		err = m.DeleteReport(context.Background(), id)
+		require.NoError(t, err)
 
-	err = m.DeleteReport(context.Background(), id)
-	require.NoError(t, err)
+		r, err = m.GetReport(context.Background(), id)
+		require.Error(t, err)
+		assert.Equal(t, document.ErrNotFound, err)
 
-	r, err = m.GetReport(context.Background(), id)
-	require.Error(t, err)
-	assert.Equal(t, document.ErrNotFound, err)
+		// test that we are able to list closed reports
+		reports, err = listPackageReports(m, "pkg", map[string]string{"Closed": "true"})
+		require.NoError(t, err)
+		require.Len(t, reports, 1)
+		assertReport(reports[0])
+		assert.True(t, reports[0].Closed)
 
-	// test that we are able to list closed reports
-	reports, err = listPackageReports(m, "pkg", map[string]string{"Closed": "true"})
-	require.NoError(t, err)
-	require.Len(t, reports, 1)
-	assertReport(reports[0])
-	assert.True(t, reports[0].Closed)
+		update := Report{
+			Author:    "test.capturePanic",
+			Subject:   "reopened",
+			Package:   "pkg",
+			Version:   "v1.0.0",
+			Closed:    false,
+			CreatedAt: time.Now(),
+		}
 
-	update := Report{
-		Author:    "test.capturePanic",
-		Subject:   "reopened",
-		Package:   "pkg",
-		Version:   "v1.0.0",
-		Closed:    false,
-		CreatedAt: time.Now(),
-	}
+		require.NoError(t, m.UpdateReport(context.Background(), closedIssueID, update))
+		reports, err = listPackageReports(m, "pkg", map[string]string{"Subject": "reopened"})
+		require.NoError(t, err)
+		require.Len(t, reports, 1)
+		assertReport(reports[0])
+		assert.False(t, reports[0].Closed)
+	})
 
-	require.NoError(t, m.UpdateReport(context.Background(), closedIssueID, update))
-	reports, err = listPackageReports(m, "pkg", map[string]string{"Subject": "reopened"})
-	require.NoError(t, err)
-	require.Len(t, reports, 1)
-	assertReport(reports[0])
-	assert.False(t, reports[0].Closed)
+	t.Run("should be able to create issues past max number of retries", func(t *testing.T) {
+		m, _ := newTestingDocumentTracker()
+		svc := document.NewInMemoryCache()
+		for i := 0; i < int(10+1); i++ {
+			m = NewDocumentTracker(svc)
+			report := Report{
+				Author:  "test2",
+				Subject: "bummers",
+				Package: "pkg",
+			}
+			id, err := m.CreateReport(context.Background(), report)
+			require.NoError(t, err)
+			assert.NotZero(t, id)
+		}
+	})
 }
