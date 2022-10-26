@@ -18,18 +18,20 @@ import (
 type documentType int32
 
 const (
-	// panic report document
+	// panic report document. This can be used for versioning.
 	documentTypeReport = iota
 
 	// ReportMetadataIDField represents the name of the debug.Report.Metadata field used
 	// to store the document ID.
 	ReportMetadataIDField          = "_id"
 	reportMetadataIssueNumberField = "_in"
+
+	autoIncrementMaxRetries uint = 10
 )
 
 var (
 	// something must be wrong if we try 10 times and fail
-	autoIncrementRetryStrategy = retry.LimitStrategy(10)
+	autoIncrementRetryStrategy = retry.LimitStrategy(autoIncrementMaxRetries)
 )
 
 type documentTracker struct {
@@ -50,13 +52,13 @@ func NewDocumentTracker(db document.Service) Tracker {
 	return ret
 }
 
-func (d *documentTracker) fetchLastIssueNumber(ctx context.Context, pkg string) error {
+func (d *documentTracker) fetchLastIssueNumber(ctx context.Context, pkg string) (int, error) {
 	// NOTE if the number of issues is ever large, this could be a bit smarter by
 	// trying to sort limit 1. It would require adding sorting capability to document.Service.List.
 	// It only happens once the service is started.
 	it, err := d.ListPackageReports(ctx, pkg, nil)
 	if err != nil {
-		return fmt.Errorf("fetch last issue number: %d", err)
+		return 0, fmt.Errorf("fetch last issue number: %v", err)
 	}
 
 	var maxIssueNumber int
@@ -64,7 +66,7 @@ func (d *documentTracker) fetchLastIssueNumber(ctx context.Context, pkg string) 
 		report, ok := it.Next()
 		if !ok {
 			if err := it.Err(); err != nil {
-				return err
+				return 0, err
 			}
 			break
 		}
@@ -83,7 +85,8 @@ func (d *documentTracker) fetchLastIssueNumber(ctx context.Context, pkg string) 
 		}
 	}
 	d.lastIssueNumber[pkg] = maxIssueNumber
-	return nil
+	log.Debugf("Found max issue number for package %q to be %d", pkg, maxIssueNumber)
+	return maxIssueNumber, nil
 }
 
 // CreateReport  stores the given report into the underlying document.Service. It also appends
@@ -106,7 +109,8 @@ func (d *documentTracker) CreateReport(
 	lastIssueNumber, ok := d.lastIssueNumber[report.Package]
 	if !ok {
 		// initialize last issue ptr
-		err := d.fetchLastIssueNumber(ctx, report.Package)
+		var err error
+		lastIssueNumber, err = d.fetchLastIssueNumber(ctx, report.Package)
 		if err != nil {
 			return "", err
 		}
