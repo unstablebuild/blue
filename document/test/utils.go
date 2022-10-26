@@ -2,13 +2,13 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ernestrc/blue/document"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -148,7 +148,7 @@ func testDatastoreCreate(t *testing.T, serviceFactory FnServiceFactory) {
 	t.Run("Create does not store private fields", func(t *testing.T) {
 		s := serviceFactory(t)
 		defer s.Close()
-		id := uuid.New().String()
+		id := "create_private_fields"
 
 		putxi := MakeSegador(
 			withName("Putxi"),
@@ -166,7 +166,7 @@ func testDatastoreCreate(t *testing.T, serviceFactory FnServiceFactory) {
 	t.Run("Create always creates document with CreatedAt and UpdatedAt fields", func(t *testing.T) {
 		s := serviceFactory(t)
 		defer s.Close()
-		myID := uuid.New().String()
+		myID := "create_always_created_at_updated_at"
 
 		err := s.Create(ctx, myID, myOtherEntity{})
 		require.NoError(t, err)
@@ -234,7 +234,7 @@ func testDatastoreSet(t *testing.T, serviceFactory FnServiceFactory) {
 	t.Run("Set updates UpdatedAt field", func(t *testing.T) {
 		s := serviceFactory(t)
 		defer s.Close()
-		myID := uuid.New().String()
+		myID := "updates_updated_at"
 
 		err := s.Set(ctx, myID, myOtherEntity{})
 		require.NoError(t, err)
@@ -253,7 +253,7 @@ func testDatastoreGet(t *testing.T, serviceFactory FnServiceFactory) {
 	t.Run("Get retrieves a document", func(t *testing.T) {
 		s := serviceFactory(t)
 		defer s.Close()
-		myID := uuid.New().String()
+		myID := "retrieves_doc"
 
 		var myBob Segador
 
@@ -279,7 +279,7 @@ func testDatastoreGet(t *testing.T, serviceFactory FnServiceFactory) {
 		s := serviceFactory(t)
 		defer s.Close()
 
-		myID := uuid.New().String()
+		myID := "get_errors_non_ptr"
 		err := s.Create(ctx, myID, myOtherEntity{})
 		require.NoError(t, err)
 
@@ -290,7 +290,7 @@ func testDatastoreGet(t *testing.T, serviceFactory FnServiceFactory) {
 	t.Run("Get with map receiver", func(t *testing.T) {
 		s := serviceFactory(t)
 		defer s.Close()
-		myID := uuid.New().String()
+		myID := "get_map_receiver"
 
 		err := s.Create(ctx, myID, bob)
 		require.NoError(t, err)
@@ -312,7 +312,7 @@ func testDatastoreDelete(t *testing.T, serviceFactory FnServiceFactory) {
 	t.Run("Get after a Delete returns nil", func(t *testing.T) {
 		s := serviceFactory(t)
 		defer s.Close()
-		myID := uuid.New().String()
+		myID := "get_delete_notfound"
 
 		var myBob Segador
 
@@ -347,10 +347,8 @@ func updateTrait(k string, v interface{}) document.Update {
 func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 	ctx := context.Background()
 
-	prepareForUpdate := func(t *testing.T, document interface{}) (s document.Service, myID string) {
+	prepareForUpdate := func(t *testing.T, myID string, document interface{}) (s document.Service) {
 		s = serviceFactory(t)
-		myID = uuid.New().String()
-
 		err := s.Create(ctx, myID, document)
 		require.NoError(t, err)
 		return
@@ -359,7 +357,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 	t.Run("Update panics if updates is empty", func(t *testing.T) {
 		s := serviceFactory(t)
 		defer s.Close()
-		myID := uuid.New().String()
+		myID := "update_panics"
 		updates := make([]document.Update, 0)
 
 		assert.Panics(t, func() {
@@ -370,7 +368,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 	t.Run("Update returns ErrNotFound if attempting to update a document that does not exist", func(t *testing.T) {
 		s := serviceFactory(t)
 		defer s.Close()
-		myID := uuid.New().String()
+		myID := "update_errnotfound"
 		updates := make([]document.Update, 1)
 		updates[0].FieldPath = []string{"fjklewjflwk"}
 
@@ -379,7 +377,8 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("Update updates a document field", func(t *testing.T) {
-		s, myID := prepareForUpdate(t, alice)
+		myID := "updates_doc_field"
+		s := prepareForUpdate(t, myID, alice)
 		defer s.Close()
 
 		err := s.Update(ctx, myID, []document.Update{updateName("Alexandra")})
@@ -392,7 +391,8 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("Update updates a nested document field", func(t *testing.T) {
-		s, myID := prepareForUpdate(t, alice)
+		myID := "update_nested_doc_field"
+		s := prepareForUpdate(t, myID, alice)
 		defer s.Close()
 
 		err := s.Update(ctx, myID, []document.Update{
@@ -407,7 +407,8 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("Update converts a nested document field when type is a struct", func(t *testing.T) {
-		s, myID := prepareForUpdate(t, alice)
+		myID := "converts_nested_doc_field_struct"
+		s := prepareForUpdate(t, myID, alice)
 		defer s.Close()
 
 		err := s.Update(ctx, myID, []document.Update{
@@ -427,7 +428,8 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("Update DOES NOT update a nested document field that does not exist", func(t *testing.T) {
-		s, myID := prepareForUpdate(t, alice)
+		myID := "update_not_update_nested_not_exist"
+		s := prepareForUpdate(t, myID, alice)
 		defer s.Close()
 
 		myNewAttr := make(map[string]interface{})
@@ -445,7 +447,8 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("Update processes multiple updates", func(t *testing.T) {
-		s, myID := prepareForUpdate(t, alice)
+		myID := "multiple_updates"
+		s := prepareForUpdate(t, myID, alice)
 		defer s.Close()
 
 		err := s.Update(ctx, myID, []document.Update{
@@ -462,13 +465,14 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("Update overrides client UpdatedAt field", func(t *testing.T) {
-		s, myID := prepareForUpdate(t, myOtherEntity{})
+		myID := "update_overrides_updated_at"
+		s := prepareForUpdate(t, myID, myOtherEntity{})
 		defer s.Close()
 
 		t1 := time.Now().Add(-time.Hour * 48)
 
 		err := s.Update(ctx, myID, []document.Update{
-			document.Update{FieldPath: []string{document.DefaultUpdatedAtField}, Value: t1},
+			{FieldPath: []string{document.DefaultUpdatedAtField}, Value: t1},
 		})
 		require.NoError(t, err)
 
@@ -481,11 +485,12 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("Update always updates UpdatedAt field", func(t *testing.T) {
-		s, myID := prepareForUpdate(t, myOtherEntity{})
+		myID := "update_always_updates_updated_at_field"
+		s := prepareForUpdate(t, myID, myOtherEntity{})
 		defer s.Close()
 
 		err := s.Update(ctx, myID, []document.Update{
-			document.Update{FieldPath: []string{"Value"}, Value: 1},
+			{FieldPath: []string{"Value"}, Value: 1},
 		})
 		require.NoError(t, err)
 
@@ -499,19 +504,19 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 }
 
 func prepareServiceForListTest(
-	t *testing.T, serviceFactory FnServiceFactory,
+	t *testing.T, name string, serviceFactory FnServiceFactory,
 ) document.Service {
 	s := serviceFactory(t)
 	ctx := context.Background()
 
 	for i := 0; i < 10; i++ {
-		myID := uuid.New().String()
+		myID := fmt.Sprintf("%s_list_bob_%d", name, i)
 		err := s.Create(ctx, myID, bob)
 		require.NoError(t, err)
 	}
 
 	for i := 0; i < 2; i++ {
-		myID := uuid.New().String()
+		myID := fmt.Sprintf("%s_list_alice_%d", name, i)
 		err := s.Create(ctx, myID, alice)
 		require.NoError(t, err)
 	}
@@ -537,7 +542,7 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 	ctx := context.Background()
 
 	t.Run("List retrieves ALL document if filters is nil or empty", func(t *testing.T) {
-		s := prepareServiceForListTest(t, serviceFactory)
+		s := prepareServiceForListTest(t, "list_all_doc_nil_filter", serviceFactory)
 		defer s.Close()
 
 		it, err := s.List(ctx, nil)
@@ -547,7 +552,7 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("NextTo errors with anything that's not a pointer to struct or map", func(t *testing.T) {
-		s := prepareServiceForListTest(t, serviceFactory)
+		s := prepareServiceForListTest(t, "list_nextto_errors_anyting", serviceFactory)
 		defer s.Close()
 
 		var myVal Segador
@@ -558,7 +563,7 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("NextTo with map receiver", func(t *testing.T) {
-		s := prepareServiceForListTest(t, serviceFactory)
+		s := prepareServiceForListTest(t, "list_nextto_map_receiver", serviceFactory)
 		defer s.Close()
 
 		it, err := s.List(ctx, []document.Filter{nameFilter("Bob", document.OpEqual)})
@@ -575,17 +580,17 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("List zero-value filter panics", func(t *testing.T) {
-		s := prepareServiceForListTest(t, serviceFactory)
+		s := prepareServiceForListTest(t, "list_zero_filter_panics", serviceFactory)
 		defer s.Close()
 
-		filters := []document.Filter{document.Filter{}}
+		filters := []document.Filter{{}}
 		assert.Panics(t, func() {
 			_, _ = s.List(ctx, filters)
 		})
 	})
 
 	t.Run("List OpEqual filter retrieves of documents with prop equal to a value", func(t *testing.T) {
-		s := prepareServiceForListTest(t, serviceFactory)
+		s := prepareServiceForListTest(t, "list_op_equal", serviceFactory)
 		defer s.Close()
 
 		filters := []document.Filter{nameFilter("Alice", document.OpEqual)}
@@ -595,7 +600,7 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("List OpGreaterThan filter retrieves of documents with prop greater than a value", func(t *testing.T) {
-		s := prepareServiceForListTest(t, serviceFactory)
+		s := prepareServiceForListTest(t, "list_op_greater_than", serviceFactory)
 		defer s.Close()
 
 		filters := []document.Filter{nameFilter("B", document.OpGreaterThan)}
@@ -605,7 +610,7 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("List OpGreaterThanEqual filter retrieves of documents with prop greater than or equal to value", func(t *testing.T) {
-		s := prepareServiceForListTest(t, serviceFactory)
+		s := prepareServiceForListTest(t, "list_op_greater_than_equal", serviceFactory)
 		defer s.Close()
 
 		filters := []document.Filter{nameFilter("Bob", document.OpGreaterThanEqual)}
@@ -615,7 +620,7 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("List OpLessThan filter retrieves of documents with prop less than a value", func(t *testing.T) {
-		s := prepareServiceForListTest(t, serviceFactory)
+		s := prepareServiceForListTest(t, "list_op_less_than", serviceFactory)
 		defer s.Close()
 
 		filters := []document.Filter{nameFilter("B", document.OpLessThan)}
@@ -625,7 +630,7 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("List OpLessThanEqual filter retrieves of documents with prop less than or equal to a value", func(t *testing.T) {
-		s := prepareServiceForListTest(t, serviceFactory)
+		s := prepareServiceForListTest(t, "list_op_less_than_equal", serviceFactory)
 		defer s.Close()
 
 		filters := []document.Filter{nameFilter("Bob", document.OpLessThanEqual)}
@@ -635,7 +640,7 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("List with multiple filters retrieves of documents with AND filter predicate", func(t *testing.T) {
-		s := prepareServiceForListTest(t, serviceFactory)
+		s := prepareServiceForListTest(t, "list_multiple_filters_and_predicate", serviceFactory)
 		defer s.Close()
 
 		filters := []document.Filter{
@@ -656,7 +661,7 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("List with filter on nested field", func(t *testing.T) {
-		s := prepareServiceForListTest(t, serviceFactory)
+		s := prepareServiceForListTest(t, "list_with_filter_nested_field", serviceFactory)
 		defer s.Close()
 
 		filters := []document.Filter{traitFilter("fancy", true, document.OpEqual)}
@@ -666,7 +671,7 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("List with filter with value incorrect numeric type coerces type", func(t *testing.T) {
-		s := prepareServiceForListTest(t, serviceFactory)
+		s := prepareServiceForListTest(t, "list_incorrect_numeric_coerces", serviceFactory)
 		defer s.Close()
 
 		filters := []document.Filter{traitFilter("years", int(30), document.OpGreaterThanEqual)}
@@ -676,7 +681,7 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("List with filter with value incorrect type returns nothing", func(t *testing.T) {
-		s := prepareServiceForListTest(t, serviceFactory)
+		s := prepareServiceForListTest(t, "list_with_filter_value_incorrect_type_returns_nothing", serviceFactory)
 		defer s.Close()
 
 		filters := []document.Filter{traitFilter("years", "30", document.OpEqual)}
@@ -686,7 +691,7 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 	})
 
 	t.Run("List with filter with incorrect field path returns nothing", func(t *testing.T) {
-		s := prepareServiceForListTest(t, serviceFactory)
+		s := prepareServiceForListTest(t, "list_incorrect_field_returns_nothing", serviceFactory)
 		defer s.Close()
 
 		filters := []document.Filter{traitFilter("wtf", "PROLLY", document.OpEqual)}
@@ -723,7 +728,7 @@ func TestDocumentService(t *testing.T, serviceFactory FnServiceFactory) {
 		ctx := context.Background()
 		s := serviceFactory(t)
 		defer s.Close()
-		myID := uuid.New().String()
+		myID := "is_threadsafe"
 
 		var wg sync.WaitGroup
 		for i := 0; i < 10; i++ {
