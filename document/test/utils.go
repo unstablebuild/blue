@@ -20,8 +20,8 @@ type Reaper interface {
 }
 
 type Segador struct {
-	Name          string                 `json:"name" bson:"name" yaml:"name"`
-	Traits        map[string]interface{} `json:"traits" bson:"traits" yaml:"traits"`
+	Name          string                 `json:"name" bson:"name" yaml:"name" toml:"name"`
+	Traits        map[string]interface{} `json:"traits" bson:"traits" yaml:"traits" toml:"traits"`
 	internalField string
 }
 
