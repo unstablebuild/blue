@@ -123,7 +123,7 @@ func testDatastoreCreate(t *testing.T, serviceFactory FnServiceFactory) {
 		var myVal Segador
 		err = s.Get(ctx, "bobID", &myVal)
 		require.NoError(t, err)
-		assert.Equal(t, bob, myVal)
+		assert.EqualValues(t, bob, myVal)
 	})
 
 	t.Run("Create returns ErrAlreadyExists if attempt to create a document that already exists", func(t *testing.T) {
@@ -206,7 +206,7 @@ func testDatastoreSet(t *testing.T, serviceFactory FnServiceFactory) {
 		var myVal Segador
 		err = s.Get(ctx, "bobID", &myVal)
 		require.NoError(t, err)
-		assert.Equal(t, bob, myVal)
+		assert.EqualValues(t, bob, myVal)
 	})
 
 	t.Run("Set updates record if document already exists", func(t *testing.T) {
@@ -219,7 +219,7 @@ func testDatastoreSet(t *testing.T, serviceFactory FnServiceFactory) {
 		var myVal Segador
 		err = s.Get(ctx, "NighthawkM1", &myVal)
 		require.NoError(t, err)
-		assert.Equal(t, bob, myVal)
+		assert.EqualValues(t, bob, myVal)
 	})
 
 	t.Run("Set panics if attempt to create a document from nil", func(t *testing.T) {
@@ -265,7 +265,7 @@ func testDatastoreGet(t *testing.T, serviceFactory FnServiceFactory) {
 
 		err = s.Get(ctx, myID, &myBob)
 		require.NoError(t, err)
-		assert.Equal(t, bob, myBob)
+		assert.EqualValues(t, bob, myBob)
 	})
 
 	t.Run("Get returns ErrNotFound if document does not exist", func(t *testing.T) {
@@ -302,7 +302,7 @@ func testDatastoreGet(t *testing.T, serviceFactory FnServiceFactory) {
 
 		delete(myBob, document.DefaultCreatedAtField)
 		delete(myBob, document.DefaultUpdatedAtField)
-		assert.Equal(t, bob.toMap(), myBob)
+		assert.EqualValues(t, bob.toMap(), myBob)
 	})
 }
 
@@ -424,7 +424,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 		require.NotNil(t, bro)
 
 		require.Equal(t, reflect.Map, reflect.ValueOf(bro).Kind())
-		assert.Equal(t, bob.toMap(), bro.(map[string]interface{}))
+		assert.EqualValues(t, bob.toMap(), bro.(map[string]interface{}))
 	})
 
 	t.Run("Update DOES NOT update a nested document field that does not exist", func(t *testing.T) {
@@ -575,7 +575,7 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 
 		delete(myBob, document.DefaultCreatedAtField)
 		delete(myBob, document.DefaultUpdatedAtField)
-		assert.Equal(t, bob.toMap(), myBob)
+		assert.EqualValues(t, bob.toMap(), myBob)
 		assert.NoError(t, it.Close())
 	})
 
