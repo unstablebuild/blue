@@ -332,14 +332,14 @@ func testDatastoreDelete(t *testing.T, serviceFactory FnServiceFactory) {
 
 func updateName(newName string) document.Update {
 	return document.Update{
-		FieldPath: []string{"Name"},
+		FieldPath: []string{"name"},
 		Value:     newName,
 	}
 }
 
 func updateTrait(k string, v interface{}) document.Update {
 	return document.Update{
-		FieldPath: []string{"Traits", k},
+		FieldPath: []string{"traits", k},
 		Value:     v,
 	}
 }
@@ -703,14 +703,14 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 
 func traitFilter(field string, value interface{}, op document.Op) document.Filter {
 	return document.Filter{Field: document.Field{
-		FieldPath: []string{"Traits", field},
+		FieldPath: []string{"traits", field},
 		Value:     value,
 	}, Op: op}
 }
 
 func nameFilter(value string, op document.Op) document.Filter {
 	return document.Filter{Field: document.Field{
-		FieldPath: []string{"Name"},
+		FieldPath: []string{"name"},
 		Value:     value,
 	}, Op: op}
 }
@@ -736,7 +736,7 @@ func TestDocumentService(t *testing.T, serviceFactory FnServiceFactory) {
 				var myBob Segador
 				_ = s.Create(ctx, myID, bob)
 				_ = s.Get(ctx, myID, &myBob)
-				_ = s.Update(ctx, myID, []document.Update{{FieldPath: []string{"Name"}, Value: "value"}})
+				_ = s.Update(ctx, myID, []document.Update{{FieldPath: []string{"name"}, Value: "value"}})
 				_ = s.Delete(ctx, myID)
 				_, _ = s.List(ctx, nil)
 			}()
