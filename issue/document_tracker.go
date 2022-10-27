@@ -145,7 +145,7 @@ func (d *documentTracker) list(ctx context.Context, filters []document.Filter) (
 
 	it, err := d.db.List(ctx, filters)
 	if err != nil {
-		return nil, fmt.Errorf("document.Service.Create: %v", err)
+		return nil, fmt.Errorf("document.Service.List: %v", err)
 	}
 
 	docIter := iterator.FromDocumentIterator[reportDocument](it)
