@@ -92,7 +92,7 @@ var (
 )
 
 type myOtherEntity struct {
-	Value     int
+	Value     int       `json:"value" bson:"value" yaml:"value" toml:"value"`
 	UpdatedAt time.Time `firestore:",serverTimestamp"`
 	CreatedAt time.Time `firestore:",serverTimestamp"`
 }
