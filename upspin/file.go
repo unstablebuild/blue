@@ -3,7 +3,6 @@ package upspin
 import (
 	"bytes"
 	"context"
-	stdErr "errors"
 	"fmt"
 	"io"
 	"math"
@@ -28,9 +27,11 @@ var (
 // for opening a file for read and write at the same time. In contrast,
 // it stores the data in-memory, to it should only be used over upspin.File
 // when the all the data is usually read anyway.
+// This File it's always readable so passing O_WRONLY or O_RDWR is equivalent.
 type File struct {
 	name        upspin.PathName
 	writable    bool
+	create      bool
 	dirty       bool
 	closed      bool
 	client      upspin.Client
@@ -55,25 +56,23 @@ func Open(
 ) (*File, error) {
 	const op errors.Op = "Open"
 	data, err := client.Get(name)
+	create := flag&os.O_CREATE != 0
 	isNotExistError := errors.Is(errors.NotExist, err)
 	if err != nil {
-		if !isNotExistError || flag&os.O_CREATE == 0 {
+		if !isNotExistError || !create {
 			return nil, err
 		}
 	}
-	if flag&os.O_WRONLY == os.O_WRONLY {
-		return nil, stdErr.New("O_WRONLY not supported")
-	}
-
 	f := &File{
 		client:      client,
 		name:        name,
 		data:        data,
 		dirty:       true,
+		create:      create,
 		writeOffset: int64(len(data)),
 	}
 
-	if flag&os.O_RDWR == os.O_RDWR {
+	if flag&os.O_RDWR == os.O_RDWR || flag&os.O_WRONLY == os.O_WRONLY {
 		f.writable = true
 	}
 	return f, nil
@@ -224,14 +223,16 @@ func (f *File) sync() (int64, error) {
 	if f.closed {
 		return 0, f.errClosed(op)
 	}
-	if !f.writable {
-		return 0, errors.E(op, errors.Invalid, f.name, "not open for write")
+	// allow creating an entry, even if file is not writeable
+	// if create flag is passed and there's no data in the buffer.
+	if f.writable || (len(f.data) == 0 && f.create) {
+		err := f.put(op)
+		if err != nil {
+			return 0, err
+		}
+		return f.lastPutSeqID, nil
 	}
-	err := f.put(op)
-	if err != nil {
-		return 0, err
-	}
-	return f.lastPutSeqID, nil
+	return 0, errors.E(op, errors.Invalid, f.name, "not open for write")
 }
 
 // Truncate changes the size of the file to size.
