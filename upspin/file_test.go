@@ -241,6 +241,14 @@ func TestReadWritable(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, f.Close())
 	})
+	t.Run("O_EXCL", func(t *testing.T) {
+		client := &dummyClient{putData: []byte{}}
+		f, err := Open(client, "b", os.O_CREATE)
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+		_, err = Open(client, "b", os.O_CREATE|os.O_EXCL)
+		require.Error(t, err)
+	})
 
 	t.Run("Truncate initial content", func(t *testing.T) {
 		f, client := makeReadWritableFile(t, "a", "breachez")
