@@ -232,6 +232,16 @@ func TestReadWritable(t *testing.T) {
 		expectFileContent(t, f, client, "found it!")
 	})
 
+	t.Run("File open for create", func(t *testing.T) {
+		client := &dummyClient{putData: []byte{}}
+		f, err := Open(client, "b", os.O_CREATE)
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+		f, err = Open(client, "b", 0)
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+	})
+
 	t.Run("Truncate initial content", func(t *testing.T) {
 		f, client := makeReadWritableFile(t, "a", "breachez")
 		err := f.Truncate(0)
