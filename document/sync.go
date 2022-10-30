@@ -5,17 +5,71 @@ import (
 	"sync"
 )
 
-type syncService struct {
+// Sync returns a mutual exclusion document.Service.
+// All calls are serialized preventing concurrent access to the given
+// underlying Service.
+func Sync(svc Service) Service {
+	return &syncService{svc: svc}
+}
+
+// RWSync returns a mutual read/write exclusion document.Service.
+// Create, Update, and Delete calls are serialized and will
+// prevent Get and List to access the underlying documents while running
+// but if there are no writes reads can run concurrently.
+func RWSync(svc Service) Service {
+	return &rwSyncService{svc: svc}
+}
+
+type rwSyncService struct {
 	mu  sync.RWMutex
 	svc Service
 }
 
-// Sync returns a mutual read/write exclusion document.Service.
-// Create, Update, and Delete calls are serialized and will
-// prevent Get and List to access the underlying documents while running
-// but if there are no writes reads can run concurrently.
-func Sync(svc Service) Service {
-	return &syncService{svc: svc}
+func (s *rwSyncService) Create(ctx context.Context, ID string, doc interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.svc.Create(ctx, ID, doc)
+}
+
+func (s *rwSyncService) Set(ctx context.Context, ID string, doc interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.svc.Set(ctx, ID, doc)
+}
+
+func (s *rwSyncService) Update(ctx context.Context, ID string, updates []Update) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.svc.Update(ctx, ID, updates)
+}
+
+func (s *rwSyncService) Get(ctx context.Context, ID string, doc interface{}) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.svc.Get(ctx, ID, doc)
+}
+
+func (s *rwSyncService) Delete(ctx context.Context, ID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.svc.Delete(ctx, ID)
+}
+
+func (s *rwSyncService) List(ctx context.Context, filters []Filter) (Iterator, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.svc.List(ctx, filters)
+}
+
+func (s *rwSyncService) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.svc.Close()
+}
+
+type syncService struct {
+	mu  sync.Mutex
+	svc Service
 }
 
 func (s *syncService) Create(ctx context.Context, ID string, doc interface{}) error {
@@ -37,8 +91,8 @@ func (s *syncService) Update(ctx context.Context, ID string, updates []Update) e
 }
 
 func (s *syncService) Get(ctx context.Context, ID string, doc interface{}) error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.svc.Get(ctx, ID, doc)
 }
 
@@ -49,8 +103,8 @@ func (s *syncService) Delete(ctx context.Context, ID string) error {
 }
 
 func (s *syncService) List(ctx context.Context, filters []Filter) (Iterator, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.svc.List(ctx, filters)
 }
 
