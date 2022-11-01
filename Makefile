@@ -7,7 +7,7 @@ EXEC=$(patsubst cmd/%/,$(BIN)/%,$(EXECDIRS))
 COVERPROF=test.coverprofile
 LIBRPC=$(wildcard **/**/*.proto)
 GOFLAGS="-ldflags=-X main.Tag=$$(git describe --tags) -X main.Commit=$$(git rev-parse --short HEAD)"
-GOTESTFLAGS=-timeout 20s
+GOTESTFLAGS=-timeout 120s
 
 .PHONY: clean test coverage generate release debug
 

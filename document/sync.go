@@ -9,7 +9,11 @@ import (
 // All calls are serialized preventing concurrent access to the given
 // underlying Service.
 func Sync(svc Service) Service {
-	return &syncService{svc: svc}
+	return SyncWithLocker(svc, new(sync.Mutex))
+}
+
+func SyncWithLocker(svc Service, locker sync.Locker) Service {
+	return &syncService{svc: svc, mu: locker}
 }
 
 // RWSync returns a mutual read/write exclusion document.Service.
@@ -68,7 +72,7 @@ func (s *rwSyncService) Close() error {
 }
 
 type syncService struct {
-	mu  sync.Mutex
+	mu  sync.Locker
 	svc Service
 }
 

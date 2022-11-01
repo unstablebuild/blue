@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ernestrc/blue/document"
+	"github.com/ernestrc/blue/retry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -729,26 +730,40 @@ func TestDocumentService(t *testing.T, serviceFactory FnServiceFactory) {
 		s := serviceFactory(t)
 		defer s.Close()
 		myID := "is_threadsafe"
+		n := 10
 
 		var wg sync.WaitGroup
-		for i := 0; i < 10; i++ {
+		wg.Add(n)
+		for i := 0; i < n; i++ {
 			go func() {
+				defer wg.Done()
 				var myBob Segador
 				_ = s.Create(ctx, myID, bob)
 				_ = s.Get(ctx, myID, &myBob)
 				_ = s.Update(ctx, myID, []document.Update{{FieldPath: []string{"name"}, Value: "value"}})
 				_ = s.Delete(ctx, myID)
-				_, _ = s.List(ctx, nil)
+				it, err := s.List(ctx, nil)
+				if err == nil {
+					it.Close()
+				}
 			}()
 		}
 
 		wg.Wait()
 
 		// wait for eventually consistent implementations
-		time.Sleep(500 * time.Millisecond)
-
-		var myBob Segador
-		err := s.Get(ctx, myID, &myBob)
-		require.Equal(t, document.ErrNotFound, err)
+		timeout := 2000 * time.Millisecond
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		retryStrategy := retry.SequentialStrategy(50 * time.Millisecond)
+		err := retry.Retry(ctx, retryStrategy, func(ctx context.Context) (bool, error) {
+			var myBob Segador
+			err := s.Get(ctx, myID, &myBob)
+			if err != document.ErrNotFound {
+				return true, fmt.Errorf("expected ErrNotFound found %v", err)
+			}
+			return false, nil
+		})
+		assert.NoError(t, err)
 	})
 }
