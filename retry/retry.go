@@ -48,8 +48,8 @@ func SequentialStrategy(every time.Duration) Strategy {
 
 // CombinedStrategy returns a retry strategy that combines all the given strategies
 // using the following rules:
-//	- If any returns stop=true, then stop=true is returned.
-//  - If multiple return a sleep time that is non-zero, then the biggest sleep value is used.
+//   - If any returns stop=true, then stop=true is returned.
+//   - If multiple return a sleep time that is non-zero, then the biggest sleep value is used.
 func CombinedStrategy(i Strategy, n ...Strategy) Strategy {
 	all := append([]Strategy{}, i)
 	all = append(all, n...)
@@ -85,10 +85,14 @@ func Retry(
 		if ctx.Err() != nil {
 			result = multierror.Append(result, ctx.Err())
 		}
-		result = multierror.Append(result, err)
 		if !retry {
-			return result
+			// if we never allowed retries, pass error as is
+			if result == nil {
+				return err
+			}
+			return multierror.Append(result, err)
 		}
+		result = multierror.Append(result, err)
 
 		retryCount++
 		sleep, stop := strategy(retryCount)

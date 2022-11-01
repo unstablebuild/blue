@@ -34,6 +34,16 @@ func init() {
 	cancel()
 }
 
+func TestRetryErrorValue(t *testing.T) {
+	t.Run("returns error as is if retry was set to false since the start", func(t *testing.T) {
+		origErr := errors.New("bla")
+		err := Retry(context.Background(), LimitStrategy(2), func(ctx context.Context) (bool, error) {
+			return false, origErr
+		})
+		assert.Equal(t, origErr, err)
+	})
+}
+
 func TestRetry(t *testing.T) {
 	tsuite := []struct {
 		msg       string
