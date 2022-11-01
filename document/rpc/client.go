@@ -3,7 +3,6 @@ package rpc
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"reflect"
@@ -38,7 +37,7 @@ func NewClient(addr net.Addr, opts ...grpc.DialOption) (document.Service, error)
 	))
 	cc, err := grpc.Dial("", opts...)
 	if err != nil {
-		return nil, fmt.Errorf("grpc.Dial error: %v", err)
+		return nil, err
 	}
 
 	ret := new(Client)
@@ -74,7 +73,7 @@ func (c *Client) Create(
 	req := proto.CreateDocumentRequest{Id: ID, Data: bytes}
 	res, err := c.pb.Create(ctx, &req)
 	if err != nil {
-		return fmt.Errorf("pb.Create: %v", err)
+		return err
 	}
 	if res.GetAlreadyExists() {
 		return document.ErrAlreadyExists
@@ -93,7 +92,7 @@ func (c *Client) Set(
 	req := proto.SetDocumentRequest{Id: ID, Data: bytes}
 	_, err = c.pb.Set(ctx, &req)
 	if err != nil {
-		return fmt.Errorf("pb.Set: %v", err)
+		return err
 	}
 	return nil
 }
@@ -149,7 +148,7 @@ func (c *Client) Update(
 	req := proto.UpdateDocumentRequest{Id: ID, Updates: u}
 	res, err := c.pb.Update(ctx, &req)
 	if err != nil {
-		return fmt.Errorf("pb.Update: %v", err)
+		return err
 	}
 	if res.GetNotFound() {
 		return document.ErrNotFound
@@ -163,7 +162,7 @@ func (c *Client) Get(
 	req := proto.GetDocumentRequest{Id: ID}
 	res, err := c.pb.Get(ctx, &req)
 	if err != nil {
-		return fmt.Errorf("pb.Get: %v", err)
+		return err
 	}
 	if res.GetNotFound() {
 		return document.ErrNotFound
@@ -172,7 +171,7 @@ func (c *Client) Get(
 	data := res.GetData()
 	err = document.SafeDecode(doc, data)
 	if err != nil {
-		return fmt.Errorf("failed to decode data: %v", err)
+		return err
 	}
 	return nil
 }
@@ -183,7 +182,7 @@ func (c *Client) Delete(
 	req := proto.DeleteDocumentRequest{Id: ID}
 	_, err := c.pb.Delete(ctx, &req)
 	if err != nil {
-		return fmt.Errorf("pb.Delete: %v", err)
+		return err
 	}
 	return nil
 }
@@ -299,7 +298,7 @@ func (c *Client) List(
 	req := proto.ListDocumentRequest{Filters: f}
 	res, err := c.pb.List(ctx, &req)
 	if err != nil {
-		return nil, fmt.Errorf("pb.List: %v", err)
+		return nil, err
 	}
 	return &rpcIterator{cc: res}, nil
 }
