@@ -296,7 +296,12 @@ func (s *service) leadOrFollow() {
 			s.log(log.WarnLevel, "Unexpected lead error: %v", err)
 			return true, err
 		}
-		// FIXME use better heuristics
+
+		// if permission denied, then we'll never succeed, stop retrying
+		if strings.Contains(err.Error(), "permission denied") {
+			return false, err
+		}
+
 		if !strings.Contains(err.Error(), "address already in use") {
 			s.log(log.WarnLevel, "Unexpected error while trying to acquire lock %q: %v", s.lockFile, err)
 			return true, err
@@ -327,7 +332,7 @@ func (s *service) leadOrFollow() {
 	select {
 	case <-quitCh:
 	default:
-		s.log(log.PanicLevel, "Unexpectedly stopped retrying: %v", err)
+		s.log(log.ErrorLevel, "Unexpectedly stopped retrying: %v", err)
 	}
 }
 
