@@ -14,6 +14,7 @@ import (
 	"github.com/ernestrc/blue/document/rpc"
 	"github.com/ernestrc/blue/logging"
 	"github.com/ernestrc/blue/retry"
+	multierr "github.com/ernestrc/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -337,13 +338,21 @@ func (s *service) leadOrFollow() {
 	}
 }
 
-func (s *service) Close() error {
+func (s *service) Close() (ret error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.quitCh == nil {
-		return nil
+		return
 	}
 	close(s.quitCh)
 	s.quitCh = nil
-	return s.svc.Close()
+	if s.active != s.svc {
+		if err := s.active.Close(); err != nil {
+			ret = multierr.Append(ret, err)
+		}
+	}
+	if err := s.svc.Close(); err != nil {
+		ret = multierr.Append(ret, err)
+	}
+	return
 }
