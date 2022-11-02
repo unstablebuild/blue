@@ -247,8 +247,8 @@ func (s *service) setActiveAndUnlock(svc document.Service) {
 
 func (s *service) lead(ctx context.Context, listener net.Listener) (reconnect bool, err error) {
 	server := rpc.NewServer(document.SyncWithLocker(s.svc, &s.mu))
-	defer server.Close()
 	defer listener.Close()
+	defer server.Close()
 
 	done := make(chan error)
 	quitCh := s.quitCh
