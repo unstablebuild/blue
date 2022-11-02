@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/ernestrc/blue/document"
@@ -178,6 +178,9 @@ func (s *service) follow(ctx context.Context, addr net.Addr) (bool, error) {
 	conn, err := grpc.DialContext(dialCtx, "", opts...)
 	cancel()
 	if err != nil {
+		// any Dial errors should always be retried. Any socket specific errors
+		// that are not expected, and therefore would trigger a full halt will
+		// be handled by the leader erro handling logic.
 		return true, err
 	}
 
@@ -305,8 +308,7 @@ func (s *service) leadOrFollow() {
 			return true, err
 		}
 
-		// stop retrying if we don't expect error
-		if !strings.Contains(err.Error(), "address already in use") {
+		if !errors.Is(err, syscall.EADDRINUSE) {
 			s.log(log.WarnLevel, "Unexpected error while trying to acquire lock %q: %v", s.lockFile, err)
 			return false, err
 		}
