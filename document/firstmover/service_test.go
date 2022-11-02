@@ -2,6 +2,7 @@ package firstmover
 
 import (
 	"context"
+	"errors"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -9,27 +10,10 @@ import (
 
 	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/document/test"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
-type testStruct struct {
-	A string
-}
-
-func testConfig() Config {
-	return Config{
-		TransientFailureRecoverTimeout: 250 * time.Millisecond,
-		MethodRetryCadence:             20 * time.Millisecond,
-		ConnectRetryCadence:            50 * time.Millisecond,
-		TimeToCoup:                     350 * time.Millisecond,
-		DialTimeout:                    50 * time.Millisecond,
-	}
-}
-
 func TestServiceIntegration(t *testing.T) {
-	logrus.SetOutput(os.Stdout)
-	logrus.SetLevel(logrus.TraceLevel)
 	t.Run("single instance assumes leader", func(t *testing.T) {
 		test.TestDocumentService(t, func(t *testing.T) document.Service {
 			f, err := ioutil.TempFile("", "")
@@ -130,4 +114,120 @@ func TestServiceIntegration(t *testing.T) {
 			return instances[len(instances)-1]
 		})
 	})
+}
+
+func TestCustomRetryableErrors(t *testing.T) {
+	myError := errors.New("dia de los muertos")
+	tsuite := []struct {
+		desc         string
+		methodError  error
+		closeError   error
+		wantSuccess  bool
+		makeInstance func(document.Service, string, Config) (document.Service, func())
+	}{
+		{"leader does not retry error passed in Config", myError, myError, false, makeLeader},
+		{"follower retries close error passed in Config until success", myError, myError, true, makeFollower},
+		{"follower does not retry any error other than the error passed in Config", errors.New("wasup"), myError, false, makeFollower},
+		{"follower does not retry any error if error in config is nil", errors.New("wasup"), nil, false, makeFollower},
+	}
+
+	for _, tcase := range tsuite {
+		t.Run(tcase.desc, func(t *testing.T) {
+			f, err := ioutil.TempFile("", "")
+			require.NoError(t, err)
+			require.NoError(t, f.Close())
+			require.NoError(t, os.Remove(f.Name()))
+			require.Error(t, tcase.methodError)
+			mock := newTestService(tcase.methodError)
+			cfg := testConfig()
+			cfg.CloseError = tcase.closeError
+			svc, doneFn := tcase.makeInstance(mock, f.Name(), cfg)
+			defer doneFn()
+			err = svc.Set(context.Background(), "bluegrass", &testStruct{A: "1234"})
+			if !tcase.wantSuccess {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func makeFollower(svc document.Service, lockFile string, cfg Config) (document.Service, func()) {
+	var temp testStruct
+	leader := New(svc, lockFile, cfg)
+	// ensure leader is ready
+	_ = leader.Get(context.Background(), "bla", &temp)
+	follower := New(svc, lockFile, cfg)
+	// ensure follower is ready
+	_ = follower.Get(context.Background(), "bla", &temp)
+	return follower, func() {
+		leader.Close()
+		follower.Close()
+	}
+}
+
+func makeLeader(svc document.Service, lockFile string, cfg Config) (document.Service, func()) {
+	leader := New(svc, lockFile, cfg)
+	return leader, func() {
+		_ = leader.Close()
+	}
+}
+
+type testStruct struct {
+	A string
+}
+
+func testConfig() Config {
+	return Config{
+		TransientFailureRecoverTimeout: 450 * time.Millisecond,
+		MethodRetryCadence:             20 * time.Millisecond,
+		ConnectRetryCadence:            50 * time.Millisecond,
+		TimeToCoup:                     500 * time.Millisecond,
+		DialTimeout:                    50 * time.Millisecond,
+	}
+}
+
+type testService struct {
+	err   error
+	tries int
+	svc   document.Service
+}
+
+func newTestService(err error) document.Service {
+	return &testService{err: err, svc: document.NewInMemoryService()}
+}
+
+func (t *testService) Set(ctx context.Context, ID string, doc interface{}) error {
+	if t.err == nil {
+		panic("incorrect test case")
+	}
+	t.tries++
+	if t.tries < 2 {
+		return t.err
+	}
+	return t.svc.Set(ctx, ID, doc)
+}
+
+func (t *testService) Get(ctx context.Context, ID string, doc interface{}) error {
+	return t.svc.Get(ctx, ID, doc)
+}
+
+func (t *testService) Create(ctx context.Context, ID string, doc interface{}) error {
+	panic("unimplemented")
+}
+func (t *testService) Update(ctx context.Context, ID string, updates []document.Update) error {
+	panic("unimplemented")
+}
+
+func (t *testService) Delete(ctx context.Context, ID string) error {
+	panic("unimplemented")
+}
+
+func (t *testService) List(ctx context.Context, filters []document.Filter) (document.Iterator, error) {
+	panic("unimplemented")
+}
+
+func (t *testService) Close() error {
+	return nil
 }

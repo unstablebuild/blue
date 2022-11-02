@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -75,10 +76,16 @@ func (s *service) init(svc document.Service, lockFile string, cfg Config) {
 }
 
 func (s *service) isRetriableError(err error) bool {
-	if s.svc == s.active {
+	if err == nil || s.svc == s.active {
 		return false
 	}
-	c := status.Convert(err).Code()
+
+	stat := status.Convert(err)
+	if s.cfg.CloseError != nil && strings.Contains(stat.Message(), s.cfg.CloseError.Error()) {
+		return true
+	}
+
+	c := stat.Code()
 	return c == codes.Unavailable || c == codes.DeadlineExceeded
 }
 
@@ -91,9 +98,11 @@ func retryHandleDocErrs(
 		var shouldRetry bool
 		shouldRetry, err = fn(ctx)
 		if !shouldRetry {
-			return false, nil
+			// return nil so retryErr is nil and we know that we need to
+			// return original error
+			return shouldRetry, nil
 		}
-		return true, err
+		return shouldRetry, err
 	})
 	if retryErr != nil {
 		return retryErr
