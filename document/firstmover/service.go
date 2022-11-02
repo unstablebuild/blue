@@ -298,15 +298,10 @@ func (s *service) leadOrFollow() {
 			return true, err
 		}
 
-		// if permission denied, then we'll never succeed, stop retrying
-		if strings.Contains(err.Error(), "permission denied") {
-			s.setActiveAndUnlock(errService{err: err})
-			return false, err
-		}
-
+		// stop retrying if we don't expect error
 		if !strings.Contains(err.Error(), "address already in use") {
 			s.log(log.WarnLevel, "Unexpected error while trying to acquire lock %q: %v", s.lockFile, err)
-			return true, err
+			return false, err
 		}
 
 		s.log(log.TraceLevel, "Expected error while trying to acquire lock %q: "+
