@@ -18,6 +18,12 @@ type Config struct {
 	TimeToCoup time.Duration
 	// DialTimeout is net.Dial timeout
 	DialTimeout time.Duration
+	// CloseError can be optionally set to an error value that
+	// the underlying document.Service passes when it's been
+	// called Close and any other calls to its API will fail.
+	// This error will be retried by followers until a new leader
+	// is selected.
+	CloseError error
 }
 
 // DefaultConfig returns a sane Config.

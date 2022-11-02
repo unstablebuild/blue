@@ -78,6 +78,9 @@ func (s *service) isRetriableError(err error) bool {
 	if s.svc == s.active {
 		return false
 	}
+	if s.cfg.CloseError != nil && errors.Is(err, s.cfg.CloseError) {
+		return true
+	}
 	c := status.Convert(err).Code()
 	return c == codes.Unavailable || c == codes.DeadlineExceeded
 }
