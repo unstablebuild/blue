@@ -22,30 +22,20 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const (
-	transientFailureRecoverTimeout = 1 * time.Second
-	retryCadence                   = 20 * time.Millisecond
-	connectRetryCadence            = 50 * time.Millisecond
-	timeToTakeLead                 = 1 * time.Second
-	dialTimeout                    = 100 * time.Millisecond
-	maxFollowFailures              = int(timeToTakeLead / (dialTimeout + connectRetryCadence))
-)
-
-var (
-	retryStrategy = retry.CombinedStrategy(
-		retry.SequentialStrategy(retryCadence),
-		retry.LimitStrategy(uint(timeToTakeLead*2/retryCadence)),
-	)
-	connectRetryStrategy = retry.SequentialStrategy(connectRetryCadence)
-)
-
 type service struct {
 	mu       sync.Mutex
 	svc      document.Service
 	lockFile string
 
+	cfg                  Config
+	maxFollowFailures    int
+	retryStrategy        retry.Strategy
+	connectRetryStrategy retry.Strategy
+
+	closed bool
+	quitCh chan struct{}
+
 	followFailures int
-	quitCh         chan struct{}
 	active         document.Service
 }
 
@@ -58,18 +48,36 @@ type service struct {
 // or it stops responding for more than a specificed timeout,
 // all running services returned will race to re-acquire the lock and
 // act as the new leader.
-func New(svc document.Service, lockFile string) document.Service {
-	ret := &service{svc: svc, lockFile: lockFile, quitCh: make(chan struct{})}
-	ret.mu.Lock()
-	go ret.leadOrFollow()
+//
+// It is highly recommended to use DefaultConfig to build a sane Config.
+func New(svc document.Service, lockFile string, cfg Config) document.Service {
+	ret := new(service)
+	ret.init(svc, lockFile, cfg)
 	return ret
+}
+
+func (s *service) init(svc document.Service, lockFile string, cfg Config) {
+	s.svc = svc
+	s.lockFile = lockFile
+
+	s.cfg = cfg
+	s.maxFollowFailures = int(cfg.TimeToCoup / (cfg.DialTimeout + cfg.ConnectRetryCadence))
+	s.retryStrategy = retry.CombinedStrategy(
+		retry.SequentialStrategy(cfg.MethodRetryCadence),
+		retry.LimitStrategy(uint(cfg.TimeToCoup/cfg.MethodRetryCadence*2)),
+	)
+	s.connectRetryStrategy = retry.SequentialStrategy(cfg.ConnectRetryCadence)
+
+	s.quitCh = make(chan struct{})
+
+	s.mu.Lock()
+	go s.leadOrFollow()
 }
 
 func (s *service) isRetriableError(err error) bool {
 	if s.svc == s.active {
 		return false
 	}
-
 	c := status.Convert(err).Code()
 	return c == codes.Unavailable || c == codes.DeadlineExceeded
 }
@@ -94,7 +102,7 @@ func retryHandleDocErrs(
 }
 
 func (s *service) Create(ctx context.Context, ID string, doc interface{}) error {
-	return retryHandleDocErrs(ctx, retryStrategy, func(ctx context.Context) (bool, error) {
+	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		err := s.active.Create(ctx, ID, doc)
@@ -103,7 +111,7 @@ func (s *service) Create(ctx context.Context, ID string, doc interface{}) error 
 }
 
 func (s *service) Set(ctx context.Context, ID string, doc interface{}) error {
-	return retryHandleDocErrs(ctx, retryStrategy, func(ctx context.Context) (bool, error) {
+	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		err := s.active.Set(ctx, ID, doc)
@@ -112,7 +120,7 @@ func (s *service) Set(ctx context.Context, ID string, doc interface{}) error {
 }
 
 func (s *service) Update(ctx context.Context, ID string, updates []document.Update) error {
-	return retryHandleDocErrs(ctx, retryStrategy, func(ctx context.Context) (bool, error) {
+	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		err := s.active.Update(ctx, ID, updates)
@@ -121,7 +129,7 @@ func (s *service) Update(ctx context.Context, ID string, updates []document.Upda
 }
 
 func (s *service) Get(ctx context.Context, ID string, doc interface{}) error {
-	return retryHandleDocErrs(ctx, retryStrategy, func(ctx context.Context) (bool, error) {
+	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		err := s.active.Get(ctx, ID, doc)
@@ -130,7 +138,7 @@ func (s *service) Get(ctx context.Context, ID string, doc interface{}) error {
 }
 
 func (s *service) Delete(ctx context.Context, ID string) error {
-	return retryHandleDocErrs(ctx, retryStrategy, func(ctx context.Context) (bool, error) {
+	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		err := s.active.Delete(ctx, ID)
@@ -141,7 +149,7 @@ func (s *service) Delete(ctx context.Context, ID string) error {
 func (s *service) List(ctx context.Context, filters []document.Filter) (
 	it document.Iterator, err error,
 ) {
-	err = retryHandleDocErrs(ctx, retryStrategy, func(ctx context.Context) (bool, error) {
+	err = retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		it, err = s.active.List(ctx, filters)
@@ -156,7 +164,7 @@ func (s *service) isLeader() bool {
 	return s.svc == s.active
 }
 
-func (s *service) follow(ctx context.Context, addr net.Addr) (reconnect bool, err error) {
+func (s *service) follow(ctx context.Context, addr net.Addr) (bool, error) {
 	quitCh := s.quitCh
 	opts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
 	opts = append(opts, grpc.WithDialer(
@@ -166,11 +174,10 @@ func (s *service) follow(ctx context.Context, addr net.Addr) (reconnect bool, er
 		},
 	))
 	// do not override context as we're using it to know when service is closing
-	dialCtx, cancel := context.WithTimeout(ctx, dialTimeout)
+	dialCtx, cancel := context.WithTimeout(ctx, s.cfg.DialTimeout)
 	conn, err := grpc.DialContext(dialCtx, "", opts...)
 	cancel()
 	if err != nil {
-		err = fmt.Errorf("grpc.Dial: %v", err)
 		return true, err
 	}
 
@@ -191,7 +198,7 @@ loop:
 		case connectivity.Connecting, connectivity.Idle:
 			conn.WaitForStateChange(ctx, state)
 		case connectivity.TransientFailure:
-			failureCtx, cancelFn := context.WithTimeout(ctx, transientFailureRecoverTimeout)
+			failureCtx, cancelFn := context.WithTimeout(ctx, s.cfg.TransientFailureRecoverTimeout)
 			didChange := conn.WaitForStateChange(failureCtx, connectivity.TransientFailure)
 			cancelFn()
 			if !didChange {
@@ -216,8 +223,8 @@ loop:
 			}
 		case connectivity.TransientFailure:
 			s.log(log.WarnLevel, "connection state is TransientFailure. Waiting for recover with timeout %s",
-				transientFailureRecoverTimeout)
-			failureCtx, cancelFn := context.WithTimeout(ctx, transientFailureRecoverTimeout)
+				s.cfg.TransientFailureRecoverTimeout)
+			failureCtx, cancelFn := context.WithTimeout(ctx, s.cfg.TransientFailureRecoverTimeout)
 			didChange := conn.WaitForStateChange(failureCtx, connectivity.TransientFailure)
 			cancelFn()
 			if !didChange {
@@ -286,8 +293,8 @@ func (s *service) leadOrFollow() {
 		<-quitCh
 	}()
 
-	err := retry.Retry(ctx, connectRetryStrategy, func(ctx context.Context) (bool, error) {
-		cfg := net.ListenConfig{}
+	err := retry.Retry(ctx, s.connectRetryStrategy, func(ctx context.Context) (bool, error) {
+		var cfg net.ListenConfig
 		listener, err := cfg.Listen(ctx, "unix", s.lockFile)
 		if err == nil {
 			retry, err := s.lead(ctx, listener)
@@ -312,15 +319,15 @@ func (s *service) leadOrFollow() {
 		if err != nil {
 			s.followFailures++
 		}
-		if s.followFailures >= maxFollowFailures {
+		if s.followFailures >= s.maxFollowFailures {
 			s.followFailures = 0
 			s.log(log.WarnLevel, "Unresponsive leader. Removing lock and taking the lead: %v", err)
 			_ = os.Remove(s.lockFile)
 			return true, err
 		}
 		if err == nil || retry {
-			s.log(log.TraceLevel, "Expected follow error or triggered retry (left %d retries): err=%v",
-				maxFollowFailures-s.followFailures, err)
+			s.log(log.TraceLevel, "Service is closing or expected follow error (left %d retries): err=%v",
+				s.maxFollowFailures-s.followFailures, err)
 			return retry, err
 		}
 		s.log(log.WarnLevel, "Unexpected follow error: %v", err)
@@ -336,11 +343,11 @@ func (s *service) leadOrFollow() {
 func (s *service) Close() (ret error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.quitCh == nil {
+	if s.closed {
 		return
 	}
+	s.closed = true
 	close(s.quitCh)
-	s.quitCh = nil
 	if s.active != s.svc {
 		if err := s.active.Close(); err != nil {
 			ret = multierr.Append(ret, err)
