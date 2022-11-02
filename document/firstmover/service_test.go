@@ -27,7 +27,7 @@ func TestServiceIntegration(t *testing.T) {
 			require.NoError(t, f.Close())
 			require.NoError(t, os.Remove(f.Name()))
 			svc := document.NewInMemoryService()
-			return New(svc, f.Name())
+			return New(svc, f.Name(), DefaultConfig())
 		})
 	})
 
@@ -38,12 +38,12 @@ func TestServiceIntegration(t *testing.T) {
 			require.NoError(t, f.Close())
 			require.NoError(t, os.Remove(f.Name()))
 			svc := document.NewInMemoryService()
-			leader := New(svc, f.Name())
+			leader := New(svc, f.Name(), DefaultConfig())
 			// ensure leader is available
 			var temp testStruct
 			err = leader.Get(context.Background(), f.Name(), &temp)
 			require.Equal(t, document.ErrNotFound, err)
-			follower := New(svc, f.Name())
+			follower := New(svc, f.Name(), DefaultConfig())
 			return follower
 		})
 	})
@@ -55,7 +55,7 @@ func TestServiceIntegration(t *testing.T) {
 			require.NoError(t, f.Close())
 			// do not remove file
 			svc := document.NewInMemoryService()
-			return New(svc, f.Name())
+			return New(svc, f.Name(), DefaultConfig())
 		})
 	})
 
@@ -66,11 +66,11 @@ func TestServiceIntegration(t *testing.T) {
 			require.NoError(t, f.Close())
 			require.NoError(t, os.Remove(f.Name()))
 			svc := document.NewInMemoryService()
-			leader := New(svc, f.Name())
+			leader := New(svc, f.Name(), DefaultConfig())
 			// ensure leader is available
 			err = leader.Set(context.Background(), f.Name(), &testStruct{A: "1234"})
 			require.NoError(t, err)
-			follower := New(document.NewInMemoryService(), f.Name())
+			follower := New(document.NewInMemoryService(), f.Name(), DefaultConfig())
 			// ensure follow is available and using leader
 			var temp testStruct
 			err = follower.Get(context.Background(), f.Name(), &temp)
@@ -84,6 +84,7 @@ func TestServiceIntegration(t *testing.T) {
 	t.Run("multiple instances", func(t *testing.T) {
 		test.TestDocumentService(t, func(t *testing.T) document.Service {
 			const n = 50
+			cfg := DefaultConfig()
 
 			f, err := ioutil.TempFile("", "")
 			require.NoError(t, err)
@@ -95,14 +96,14 @@ func TestServiceIntegration(t *testing.T) {
 
 			// chances of returned follower to become leader are ~1/50
 			for i := 0; i < n-1; i++ {
-				instance := New(svc, f.Name())
+				instance := New(svc, f.Name(), cfg)
 				_ = instance.Get(context.Background(), f.Name(), nil)
 				instances = append(instances, instance)
 			}
 
 			go func() {
 				for i := 0; i < n-1; i++ { // always leave one fully operating
-					time.Sleep(dialTimeout + connectRetryCadence)
+					time.Sleep(cfg.DialTimeout + cfg.ConnectRetryCadence)
 					for idx, instance := range instances {
 						if TestIsLeader(instance) {
 							instance.Close()
