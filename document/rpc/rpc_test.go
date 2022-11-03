@@ -137,31 +137,35 @@ func (h interopHelper) Close() error {
 func TestRPCInterop(t *testing.T) {
 	teardowns := []func(){}
 
-	t.Run("writes by client/server are readable by underlying service", func(t *testing.T) {
-		documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
-			cache := document.NewInMemoryService()
-			addr, teardown := runDatastoreServer(t, cache)
-			teardowns = append(teardowns, teardown)
+	for name, marshaler := range map[string]Marshaler{"json": MarshalerJSON(), "bson": MarshalerBSON()} {
+		t.Run(name, func(t *testing.T) {
+			t.Run("writes by client/server are readable by underlying service", func(t *testing.T) {
+				documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
+					cache := document.NewInMemoryService()
+					addr, teardown := runDatastoreServer(t, cache)
+					teardowns = append(teardowns, teardown)
 
-			store, err := NewClient(addr, bsonMarshaler{}, grpc.WithInsecure())
-			require.NoError(t, err)
+					store, err := NewClient(addr, marshaler, grpc.WithInsecure())
+					require.NoError(t, err)
 
-			return interopHelper{read: cache, write: store}
+					return interopHelper{read: cache, write: store}
+				})
+			})
+
+			t.Run("writes by underlying service are readable by client/server", func(t *testing.T) {
+				documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
+					cache := document.NewInMemoryService()
+					addr, teardown := runDatastoreServer(t, cache)
+					teardowns = append(teardowns, teardown)
+
+					store, err := NewClient(addr, marshaler, grpc.WithInsecure())
+					require.NoError(t, err)
+
+					return interopHelper{read: store, write: cache}
+				})
+			})
 		})
-	})
-
-	t.Run("writes by underlying service are readable by client/server", func(t *testing.T) {
-		documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
-			cache := document.NewInMemoryService()
-			addr, teardown := runDatastoreServer(t, cache)
-			teardowns = append(teardowns, teardown)
-
-			store, err := NewClient(addr, bsonMarshaler{}, grpc.WithInsecure())
-			require.NoError(t, err)
-
-			return interopHelper{read: store, write: cache}
-		})
-	})
+	}
 
 	for _, fn := range teardowns {
 		fn()
