@@ -502,6 +502,29 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 		assert.Equal(t, 1, e1.Value)
 		assert.True(t, e1.UpdatedAt.After(time.Now().Add(-time.Minute)))
 	})
+
+	t.Run("Update fails if precondition is not met", func(t *testing.T) {
+		myID := "update_precondition_updated_at"
+		s := prepareForUpdate(t, myID, myOtherEntity{})
+		defer s.Close()
+
+		t1 := time.Now().Add(-time.Hour * 48)
+
+		err := s.Update(ctx, myID,
+			[]document.Update{
+				{FieldPath: []string{"Value"}, Value: 1234},
+			},
+			document.Precondition{
+				FieldPath: []string{document.DefaultUpdatedAtField}, Value: t1,
+			},
+		)
+		require.Equal(t, document.ErrPreconditionFailed, err)
+
+		var e1 myOtherEntity
+		err = s.Get(ctx, myID, &e1)
+		require.NoError(t, err)
+		assert.Equal(t, 0, e1.Value)
+	})
 }
 
 func prepareServiceForListTest(

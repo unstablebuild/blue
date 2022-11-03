@@ -132,6 +132,7 @@ func (s *Store) set(
 // Update satisfies document.Service.
 func (s *Store) Update(
 	ctx context.Context, ID string, updates []document.Update,
+	preconds ...document.Precondition,
 ) error {
 	if len(updates) == 0 {
 		panic("Update: no paths to update")
@@ -151,7 +152,10 @@ func (s *Store) Update(
 			return err
 		}
 
-		document.UpdateProto(updates, doc)
+		err = document.UpdateProto(updates, doc, preconds...)
+		if err != nil {
+			return err
+		}
 
 		return b.Put([]byte(ID), document.Encode(doc, false))
 	})

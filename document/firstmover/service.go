@@ -128,11 +128,14 @@ func (s *service) Set(ctx context.Context, ID string, doc interface{}) error {
 	})
 }
 
-func (s *service) Update(ctx context.Context, ID string, updates []document.Update) error {
+func (s *service) Update(
+	ctx context.Context, ID string, updates []document.Update,
+	preconds ...document.Precondition,
+) error {
 	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		err := s.active.Update(ctx, ID, updates)
+		err := s.active.Update(ctx, ID, updates, preconds...)
 		return s.isRetriableError(err), err
 	})
 }

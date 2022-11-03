@@ -2,6 +2,7 @@ package firestore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -76,6 +77,7 @@ func (f *fireStore) Create(
 
 func (f *fireStore) Update(
 	ctx context.Context, docID string, updates []document.Update,
+	preconds ...document.Precondition,
 ) (err error) {
 	if len(updates) == 0 {
 		panic("Update: no paths to update")
@@ -105,7 +107,25 @@ func (f *fireStore) Update(
 			Value:     firestore.ServerTimestamp,
 		})
 
-	_, err = coll.Doc(docID).Update(ctx, fUpdates)
+	if len(preconds) == 0 {
+		_, err = coll.Doc(docID).Update(ctx, fUpdates)
+		if err != nil {
+			err = convertError(err)
+		}
+		return
+	}
+
+	if len(preconds) != 1 ||
+		preconds[0].FieldPath[0] != document.DefaultUpdatedAtField {
+		return errors.New("firestore only supports an UpdatedAt precondition")
+	}
+
+	updatedAt, ok := preconds[0].Value.(time.Time)
+	if !ok {
+		panic(errors.New("invalid UpdatedAt precondition Value"))
+	}
+	precond := firestore.LastUpdateTime(updatedAt)
+	_, err = coll.Doc(docID).Update(ctx, fUpdates, precond)
 	if err != nil {
 		err = convertError(err)
 	}

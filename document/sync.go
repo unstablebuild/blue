@@ -41,10 +41,13 @@ func (s *rwSyncService) Set(ctx context.Context, ID string, doc interface{}) err
 	return s.svc.Set(ctx, ID, doc)
 }
 
-func (s *rwSyncService) Update(ctx context.Context, ID string, updates []Update) error {
+func (s *rwSyncService) Update(
+	ctx context.Context, ID string, updates []Update,
+	preconds ...Precondition,
+) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.svc.Update(ctx, ID, updates)
+	return s.svc.Update(ctx, ID, updates, preconds...)
 }
 
 func (s *rwSyncService) Get(ctx context.Context, ID string, doc interface{}) error {
@@ -88,10 +91,13 @@ func (s *syncService) Set(ctx context.Context, ID string, doc interface{}) error
 	return s.svc.Set(ctx, ID, doc)
 }
 
-func (s *syncService) Update(ctx context.Context, ID string, updates []Update) error {
+func (s *syncService) Update(
+	ctx context.Context, ID string, updates []Update,
+	preconds ...Precondition,
+) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.svc.Update(ctx, ID, updates)
+	return s.svc.Update(ctx, ID, updates, preconds...)
 }
 
 func (s *syncService) Get(ctx context.Context, ID string, doc interface{}) error {

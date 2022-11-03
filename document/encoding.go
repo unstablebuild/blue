@@ -130,7 +130,23 @@ func (l *ListIterator) Extend(filters []Filter, v []byte) {
 }
 
 // UpdateProto updates proto with the given slice of updates.
-func UpdateProto(updates []Update, proto map[string]interface{}) {
+func UpdateProto(updates []Update,
+	proto map[string]interface{}, preconds ...Precondition) error {
+	for _, cond := range preconds {
+		if len(cond.FieldPath) == 0 {
+			panic("empty field path")
+		}
+
+		lower := make([]string, len(cond.FieldPath))
+		for i, comp := range cond.FieldPath {
+			lower[i] = strings.ToLower(comp)
+		}
+
+		if !precondField(proto, Precondition{FieldPath: lower, Value: cond.Value}) {
+			return ErrPreconditionFailed
+		}
+	}
+
 	for _, update := range updates {
 		if len(update.FieldPath) == 0 {
 			panic("empty field path")
@@ -152,6 +168,8 @@ func UpdateProto(updates []Update, proto map[string]interface{}) {
 		FieldPath: []string{strings.ToLower(DefaultUpdatedAtField)},
 		Value:     time.Now(),
 	})
+
+	return nil
 }
 
 // DerefCreateValue dereferences data for a service.Create implementation
@@ -220,6 +238,25 @@ func setStructUpdatedAtFields(data interface{}) interface{} {
 	reflectSetTimeField(dst, DefaultCreatedAtField, now)
 	reflectSetTimeField(dst, DefaultUpdatedAtField, now)
 	return dst.Elem().Interface()
+}
+
+func precondField(proto map[string]interface{}, cond Precondition) bool {
+	if len(cond.FieldPath) == 1 {
+		return proto[cond.FieldPath[0]] == cond.Value
+	}
+
+	field, exist := proto[cond.FieldPath[0]]
+	if !exist {
+		return false
+	}
+
+	m, ok := field.(map[string]interface{})
+	if !ok {
+		panic("corrupted record: field node is not a map")
+	}
+
+	cond.FieldPath = cond.FieldPath[1:]
+	return precondField(m, cond)
 }
 
 func updateField(proto map[string]interface{}, update Update) {

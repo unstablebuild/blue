@@ -97,61 +97,25 @@ func (c *Client) Set(
 	return nil
 }
 
-func makeProtoUpdates(updates []document.Update) (
-	ret []*proto.UpdateDocumentRequest_Update,
-) {
-	slab := make(map[string]interface{})
-	for _, u := range updates {
-		// re-use make filter logic
-		f := document.Filter{Field: document.Field{FieldPath: u.FieldPath, Value: u.Value}}
-		pf := makeProtoFilter(slab, f)
-		pu := &proto.UpdateDocumentRequest_Update{
-			FieldPath: pf.FieldPath,
-			Data:      pf.Data,
-		}
-		ret = append(ret, pu)
-	}
-	return
-}
-
-func makeModelUpdates(updates []*proto.UpdateDocumentRequest_Update) (
-	ret []document.Update, err error,
-) {
-	var slab map[string]interface{}
-	var f document.Filter
-
-	for _, u := range updates {
-		// re-use make filter logic
-		pf := proto.ListDocumentRequest_Filter{
-			FieldPath: u.FieldPath,
-			Data:      u.Data,
-		}
-		f, err = makeModelFilter(slab, &pf)
-		if err != nil {
-			return
-		}
-		ret = append(ret, document.Update{
-			FieldPath: f.FieldPath,
-			Value:     f.Value,
-		})
-	}
-	return
-}
-
 func (c *Client) Update(
 	ctx context.Context, ID string, updates []document.Update,
+	preconds ...document.Precondition,
 ) error {
 	if len(updates) == 0 {
 		panic("invalid arguments: empty updates")
 	}
 	u := makeProtoUpdates(updates)
-	req := proto.UpdateDocumentRequest{Id: ID, Updates: u}
+	p := makeProtoPreconditions(preconds...)
+	req := proto.UpdateDocumentRequest{Id: ID, Updates: u, Preconditions: p}
 	res, err := c.pb.Update(ctx, &req)
 	if err != nil {
 		return err
 	}
 	if res.GetNotFound() {
 		return document.ErrNotFound
+	}
+	if res.GetPreconditionFailed() {
+		return document.ErrPreconditionFailed
 	}
 	return nil
 }
