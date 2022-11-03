@@ -58,6 +58,9 @@ func New(svc document.Service, lockFile string, cfg Config) document.Service {
 }
 
 func (s *service) init(svc document.Service, lockFile string, cfg Config) {
+	if cfg.Marshaler == nil {
+		panic("empty Marshaler in config")
+	}
 	s.svc = svc
 	s.lockFile = lockFile
 
@@ -197,7 +200,7 @@ func (s *service) follow(ctx context.Context, addr net.Addr) (bool, error) {
 	}
 
 	client := new(rpc.Client)
-	client.Init(conn)
+	client.Init(conn, s.cfg.Marshaler)
 
 	// wait until connection is ready to unlock API mutex
 loop:
@@ -268,7 +271,7 @@ func (s *service) setActiveAndUnlock(svc document.Service) {
 }
 
 func (s *service) lead(ctx context.Context, listener net.Listener) (reconnect bool, err error) {
-	server := rpc.NewServer(document.SyncWithLocker(s.svc, &s.mu))
+	server := rpc.NewServer(document.SyncWithLocker(s.svc, &s.mu), s.cfg.Marshaler)
 	defer listener.Close()
 	defer server.Close()
 

@@ -20,7 +20,7 @@ func tcpListener() (net.Listener, error) {
 func runDatastoreServerOverListener(
 	t *testing.T, other document.Service, listener func() (net.Listener, error),
 ) (net.Addr, func()) {
-	srv := NewServer(other)
+	srv := NewServer(other, bsonMarshaler{})
 	lis, err := listener()
 	require.NoError(t, err)
 
@@ -46,7 +46,7 @@ func testRPCDatastoreOverListener(t *testing.T, listener func() (net.Listener, e
 		addr, teardown := runDatastoreServerOverListener(t, cache, listener)
 		teardowns = append(teardowns, teardown)
 
-		store, err := NewClient(addr, grpc.WithInsecure())
+		store, err := NewClient(addr, bsonMarshaler{}, grpc.WithInsecure())
 		require.NoError(t, err)
 
 		return store
@@ -143,7 +143,7 @@ func TestRPCInterop(t *testing.T) {
 			addr, teardown := runDatastoreServer(t, cache)
 			teardowns = append(teardowns, teardown)
 
-			store, err := NewClient(addr, grpc.WithInsecure())
+			store, err := NewClient(addr, bsonMarshaler{}, grpc.WithInsecure())
 			require.NoError(t, err)
 
 			return interopHelper{read: cache, write: store}
@@ -156,7 +156,7 @@ func TestRPCInterop(t *testing.T) {
 			addr, teardown := runDatastoreServer(t, cache)
 			teardowns = append(teardowns, teardown)
 
-			store, err := NewClient(addr, grpc.WithInsecure())
+			store, err := NewClient(addr, bsonMarshaler{}, grpc.WithInsecure())
 			require.NoError(t, err)
 
 			return interopHelper{read: store, write: cache}
