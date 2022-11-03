@@ -120,7 +120,7 @@ func (l *ListIterator) Extend(filters []Filter, v []byte) {
 	var proto map[string]interface{}
 	Decode(&proto, v)
 
-	if !matchesAllFilters(proto, filters) {
+	if !matchesAllFiltersBson(proto, filters) {
 		return
 	}
 
@@ -347,7 +347,7 @@ func MatchFilter(proto map[string]interface{}, f Filter) bool {
 	return MatchFilter(m, f)
 }
 
-func matchesAllFilters(proto map[string]interface{}, filters []Filter) bool {
+func matchesAllFiltersBson(proto map[string]interface{}, filters []Filter) bool {
 	for _, f := range filters {
 		// bson decodes struct fields into a map as lower case
 		lower := make([]string, len(f.FieldPath))

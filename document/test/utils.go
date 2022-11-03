@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/retry"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,7 +43,14 @@ func Bob() Segador {
 		withTrait("dob", "1989-11-03"),
 		withTrait("years", float64(30)),
 		withTrait("fancy", true),
-		withTrait("sister", alice.toMap()),
+		withTrait("sister", map[string]interface{}{
+			"Name": "Alice",
+			"Traits": map[string]interface{}{
+				"dob":   "1989-11-03",
+				"years": float64(30),
+				"fancy": false,
+			},
+		}),
 	)
 }
 
@@ -49,15 +58,28 @@ func (s *Segador) reapChains() error {
 	return nil
 }
 
-func (s *Segador) toMap() map[string]interface{} {
+func (s *Segador) assertEqualMap(t *testing.T, svc document.Service, target map[string]interface{}) {
+	// use service to encode so we're testing encoding/decoding from/to map.
+	// otherwise we need to make assumptions about how the fields names are serialized
+	// which greatly defer depending on impls.
+	id := uuid.New().String()
+	ctx := context.Background()
 	res := make(map[string]interface{})
-	res["name"] = s.Name
-	traitsMap := make(map[string]interface{})
-	for k, v := range s.Traits {
-		traitsMap[k] = v
-	}
-	res["traits"] = traitsMap
-	return res
+	err := svc.Create(ctx, id, s)
+	require.NoError(t, err)
+	err = svc.Get(ctx, id, &res)
+	require.NoError(t, err)
+	delete(res, document.DefaultCreatedAtField)
+	delete(res, document.DefaultUpdatedAtField)
+	delete(res, strings.ToLower(document.DefaultCreatedAtField))
+	delete(res, strings.ToLower(document.DefaultUpdatedAtField))
+
+	delete(target, document.DefaultCreatedAtField)
+	delete(target, document.DefaultUpdatedAtField)
+	delete(target, strings.ToLower(document.DefaultCreatedAtField))
+	delete(target, strings.ToLower(document.DefaultUpdatedAtField))
+
+	assert.EqualValues(t, res, target)
 }
 
 type segadorOpt func(*Segador) *Segador
@@ -301,9 +323,7 @@ func testDatastoreGet(t *testing.T, serviceFactory FnServiceFactory) {
 		err = s.Get(ctx, myID, &myBob)
 		require.NoError(t, err)
 
-		delete(myBob, document.DefaultCreatedAtField)
-		delete(myBob, document.DefaultUpdatedAtField)
-		assert.EqualValues(t, bob.toMap(), myBob)
+		bob.assertEqualMap(t, s, myBob)
 	})
 }
 
@@ -333,14 +353,14 @@ func testDatastoreDelete(t *testing.T, serviceFactory FnServiceFactory) {
 
 func updateName(newName string) document.Update {
 	return document.Update{
-		FieldPath: []string{"name"},
+		FieldPath: []string{"Name"},
 		Value:     newName,
 	}
 }
 
 func updateTrait(k string, v interface{}) document.Update {
 	return document.Update{
-		FieldPath: []string{"traits", k},
+		FieldPath: []string{"Traits", k},
 		Value:     v,
 	}
 }
@@ -425,7 +445,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 		require.NotNil(t, bro)
 
 		require.Equal(t, reflect.Map, reflect.ValueOf(bro).Kind())
-		assert.EqualValues(t, bob.toMap(), bro.(map[string]interface{}))
+		bob.assertEqualMap(t, s, bro.(map[string]interface{}))
 	})
 
 	t.Run("Update DOES NOT update a nested document field that does not exist", func(t *testing.T) {
@@ -597,9 +617,7 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 		err = it.NextTo(&myBob)
 		require.NoError(t, err)
 
-		delete(myBob, document.DefaultCreatedAtField)
-		delete(myBob, document.DefaultUpdatedAtField)
-		assert.EqualValues(t, bob.toMap(), myBob)
+		bob.assertEqualMap(t, s, myBob)
 		assert.NoError(t, it.Close())
 	})
 
@@ -727,14 +745,14 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 
 func traitFilter(field string, value interface{}, op document.Op) document.Filter {
 	return document.Filter{Field: document.Field{
-		FieldPath: []string{"traits", field},
+		FieldPath: []string{"Traits", field},
 		Value:     value,
 	}, Op: op}
 }
 
 func nameFilter(value string, op document.Op) document.Filter {
 	return document.Filter{Field: document.Field{
-		FieldPath: []string{"name"},
+		FieldPath: []string{"Name"},
 		Value:     value,
 	}, Op: op}
 }
@@ -763,7 +781,7 @@ func TestDocumentService(t *testing.T, serviceFactory FnServiceFactory) {
 				var myBob Segador
 				_ = s.Create(ctx, myID, bob)
 				_ = s.Get(ctx, myID, &myBob)
-				_ = s.Update(ctx, myID, []document.Update{{FieldPath: []string{"name"}, Value: "value"}})
+				_ = s.Update(ctx, myID, []document.Update{{FieldPath: []string{"Name"}, Value: "value"}})
 				_ = s.Delete(ctx, myID)
 				it, err := s.List(ctx, nil)
 				if err == nil {
