@@ -220,6 +220,8 @@ func convertError(err error) error {
 	switch status.Code(err) {
 	case codes.NotFound:
 		err = document.ErrNotFound
+	case codes.FailedPrecondition:
+		err = document.ErrPreconditionFailed
 	case codes.AlreadyExists:
 		err = document.ErrAlreadyExists
 	}
