@@ -99,7 +99,7 @@ func (c *inMemoryService) Update(
 		return err
 	}
 
-	err = UpdateProto(updates, proto, preconds...)
+	err = UpdateProto(true, updates, proto, preconds...)
 	if err != nil {
 		return err
 	}

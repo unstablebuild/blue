@@ -152,7 +152,7 @@ func (s *Store) Update(
 			return err
 		}
 
-		err = document.UpdateProto(updates, doc, preconds...)
+		err = document.UpdateProto(true, updates, doc, preconds...)
 		if err != nil {
 			return err
 		}

@@ -130,19 +130,22 @@ func (l *ListIterator) Extend(filters []Filter, v []byte) {
 }
 
 // UpdateProto updates proto with the given slice of updates.
-func UpdateProto(updates []Update,
+func UpdateProto(lowerCase bool, updates []Update,
 	proto map[string]interface{}, preconds ...Precondition) error {
 	for _, cond := range preconds {
 		if len(cond.FieldPath) == 0 {
 			panic("empty field path")
 		}
 
-		lower := make([]string, len(cond.FieldPath))
-		for i, comp := range cond.FieldPath {
-			lower[i] = strings.ToLower(comp)
+		fieldPath := cond.FieldPath
+		if lowerCase {
+			fieldPath = make([]string, len(cond.FieldPath))
+			for i, comp := range cond.FieldPath {
+				fieldPath[i] = strings.ToLower(comp)
+			}
 		}
 
-		if !precondField(proto, Precondition{FieldPath: lower, Value: cond.Value}) {
+		if !precondField(proto, Precondition{FieldPath: fieldPath, Value: cond.Value}) {
 			return ErrPreconditionFailed
 		}
 	}
@@ -156,16 +159,23 @@ func UpdateProto(updates []Update,
 		}
 
 		// bson decodes struct fields into a map as lower case
-		lower := make([]string, len(update.FieldPath))
-		for i, comp := range update.FieldPath {
-			lower[i] = strings.ToLower(comp)
+		fieldPath := update.FieldPath
+		if lowerCase {
+			fieldPath = make([]string, len(update.FieldPath))
+			for i, comp := range update.FieldPath {
+				fieldPath[i] = strings.ToLower(comp)
+			}
 		}
 
-		updateField(proto, Update{FieldPath: lower, Value: update.Value})
+		updateField(proto, Update{FieldPath: fieldPath, Value: update.Value})
 	}
 
+	updatedAtField := DefaultUpdatedAtField
+	if lowerCase {
+		updatedAtField = strings.ToLower(updatedAtField)
+	}
 	updateField(proto, Update{
-		FieldPath: []string{strings.ToLower(DefaultUpdatedAtField)},
+		FieldPath: []string{updatedAtField},
 		Value:     time.Now(),
 	})
 
