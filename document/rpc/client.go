@@ -14,14 +14,15 @@ import (
 )
 
 type Client struct {
-	cc grpc.ClientConnInterface
-	pb proto.DocumentStoreClient
+	marshaler Marshaler
+	cc        grpc.ClientConnInterface
+	pb        proto.DocumentStoreClient
 }
 
 // NewClient returns a grpc-based client that satisfies Service
 // by relaying operations to remote datastore server. See NewServer
 // for more details.
-func NewClient(addr net.Addr, opts ...grpc.DialOption) (document.Service, error) {
+func NewClient(addr net.Addr, m Marshaler, opts ...grpc.DialOption) (document.Service, error) {
 	opts = append(opts, grpc.WithDialer(
 		func(_ string, _ time.Duration) (net.Conn, error) {
 			conn, err := net.Dial(addr.Network(), addr.String())
@@ -41,31 +42,20 @@ func NewClient(addr net.Addr, opts ...grpc.DialOption) (document.Service, error)
 	}
 
 	ret := new(Client)
-	ret.Init(cc)
+	ret.Init(cc, m)
 	return ret, nil
 }
 
-func (c *Client) Init(cc grpc.ClientConnInterface) {
+func (c *Client) Init(cc grpc.ClientConnInterface, m Marshaler) {
 	c.cc = cc
 	c.pb = proto.NewDocumentStoreClient(cc)
-}
-
-func encodeCreateData(data interface{}) ([]byte, error) {
-	if data == nil {
-		panic("invalid nil data argument to Create/Set")
-	}
-	data, err := document.DerefCreateValue(reflect.ValueOf(data))
-	if err != nil {
-		return nil, err
-	}
-
-	return document.Encode(data, true), nil
+	c.marshaler = m
 }
 
 func (c *Client) Create(
 	ctx context.Context, ID string, data interface{},
 ) error {
-	bytes, err := encodeCreateData(data)
+	bytes, err := c.encodeCreateData(data)
 	if err != nil {
 		return err
 	}
@@ -84,7 +74,7 @@ func (c *Client) Create(
 func (c *Client) Set(
 	ctx context.Context, ID string, data interface{},
 ) error {
-	bytes, err := encodeCreateData(data)
+	bytes, err := c.encodeCreateData(data)
 	if err != nil {
 		return err
 	}
@@ -104,8 +94,8 @@ func (c *Client) Update(
 	if len(updates) == 0 {
 		panic("invalid arguments: empty updates")
 	}
-	u := makeProtoUpdates(updates)
-	p := makeProtoPreconditions(preconds...)
+	u := makeProtoUpdates(c.marshaler, updates)
+	p := makeProtoPreconditions(c.marshaler, preconds...)
 	req := proto.UpdateDocumentRequest{Id: ID, Updates: u, Preconditions: p}
 	res, err := c.pb.Update(ctx, &req)
 	if err != nil {
@@ -133,7 +123,7 @@ func (c *Client) Get(
 	}
 
 	data := res.GetData()
-	err = document.SafeDecode(doc, data)
+	err = safeDecode(c.marshaler, doc, data)
 	if err != nil {
 		return err
 	}
@@ -152,9 +142,10 @@ func (c *Client) Delete(
 }
 
 type rpcIterator struct {
-	cc      proto.DocumentStore_ListClient
-	next    *proto.ListDocumentResponse
-	nextErr error
+	marshaler Marshaler
+	cc        proto.DocumentStore_ListClient
+	next      *proto.ListDocumentResponse
+	nextErr   error
 }
 
 func (l *rpcIterator) HasNext() bool {
@@ -184,78 +175,17 @@ func (l *rpcIterator) NextTo(doc interface{}) error {
 		return errors.New(errStr)
 	}
 
-	return document.SafeDecode(doc, next.GetData())
+	return safeDecode(l.marshaler, doc, next.GetData())
 }
 
 func (l *rpcIterator) Close() error {
 	return l.cc.CloseSend()
 }
 
-func makeModelFilter(
-	slab map[string]interface{}, pf *proto.ListDocumentRequest_Filter,
-) (document.Filter, error) {
-	err := document.SafeDecode(&slab, pf.Data)
-	if err != nil {
-		return document.Filter{}, err
-	}
-
-	return document.Filter{
-		Field: document.Field{
-			FieldPath: pf.FieldPath,
-			Value:     slab["."],
-		},
-		Op: document.Op(pf.Operation),
-	}, nil
-}
-
-func makeModelFilters(filters []*proto.ListDocumentRequest_Filter) (
-	ret []document.Filter, err error,
-) {
-	var slab map[string]interface{}
-	for _, pf := range filters {
-		var f document.Filter
-		f, err = makeModelFilter(slab, pf)
-		if err != nil {
-			return
-		}
-		ret = append(ret, f)
-	}
-	return
-}
-
-func makeProtoFilter(
-	slab map[string]interface{}, f document.Filter,
-) proto.ListDocumentRequest_Filter {
-	// this is just atrick to be able to re-use encode functionality
-	slab["."] = f.Value
-
-	return proto.ListDocumentRequest_Filter{
-		FieldPath: f.FieldPath,
-		Data:      document.Encode(slab, false),
-		Operation: string(f.Op),
-	}
-}
-
-func makeProtoFilters(filters []document.Filter) (
-	ret []*proto.ListDocumentRequest_Filter, err error,
-) {
-	slab := make(map[string]interface{})
-	for _, f := range filters {
-		if len(f.Field.FieldPath) == 0 {
-			panic("invalid List filter: empty zero-valued FieldPath")
-		}
-		pf := new(proto.ListDocumentRequest_Filter)
-		*pf = makeProtoFilter(slab, f)
-
-		ret = append(ret, pf)
-	}
-	return
-}
-
 func (c *Client) List(
 	ctx context.Context, filters []document.Filter,
 ) (document.Iterator, error) {
-	f, err := makeProtoFilters(filters)
+	f, err := makeProtoFilters(c.marshaler, filters)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +194,7 @@ func (c *Client) List(
 	if err != nil {
 		return nil, err
 	}
-	return &rpcIterator{cc: res}, nil
+	return &rpcIterator{marshaler: c.marshaler, cc: res}, nil
 }
 
 func (c *Client) Close() error {
@@ -272,4 +202,16 @@ func (c *Client) Close() error {
 		return closer.Close()
 	}
 	return nil
+}
+
+func (c *Client) encodeCreateData(data interface{}) ([]byte, error) {
+	if data == nil {
+		panic("invalid nil data argument to Create/Set")
+	}
+	data, err := document.DerefCreateValue(reflect.ValueOf(data))
+	if err != nil {
+		return nil, err
+	}
+
+	return encode(c.marshaler, data, true), nil
 }

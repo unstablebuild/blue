@@ -12,25 +12,27 @@ import (
 
 // Server wraps another document.Service and exposes it through a grpc interface.
 type Server struct {
-	other document.Service
-	srv   *grpc.Server
+	marshaler Marshaler
+	other     document.Service
+	srv       *grpc.Server
 	proto.UnimplementedDocumentStoreServer
 }
 
 // NewServer allocates storage for a new Server and initializes it.
-func NewServer(other document.Service, opt ...grpc.ServerOption) *Server {
+func NewServer(other document.Service, m Marshaler, opt ...grpc.ServerOption) *Server {
 	ret := new(Server)
 
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(opt...)
 	proto.RegisterDocumentStoreServer(srv, ret)
 
-	ret.Init(other, srv)
+	ret.Init(other, m, srv)
 	return ret
 }
 
-func (s *Server) Init(other document.Service, srv *grpc.Server) {
+func (s *Server) Init(other document.Service, m Marshaler, srv *grpc.Server) {
 	s.srv = srv
 	s.other = other
+	s.marshaler = m
 }
 
 // Create satisfies proto.DocumentStoreServer
@@ -41,7 +43,7 @@ func (s *Server) Create(
 	data := req.GetData()
 
 	var pr map[string]interface{}
-	err = document.SafeDecode(&pr, data)
+	err = safeDecode(s.marshaler, &pr, data)
 	if err != nil {
 		return
 	}
@@ -69,7 +71,7 @@ func (s *Server) Set(
 	data := req.GetData()
 
 	var pr map[string]interface{}
-	err = document.SafeDecode(&pr, data)
+	err = safeDecode(s.marshaler, &pr, data)
 	if err != nil {
 		return
 	}
@@ -83,11 +85,11 @@ func (s *Server) Set(
 func (s *Server) Update(
 	ctx context.Context, req *proto.UpdateDocumentRequest,
 ) (*proto.UpdateDocumentResponse, error) {
-	updates, err := makeModelUpdates(req.GetUpdates())
+	updates, err := makeModelUpdates(s.marshaler, req.GetUpdates())
 	if err != nil {
 		return nil, err
 	}
-	preconds, err := makeModelPreconds(req.GetPreconditions())
+	preconds, err := makeModelPreconds(s.marshaler, req.GetPreconditions())
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +129,7 @@ func (s *Server) Get(
 	}
 
 	res = &proto.GetDocumentResponse{
-		Data: document.Encode(pr, false),
+		Data: encode(s.marshaler, pr, false),
 	}
 	return
 }
@@ -143,7 +145,7 @@ func (s *Server) Delete(
 	return
 }
 
-func streamList(list proto.DocumentStore_ListServer, it document.Iterator) (err error) {
+func (s *Server) streamList(list proto.DocumentStore_ListServer, it document.Iterator) (err error) {
 	for it.HasNext() {
 		var pr map[string]interface{}
 		err = it.NextTo(&pr)
@@ -151,7 +153,7 @@ func streamList(list proto.DocumentStore_ListServer, it document.Iterator) (err 
 		if err != nil {
 			res.Error = err.Error()
 		} else {
-			res.Data = document.Encode(pr, false)
+			res.Data = encode(s.marshaler, pr, false)
 		}
 		err = list.SendMsg(&res)
 		if err != nil {
@@ -169,7 +171,7 @@ func (s *Server) List(
 	req *proto.ListDocumentRequest, list proto.DocumentStore_ListServer,
 ) error {
 	ctx := context.Background()
-	filters, err := makeModelFilters(req.GetFilters())
+	filters, err := makeModelFilters(s.marshaler, req.GetFilters())
 	if err != nil {
 		return err
 	}
@@ -182,7 +184,7 @@ func (s *Server) List(
 		return err
 	}
 
-	return streamList(list, it)
+	return s.streamList(list, it)
 }
 
 // Serve accepts incoming connections on the listener lis.

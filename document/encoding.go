@@ -80,6 +80,9 @@ func Decode(rcv interface{}, raw []byte) {
 }
 
 // ListIterator returns an iterator that iterates over docs.
+// It will uson bson to encode and decode the data so
+// it shouldn't be used by a document.Service that doesn't use
+// the suite of Decode/Encode functions in this package.
 func NewListIterator(docs ...interface{}) *ListIterator {
 	iter := &ListIterator{docs: make([][]byte, 0)}
 	for _, data := range docs {

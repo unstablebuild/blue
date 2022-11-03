@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ernestrc/blue/document"
+	"github.com/ernestrc/blue/document/rpc"
 	"github.com/ernestrc/blue/document/test"
 	"github.com/stretchr/testify/require"
 )
@@ -180,6 +181,7 @@ type testStruct struct {
 
 func testConfig() Config {
 	return Config{
+		Marshaler:                      rpc.MarshalerBSON(),
 		TransientFailureRecoverTimeout: 450 * time.Millisecond,
 		MethodRetryCadence:             20 * time.Millisecond,
 		ConnectRetryCadence:            50 * time.Millisecond,
