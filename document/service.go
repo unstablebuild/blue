@@ -54,7 +54,8 @@ type Service interface {
 	//
 	// DefaultUpdatedAtField is automatically updated and clients can consume it
 	// by adding the corresponding property in the document structure.
-	Update(ctx context.Context, ID string, updates []Update) error
+	Update(ctx context.Context, ID string,
+		updates []Update, precond ...Precondition) error
 
 	// Get retrieves the document. If the document does not exist,
 	// it returns a ErrNotFound error.
@@ -118,6 +119,10 @@ type Field struct {
 
 // Update is used to indicate an update operation to a document field.
 type Update Field
+
+// Preconditions are optionally passed to Update to fail
+// if the document state is not expected by the caller.
+type Precondition Field
 
 // Filter is used to construct a filter predicate in a List operation.
 type Filter struct {

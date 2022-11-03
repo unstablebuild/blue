@@ -82,28 +82,32 @@ func (s *Server) Set(
 // Update satisfies proto.DocumentStoreServer
 func (s *Server) Update(
 	ctx context.Context, req *proto.UpdateDocumentRequest,
-) (res *proto.UpdateDocumentResponse, err error) {
-	var updates []document.Update
-	updates, err = makeModelUpdates(req.GetUpdates())
+) (*proto.UpdateDocumentResponse, error) {
+	updates, err := makeModelUpdates(req.GetUpdates())
 	if err != nil {
-		return
+		return nil, err
+	}
+	preconds, err := makeModelPreconds(req.GetPreconditions())
+	if err != nil {
+		return nil, err
 	}
 	// client should panic if no updates are passed
 	// so the following is to avoid potential DOS from a malicious client.
 	if len(updates) == 0 {
 		err = errors.New("invalid request: no paths to update")
-		return
+		return nil, err
 	}
-	err = s.other.Update(ctx, req.GetId(), updates)
+	err = s.other.Update(ctx, req.GetId(), updates, preconds...)
 	if err != nil {
 		if err == document.ErrNotFound {
-			res = &proto.UpdateDocumentResponse{NotFound: true}
-			err = nil
+			return &proto.UpdateDocumentResponse{NotFound: true}, nil
 		}
-		return
+		if err == document.ErrPreconditionFailed {
+			return &proto.UpdateDocumentResponse{PreconditionFailed: true}, nil
+		}
+		return nil, err
 	}
-	res = new(proto.UpdateDocumentResponse)
-	return
+	return new(proto.UpdateDocumentResponse), nil
 }
 
 // Get satisfies proto.DocumentStoreServer

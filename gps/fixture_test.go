@@ -54,6 +54,7 @@ func (s *failingDocService) Set(
 }
 func (s *failingDocService) Update(
 	ctx context.Context, ID string, updates []document.Update,
+	preconds ...document.Precondition,
 ) error {
 	return s.err
 }

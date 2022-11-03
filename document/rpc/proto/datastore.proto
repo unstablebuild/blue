@@ -16,12 +16,13 @@ message SetDocumentRequest {
 message UpdateDocumentRequest {
 	string id = 1;
 
-	message Update {
+	message Field {
 		repeated string field_path = 1;
 		bytes data = 2;
 	}
 
-	repeated Update updates = 2;
+	repeated Field updates = 2;
+	repeated Field preconditions = 3;
 }
 
 message GetDocumentRequest {
@@ -58,6 +59,7 @@ message CreateDocumentResponse {
 }
 message UpdateDocumentResponse {
 	bool not_found = 1;
+	bool precondition_failed = 2;
 }
 
 service DocumentStore {

@@ -106,8 +106,11 @@ func (h interopHelper) Set(ctx context.Context, ID string, doc interface{}) erro
 	return h.write.Set(ctx, ID, doc)
 }
 
-func (h interopHelper) Update(ctx context.Context, ID string, updates []document.Update) error {
-	return h.write.Update(ctx, ID, updates)
+func (h interopHelper) Update(
+	ctx context.Context, ID string, updates []document.Update,
+	preconds ...document.Precondition,
+) error {
+	return h.write.Update(ctx, ID, updates, preconds...)
 }
 
 func (h interopHelper) Get(ctx context.Context, ID string, doc interface{}) error {

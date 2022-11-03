@@ -216,7 +216,10 @@ func (t *testService) Get(ctx context.Context, ID string, doc interface{}) error
 func (t *testService) Create(ctx context.Context, ID string, doc interface{}) error {
 	panic("unimplemented")
 }
-func (t *testService) Update(ctx context.Context, ID string, updates []document.Update) error {
+func (t *testService) Update(
+	ctx context.Context, ID string, updates []document.Update,
+	preconds ...document.Precondition,
+) error {
 	panic("unimplemented")
 }
 

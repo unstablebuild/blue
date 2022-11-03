@@ -87,6 +87,7 @@ func (c *inMemoryService) Get(
 
 func (c *inMemoryService) Update(
 	ctx context.Context, ID string, updates []Update,
+	preconds ...Precondition,
 ) error {
 	if len(updates) == 0 {
 		panic("Update: no paths to update")
@@ -98,7 +99,10 @@ func (c *inMemoryService) Update(
 		return err
 	}
 
-	UpdateProto(updates, proto)
+	err = UpdateProto(updates, proto, preconds...)
+	if err != nil {
+		return err
+	}
 
 	c.m.Lock()
 	defer c.m.Unlock()

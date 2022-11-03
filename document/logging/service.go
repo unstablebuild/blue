@@ -53,11 +53,12 @@ func (s loggingService) Set(
 
 func (s loggingService) Update(
 	ctx context.Context, ID string, updates []document.Update,
+	preconds ...document.Precondition,
 ) error {
 	traceID, ctx := trace.FromContextOrNew(ctx)
 	attemptAt := logging.LogAttempt(traceID, s.serviceName+".Update")
 
-	err := s.svc.Update(ctx, ID, updates)
+	err := s.svc.Update(ctx, ID, updates, preconds...)
 	logging.LogResult(err, attemptAt, traceID, s.serviceName+".Update")
 
 	return err
