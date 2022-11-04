@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/ernestrc/blue/document"
+	"github.com/ernestrc/blue/encoding"
+	"github.com/ernestrc/blue/encoding/bson"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -28,8 +30,9 @@ var (
 // It additionally provides a method to efficiently delete all
 // contents of a collection: DeleteAll.
 type Store struct {
-	db     *bolt.DB
-	collID []byte
+	marshaler encoding.Marshaler
+	db        *bolt.DB
+	collID    []byte
 }
 
 // New allocates store for a new Store and initializes it with the given
@@ -59,7 +62,7 @@ func New(dbPath string, collectionID string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	s.marshaler = bson.Marshaler()
 	return s, nil
 }
 
@@ -89,7 +92,7 @@ func (s *Store) getData(ID string, doc interface{}) (
 			return document.ErrNotFound
 		}
 
-		return document.SafeDecode(doc, data)
+		return document.SafeDecode(s.marshaler, doc, data)
 	})
 }
 
@@ -125,7 +128,7 @@ func (s *Store) set(
 		if errAlreadyExists && len(b.Get(key)) != 0 {
 			return document.ErrAlreadyExists
 		}
-		return b.Put(key, document.Encode(doc, true))
+		return b.Put(key, document.Encode(s.marshaler, doc, true))
 	})
 }
 
@@ -147,17 +150,17 @@ func (s *Store) Update(
 		}
 
 		var doc map[string]interface{}
-		err := document.SafeDecode(&doc, data)
+		err := document.SafeDecode(s.marshaler, &doc, data)
 		if err != nil {
 			return err
 		}
 
-		err = document.UpdateProto(true, updates, doc, preconds...)
+		err = document.UpdateProto(bson.Marshaler(), updates, doc, preconds...)
 		if err != nil {
 			return err
 		}
 
-		return b.Put([]byte(ID), document.Encode(doc, false))
+		return b.Put([]byte(ID), document.Encode(s.marshaler, doc, false))
 	})
 }
 
@@ -182,7 +185,7 @@ func (s *Store) Delete(
 func (s *Store) List(ctx context.Context, filters []document.Filter) (
 	document.Iterator, error,
 ) {
-	iter := document.NewListIterator()
+	iter := document.NewListIterator(s.marshaler)
 	err := s.db.View(func(tx *bolt.Tx) error {
 		// NOTE: this buffers all results in memory.
 		// We should paginate results by creating a cursor

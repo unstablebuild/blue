@@ -28,3 +28,7 @@ func (j tomlMarshaler) Unmarshal(data []byte, to interface{}) error {
 	_, err := toml.NewDecoder(bytes.NewReader(data)).Decode(to)
 	return err
 }
+
+func (j tomlMarshaler) DefaultLowerCase() bool {
+	return false
+}

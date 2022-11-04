@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ernestrc/blue/encoding"
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/mgo.v2/bson"
 )
 
 // UpdateUpdatedAtField updates the default UpdatedAt field in the given document.
@@ -38,14 +38,14 @@ func UpdateCreatedAtField(doc interface{}) interface{} {
 
 // Encode encodes doc into a reversible format (via Decode)
 // and returns the data in bytes.
-func Encode(doc interface{}, addCreatedAt bool) []byte {
+func Encode(m encoding.Marshaler, doc interface{}, addCreatedAt bool) []byte {
 	if addCreatedAt {
 		doc = UpdateCreatedAtField(doc)
 	} else {
 		doc = UpdateUpdatedAtField(doc)
 	}
 
-	b, err := bson.Marshal(doc)
+	b, err := m.Marshal(doc)
 	if err != nil {
 		panic(err)
 	}
@@ -54,11 +54,11 @@ func Encode(doc interface{}, addCreatedAt bool) []byte {
 
 // SafeDecode checks if the given interface would be decoded by Decode
 // and decodes it or otherwise returns an error.
-func SafeDecode(rcv interface{}, raw []byte) error {
+func SafeDecode(m encoding.Marshaler, rcv interface{}, raw []byte) error {
 	if !IsEncodeable(rcv) {
 		return errors.New("receiver is not a pointer and not a map or is nil")
 	}
-	Decode(rcv, raw)
+	Decode(m, rcv, raw)
 	return nil
 }
 
@@ -72,8 +72,8 @@ func IsEncodeable(doc interface{}) bool {
 // Decode decotes raw into rcv and panics if there's an error decoding.
 // Use SafeDecode if you are not sure if the structure rcv is safe to be
 // encoded/decoded.
-func Decode(rcv interface{}, raw []byte) {
-	err := bson.Unmarshal(raw, rcv)
+func Decode(m encoding.Marshaler, rcv interface{}, raw []byte) {
+	err := m.Unmarshal(raw, rcv)
 	if err != nil {
 		panic(err)
 	}
@@ -83,10 +83,10 @@ func Decode(rcv interface{}, raw []byte) {
 // It will uson bson to encode and decode the data so
 // it shouldn't be used by a document.Service that doesn't use
 // the suite of Decode/Encode functions in this package.
-func NewListIterator(docs ...interface{}) *ListIterator {
-	iter := &ListIterator{docs: make([][]byte, 0)}
+func NewListIterator(m encoding.Marshaler, docs ...interface{}) *ListIterator {
+	iter := &ListIterator{marshaler: m, docs: make([][]byte, 0)}
 	for _, data := range docs {
-		iter.Extend(nil, Encode(data, false))
+		iter.Extend(nil, Encode(m, data, false))
 	}
 	return iter
 }
@@ -94,7 +94,8 @@ func NewListIterator(docs ...interface{}) *ListIterator {
 // ListIterator satisfies an Iterator with an inmemory
 // list of documents.
 type ListIterator struct {
-	docs [][]byte
+	marshaler encoding.Marshaler
+	docs      [][]byte
 }
 
 // HasNext returns false if this Iterator is empty.
@@ -105,7 +106,7 @@ func (l *ListIterator) HasNext() bool {
 // NextTo decodes the next chunk of data into doc or returns
 // an error if there was a decoding issue.
 func (l *ListIterator) NextTo(doc interface{}) error {
-	if err := SafeDecode(doc, l.docs[0]); err != nil {
+	if err := SafeDecode(l.marshaler, doc, l.docs[0]); err != nil {
 		return err
 	}
 	l.docs = l.docs[1:]
@@ -121,9 +122,9 @@ func (l *ListIterator) Close() error {
 // structure satisfies all filters.
 func (l *ListIterator) Extend(filters []Filter, v []byte) {
 	var proto map[string]interface{}
-	Decode(&proto, v)
+	Decode(l.marshaler, &proto, v)
 
-	if !matchesAllFiltersBson(proto, filters) {
+	if !MatchesAllFilters(l.marshaler, proto, filters) {
 		return
 	}
 
@@ -133,8 +134,9 @@ func (l *ListIterator) Extend(filters []Filter, v []byte) {
 }
 
 // UpdateProto updates proto with the given slice of updates.
-func UpdateProto(lowerCase bool, updates []Update,
+func UpdateProto(m encoding.Marshaler, updates []Update,
 	proto map[string]interface{}, preconds ...Precondition) error {
+	lowerCase := m.DefaultLowerCase()
 	for _, cond := range preconds {
 		if len(cond.FieldPath) == 0 {
 			panic("empty field path")
@@ -161,7 +163,6 @@ func UpdateProto(lowerCase bool, updates []Update,
 			continue
 		}
 
-		// bson decodes struct fields into a map as lower case
 		fieldPath := update.FieldPath
 		if lowerCase {
 			fieldPath = make([]string, len(update.FieldPath))
@@ -350,14 +351,18 @@ func MatchFilter(proto map[string]interface{}, f Filter) bool {
 	return MatchFilter(m, f)
 }
 
-func matchesAllFiltersBson(proto map[string]interface{}, filters []Filter) bool {
+func MatchesAllFilters(
+	m encoding.Marshaler, proto map[string]interface{},
+	filters []Filter,
+) bool {
 	for _, f := range filters {
-		// bson decodes struct fields into a map as lower case
-		lower := make([]string, len(f.FieldPath))
-		for i, comp := range f.FieldPath {
-			lower[i] = strings.ToLower(comp)
+		if m.DefaultLowerCase() {
+			fieldPath := make([]string, len(f.FieldPath))
+			for i, comp := range f.FieldPath {
+				fieldPath[i] = strings.ToLower(comp)
+			}
+			f.FieldPath = fieldPath
 		}
-		f.FieldPath = lower
 
 		if !MatchFilter(proto, f) {
 			return false

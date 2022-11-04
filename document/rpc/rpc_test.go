@@ -11,7 +11,6 @@ import (
 	documenttest "github.com/ernestrc/blue/document/test"
 	"github.com/ernestrc/blue/encoding"
 	"github.com/ernestrc/blue/encoding/bson"
-	"github.com/ernestrc/blue/encoding/json"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -141,13 +140,12 @@ func TestRPCInterop(t *testing.T) {
 	teardowns := []func(){}
 
 	for name, marshaler := range map[string]encoding.Marshaler{
-		"json": json.Marshaler(),
 		"bson": bson.Marshaler(),
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Run("writes by client/server are readable by underlying service", func(t *testing.T) {
 				documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
-					cache := document.NewInMemoryService()
+					cache := document.NewInMemoryServiceWithMarshaler(marshaler)
 					addr, teardown := runDatastoreServer(t, cache)
 					teardowns = append(teardowns, teardown)
 
@@ -160,7 +158,7 @@ func TestRPCInterop(t *testing.T) {
 
 			t.Run("writes by underlying service are readable by client/server", func(t *testing.T) {
 				documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
-					cache := document.NewInMemoryService()
+					cache := document.NewInMemoryServiceWithMarshaler(marshaler)
 					addr, teardown := runDatastoreServer(t, cache)
 					teardowns = append(teardowns, teardown)
 

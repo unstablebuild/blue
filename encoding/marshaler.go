@@ -5,4 +5,7 @@ package encoding
 type Marshaler interface {
 	Marshal(in interface{}) ([]byte, error)
 	Unmarshal(data []byte, to interface{}) error
+	// DefaultLowerCase should return true if by default
+	// struct fields are encoded in lower case.
+	DefaultLowerCase() bool
 }
