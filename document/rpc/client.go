@@ -124,7 +124,7 @@ func (c *Client) Get(
 	}
 
 	data := res.GetData()
-	err = safeDecode(c.marshaler, doc, data)
+	err = document.SafeDecode(c.marshaler, doc, data)
 	if err != nil {
 		return err
 	}
@@ -176,7 +176,7 @@ func (l *rpcIterator) NextTo(doc interface{}) error {
 		return errors.New(errStr)
 	}
 
-	return safeDecode(l.marshaler, doc, next.GetData())
+	return document.SafeDecode(l.marshaler, doc, next.GetData())
 }
 
 func (l *rpcIterator) Close() error {
@@ -214,5 +214,5 @@ func (c *Client) encodeCreateData(data interface{}) ([]byte, error) {
 		return nil, err
 	}
 
-	return encode(c.marshaler, data, true), nil
+	return document.Encode(c.marshaler, data, true), nil
 }

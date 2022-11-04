@@ -575,7 +575,7 @@ func assertListResults(
 	for it.HasNext() {
 		var s Segador
 		err := it.NextTo(&s)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		i++
 	}
 	assert.Equal(t, expectedLen, i)
