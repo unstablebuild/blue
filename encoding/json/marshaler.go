@@ -21,3 +21,7 @@ func (j jsonMarshaler) Marshal(in interface{}) ([]byte, error) {
 func (j jsonMarshaler) Unmarshal(data []byte, to interface{}) error {
 	return json.Unmarshal(data, to)
 }
+
+func (j jsonMarshaler) DefaultLowerCase() bool {
+	return false
+}

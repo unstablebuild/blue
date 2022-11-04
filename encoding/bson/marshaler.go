@@ -20,3 +20,7 @@ func (b bsonMarshaler) Marshal(doc interface{}) ([]byte, error) {
 func (b bsonMarshaler) Unmarshal(data []byte, doc interface{}) error {
 	return bson.Unmarshal(data, doc)
 }
+
+func (j bsonMarshaler) DefaultLowerCase() bool {
+	return true
+}

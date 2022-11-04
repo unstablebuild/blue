@@ -4,19 +4,28 @@ import (
 	"context"
 	"reflect"
 	"sync"
+
+	"github.com/ernestrc/blue/encoding"
+	"github.com/ernestrc/blue/encoding/bson"
 )
 
 type inMemoryService struct {
-	m       sync.Locker
-	storage map[string][]byte
+	marshaler encoding.Marshaler
+	m         sync.Locker
+	storage   map[string][]byte
 }
 
 // NewInMemoryService returns an instance of Service backed
 // by an in-memory map.
 func NewInMemoryService() DroppableService {
+	return NewInMemoryServiceWithMarshaler(bson.Marshaler())
+}
+
+func NewInMemoryServiceWithMarshaler(m encoding.Marshaler) DroppableService {
 	return &inMemoryService{
-		m:       new(sync.Mutex),
-		storage: make(map[string][]byte),
+		marshaler: m,
+		m:         new(sync.Mutex),
+		storage:   make(map[string][]byte),
 	}
 }
 
@@ -53,7 +62,7 @@ func (c *inMemoryService) set(
 			return ErrAlreadyExists
 		}
 	}
-	c.storage[ID] = Encode(data, true)
+	c.storage[ID] = Encode(c.marshaler, data, true)
 	return
 }
 
@@ -72,7 +81,7 @@ func (c *inMemoryService) getValue(ID string, doc interface{}) (
 		return
 	}
 
-	return SafeDecode(doc, raw)
+	return SafeDecode(c.marshaler, doc, raw)
 }
 
 func (c *inMemoryService) Get(
@@ -99,7 +108,7 @@ func (c *inMemoryService) Update(
 		return err
 	}
 
-	err = UpdateProto(true, updates, proto, preconds...)
+	err = UpdateProto(c.marshaler, updates, proto, preconds...)
 	if err != nil {
 		return err
 	}
@@ -107,7 +116,7 @@ func (c *inMemoryService) Update(
 	c.m.Lock()
 	defer c.m.Unlock()
 
-	c.storage[ID] = Encode(proto, false)
+	c.storage[ID] = Encode(c.marshaler, proto, false)
 
 	return nil
 }
@@ -127,7 +136,7 @@ func (c *inMemoryService) Delete(ctx context.Context, ID string) error {
 func (c *inMemoryService) List(ctx context.Context, filters []Filter) (
 	it Iterator, err error,
 ) {
-	iter := NewListIterator()
+	iter := NewListIterator(c.marshaler)
 
 	c.m.Lock()
 	defer c.m.Unlock()

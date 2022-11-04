@@ -20,3 +20,7 @@ func (j yamlMarshaler) Marshal(in interface{}) ([]byte, error) {
 func (j yamlMarshaler) Unmarshal(data []byte, to interface{}) error {
 	return yaml.Unmarshal(data, to)
 }
+
+func (j yamlMarshaler) DefaultLowerCase() bool {
+	return true
+}
