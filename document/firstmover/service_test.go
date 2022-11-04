@@ -111,6 +111,7 @@ func TestServiceIntegration(t *testing.T) {
 				_ = instance.Get(context.Background(), f.Name(), nil)
 				instances = append(instances, instance)
 			}
+			ret := instances[len(instances)-1]
 
 			go func() {
 				for i := 0; i < n-1; i++ { // always leave one fully operating
@@ -128,7 +129,7 @@ func TestServiceIntegration(t *testing.T) {
 					}
 				}
 			}()
-			return instances[len(instances)-1]
+			return ret
 		})
 	})
 }
