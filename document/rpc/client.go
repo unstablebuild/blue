@@ -10,11 +10,12 @@ import (
 
 	"github.com/ernestrc/blue/document"
 	proto "github.com/ernestrc/blue/document/rpc/proto"
+	"github.com/ernestrc/blue/encoding"
 	"google.golang.org/grpc"
 )
 
 type Client struct {
-	marshaler Marshaler
+	marshaler encoding.Marshaler
 	cc        grpc.ClientConnInterface
 	pb        proto.DocumentStoreClient
 }
@@ -22,7 +23,7 @@ type Client struct {
 // NewClient returns a grpc-based client that satisfies Service
 // by relaying operations to remote datastore server. See NewServer
 // for more details.
-func NewClient(addr net.Addr, m Marshaler, opts ...grpc.DialOption) (document.Service, error) {
+func NewClient(addr net.Addr, m encoding.Marshaler, opts ...grpc.DialOption) (document.Service, error) {
 	opts = append(opts, grpc.WithDialer(
 		func(_ string, _ time.Duration) (net.Conn, error) {
 			conn, err := net.Dial(addr.Network(), addr.String())
@@ -46,7 +47,7 @@ func NewClient(addr net.Addr, m Marshaler, opts ...grpc.DialOption) (document.Se
 	return ret, nil
 }
 
-func (c *Client) Init(cc grpc.ClientConnInterface, m Marshaler) {
+func (c *Client) Init(cc grpc.ClientConnInterface, m encoding.Marshaler) {
 	c.cc = cc
 	c.pb = proto.NewDocumentStoreClient(cc)
 	c.marshaler = m
@@ -142,7 +143,7 @@ func (c *Client) Delete(
 }
 
 type rpcIterator struct {
-	marshaler Marshaler
+	marshaler encoding.Marshaler
 	cc        proto.DocumentStore_ListClient
 	next      *proto.ListDocumentResponse
 	nextErr   error

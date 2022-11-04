@@ -265,7 +265,7 @@ func precondField(proto map[string]interface{}, cond Precondition) bool {
 
 	m, ok := field.(map[string]interface{})
 	if !ok {
-		panic("corrupted record: field node is not a map")
+		return false
 	}
 
 	cond.FieldPath = cond.FieldPath[1:]
@@ -289,7 +289,7 @@ func updateField(proto map[string]interface{}, update Update) {
 
 	m, ok := field.(map[string]interface{})
 	if !ok {
-		panic("corrupted record: field node is not a map")
+		return
 	}
 
 	update.FieldPath = update.FieldPath[1:]

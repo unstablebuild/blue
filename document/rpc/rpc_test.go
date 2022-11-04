@@ -9,6 +9,9 @@ import (
 
 	"github.com/ernestrc/blue/document"
 	documenttest "github.com/ernestrc/blue/document/test"
+	"github.com/ernestrc/blue/encoding"
+	"github.com/ernestrc/blue/encoding/bson"
+	"github.com/ernestrc/blue/encoding/json"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -20,7 +23,7 @@ func tcpListener() (net.Listener, error) {
 func runDatastoreServerOverListener(
 	t *testing.T, other document.Service, listener func() (net.Listener, error),
 ) (net.Addr, func()) {
-	srv := NewServer(other, bsonMarshaler{})
+	srv := NewServer(other, bson.Marshaler())
 	lis, err := listener()
 	require.NoError(t, err)
 
@@ -46,7 +49,7 @@ func testRPCDatastoreOverListener(t *testing.T, listener func() (net.Listener, e
 		addr, teardown := runDatastoreServerOverListener(t, cache, listener)
 		teardowns = append(teardowns, teardown)
 
-		store, err := NewClient(addr, bsonMarshaler{}, grpc.WithInsecure())
+		store, err := NewClient(addr, bson.Marshaler(), grpc.WithInsecure())
 		require.NoError(t, err)
 
 		return store
@@ -137,7 +140,10 @@ func (h interopHelper) Close() error {
 func TestRPCInterop(t *testing.T) {
 	teardowns := []func(){}
 
-	for name, marshaler := range map[string]Marshaler{"json": MarshalerJSON(), "bson": MarshalerBSON()} {
+	for name, marshaler := range map[string]encoding.Marshaler{
+		"json": json.Marshaler(),
+		"bson": bson.Marshaler(),
+	} {
 		t.Run(name, func(t *testing.T) {
 			t.Run("writes by client/server are readable by underlying service", func(t *testing.T) {
 				documenttest.TestDocumentService(t, func(t *testing.T) document.Service {

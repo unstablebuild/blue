@@ -1,10 +1,13 @@
-package rpc
+package bson
 
-import "gopkg.in/mgo.v2/bson"
+import (
+	"github.com/ernestrc/blue/encoding"
+	"gopkg.in/mgo.v2/bson"
+)
 
-// MarshalerBSON returns a Marshaler backed by gopkg.in/mgo.v2/bson binary
+// Marshaler returns a Marshaler backed by gopkg.in/mgo.v2/bson binary
 // marshaler implementation.
-func MarshalerBSON() Marshaler {
+func Marshaler() encoding.Marshaler {
 	return bsonMarshaler{}
 }
 
