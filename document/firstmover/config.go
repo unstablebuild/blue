@@ -3,12 +3,13 @@ package firstmover
 import (
 	"time"
 
-	"github.com/ernestrc/blue/document/rpc"
+	"github.com/ernestrc/blue/encoding"
+	"github.com/ernestrc/blue/encoding/bson"
 )
 
 // Config holds configuration for a firstmover document.Service
 type Config struct {
-	Marshaler rpc.Marshaler
+	Marshaler encoding.Marshaler
 	// TransientFailureRecoverTimeout is the timeout until a grpc
 	// transient connection failure is considered unrecoverable..
 	TransientFailureRecoverTimeout time.Duration
@@ -32,7 +33,7 @@ type Config struct {
 // DefaultConfig returns a sane Config.
 func DefaultConfig() Config {
 	return Config{
-		Marshaler:                      rpc.MarshalerBSON(),
+		Marshaler:                      bson.Marshaler(),
 		TransientFailureRecoverTimeout: 1 * time.Second,
 		MethodRetryCadence:             20 * time.Millisecond,
 		ConnectRetryCadence:            50 * time.Millisecond,

@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	cloud.google.com/go/firestore v1.2.0
+	github.com/BurntSushi/toml v1.2.0
 	github.com/adrianmo/go-nmea v1.2.0
 	github.com/cheggaaa/pb/v3 v3.0.8
 	github.com/ernestrc/go-multierror v1.1.2
@@ -32,7 +33,6 @@ require (
 
 require (
 	cloud.google.com/go v0.63.0 // indirect
-	github.com/BurntSushi/toml v1.2.0 // indirect
 	github.com/VividCortex/ewma v1.1.1 // indirect
 	github.com/cilium/ebpf v0.7.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

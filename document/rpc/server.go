@@ -7,19 +7,20 @@ import (
 
 	"github.com/ernestrc/blue/document"
 	proto "github.com/ernestrc/blue/document/rpc/proto"
+	"github.com/ernestrc/blue/encoding"
 	"google.golang.org/grpc"
 )
 
 // Server wraps another document.Service and exposes it through a grpc interface.
 type Server struct {
-	marshaler Marshaler
+	marshaler encoding.Marshaler
 	other     document.Service
 	srv       *grpc.Server
 	proto.UnimplementedDocumentStoreServer
 }
 
 // NewServer allocates storage for a new Server and initializes it.
-func NewServer(other document.Service, m Marshaler, opt ...grpc.ServerOption) *Server {
+func NewServer(other document.Service, m encoding.Marshaler, opt ...grpc.ServerOption) *Server {
 	ret := new(Server)
 
 	srv := grpc.NewServer(opt...)
@@ -29,7 +30,7 @@ func NewServer(other document.Service, m Marshaler, opt ...grpc.ServerOption) *S
 	return ret
 }
 
-func (s *Server) Init(other document.Service, m Marshaler, srv *grpc.Server) {
+func (s *Server) Init(other document.Service, m encoding.Marshaler, srv *grpc.Server) {
 	s.srv = srv
 	s.other = other
 	s.marshaler = m

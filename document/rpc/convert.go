@@ -3,9 +3,10 @@ package rpc
 import (
 	"github.com/ernestrc/blue/document"
 	proto "github.com/ernestrc/blue/document/rpc/proto"
+	"github.com/ernestrc/blue/encoding"
 )
 
-func makeProtoUpdates(m Marshaler, updates []document.Update) (
+func makeProtoUpdates(m encoding.Marshaler, updates []document.Update) (
 	ret []*proto.UpdateDocumentRequest_Field,
 ) {
 	slab := make(map[string]interface{})
@@ -22,7 +23,7 @@ func makeProtoUpdates(m Marshaler, updates []document.Update) (
 	return
 }
 
-func makeProtoPreconditions(m Marshaler, preconds ...document.Precondition) (
+func makeProtoPreconditions(m encoding.Marshaler, preconds ...document.Precondition) (
 	ret []*proto.UpdateDocumentRequest_Field,
 ) {
 	slab := make(map[string]interface{})
@@ -38,7 +39,7 @@ func makeProtoPreconditions(m Marshaler, preconds ...document.Precondition) (
 	return
 }
 
-func makeModelUpdates(m Marshaler, updates []*proto.UpdateDocumentRequest_Field) (
+func makeModelUpdates(m encoding.Marshaler, updates []*proto.UpdateDocumentRequest_Field) (
 	ret []document.Update, err error,
 ) {
 	fields, err := makeModelFields(m, updates)
@@ -51,7 +52,7 @@ func makeModelUpdates(m Marshaler, updates []*proto.UpdateDocumentRequest_Field)
 	return
 }
 
-func makeModelPreconds(m Marshaler, preconds []*proto.UpdateDocumentRequest_Field) (
+func makeModelPreconds(m encoding.Marshaler, preconds []*proto.UpdateDocumentRequest_Field) (
 	ret []document.Precondition, err error,
 ) {
 	fields, err := makeModelFields(m, preconds)
@@ -64,7 +65,7 @@ func makeModelPreconds(m Marshaler, preconds []*proto.UpdateDocumentRequest_Fiel
 	return
 }
 
-func makeModelFields(m Marshaler, fields []*proto.UpdateDocumentRequest_Field) (
+func makeModelFields(m encoding.Marshaler, fields []*proto.UpdateDocumentRequest_Field) (
 	ret []document.Field, err error,
 ) {
 	var slab map[string]interface{}
@@ -88,7 +89,7 @@ func makeModelFields(m Marshaler, fields []*proto.UpdateDocumentRequest_Field) (
 	return
 }
 
-func makeModelFilter(m Marshaler,
+func makeModelFilter(m encoding.Marshaler,
 	slab map[string]interface{}, pf *proto.ListDocumentRequest_Filter,
 ) (document.Filter, error) {
 	err := safeDecode(m, &slab, pf.Data)
@@ -105,7 +106,7 @@ func makeModelFilter(m Marshaler,
 	}, nil
 }
 
-func makeModelFilters(m Marshaler, filters []*proto.ListDocumentRequest_Filter) (
+func makeModelFilters(m encoding.Marshaler, filters []*proto.ListDocumentRequest_Filter) (
 	ret []document.Filter, err error,
 ) {
 	var slab map[string]interface{}
@@ -121,7 +122,7 @@ func makeModelFilters(m Marshaler, filters []*proto.ListDocumentRequest_Filter) 
 }
 
 func makeProtoFilter(
-	m Marshaler,
+	m encoding.Marshaler,
 	slab map[string]interface{}, f document.Filter,
 ) proto.ListDocumentRequest_Filter {
 	// this is just atrick to be able to re-use encode functionality
@@ -134,7 +135,7 @@ func makeProtoFilter(
 	}
 }
 
-func makeProtoFilters(m Marshaler, filters []document.Filter) (
+func makeProtoFilters(m encoding.Marshaler, filters []document.Filter) (
 	ret []*proto.ListDocumentRequest_Filter, err error,
 ) {
 	slab := make(map[string]interface{})
