@@ -44,7 +44,7 @@ func (s *Server) Create(
 	data := req.GetData()
 
 	var pr map[string]interface{}
-	err = safeDecode(s.marshaler, &pr, data)
+	err = document.SafeDecode(s.marshaler, &pr, data)
 	if err != nil {
 		return
 	}
@@ -72,7 +72,7 @@ func (s *Server) Set(
 	data := req.GetData()
 
 	var pr map[string]interface{}
-	err = safeDecode(s.marshaler, &pr, data)
+	err = document.SafeDecode(s.marshaler, &pr, data)
 	if err != nil {
 		return
 	}
@@ -130,7 +130,7 @@ func (s *Server) Get(
 	}
 
 	res = &proto.GetDocumentResponse{
-		Data: encode(s.marshaler, pr, false),
+		Data: document.Encode(s.marshaler, pr, false),
 	}
 	return
 }
@@ -154,7 +154,7 @@ func (s *Server) streamList(list proto.DocumentStore_ListServer, it document.Ite
 		if err != nil {
 			res.Error = err.Error()
 		} else {
-			res.Data = encode(s.marshaler, pr, false)
+			res.Data = document.Encode(s.marshaler, pr, false)
 		}
 		err = list.SendMsg(&res)
 		if err != nil {

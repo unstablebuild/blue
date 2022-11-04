@@ -6,6 +6,9 @@ import (
 	"github.com/ernestrc/blue/encoding"
 )
 
+// this is just a trick to be able to re-use encode functionality
+const protoFieldKey = "X"
+
 func makeProtoUpdates(m encoding.Marshaler, updates []document.Update) (
 	ret []*proto.UpdateDocumentRequest_Field,
 ) {
@@ -92,7 +95,7 @@ func makeModelFields(m encoding.Marshaler, fields []*proto.UpdateDocumentRequest
 func makeModelFilter(m encoding.Marshaler,
 	slab map[string]interface{}, pf *proto.ListDocumentRequest_Filter,
 ) (document.Filter, error) {
-	err := safeDecode(m, &slab, pf.Data)
+	err := document.SafeDecode(m, &slab, pf.Data)
 	if err != nil {
 		return document.Filter{}, err
 	}
@@ -100,7 +103,7 @@ func makeModelFilter(m encoding.Marshaler,
 	return document.Filter{
 		Field: document.Field{
 			FieldPath: pf.FieldPath,
-			Value:     slab["."],
+			Value:     slab[protoFieldKey],
 		},
 		Op: document.Op(pf.Operation),
 	}, nil
@@ -125,12 +128,11 @@ func makeProtoFilter(
 	m encoding.Marshaler,
 	slab map[string]interface{}, f document.Filter,
 ) proto.ListDocumentRequest_Filter {
-	// this is just atrick to be able to re-use encode functionality
-	slab["."] = f.Value
+	slab[protoFieldKey] = f.Value
 
 	return proto.ListDocumentRequest_Filter{
 		FieldPath: f.FieldPath,
-		Data:      encode(m, slab, false),
+		Data:      document.Encode(m, slab, false),
 		Operation: string(f.Op),
 	}
 }

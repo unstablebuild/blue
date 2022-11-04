@@ -10,38 +10,54 @@ import (
 
 	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/document/test"
+	"github.com/ernestrc/blue/encoding"
 	"github.com/ernestrc/blue/encoding/bson"
+	"github.com/ernestrc/blue/encoding/json"
+	"github.com/ernestrc/blue/encoding/toml"
 	"github.com/stretchr/testify/require"
 )
 
 func TestServiceIntegration(t *testing.T) {
-	t.Run("single instance assumes leader", func(t *testing.T) {
-		test.TestDocumentService(t, func(t *testing.T) document.Service {
-			f, err := ioutil.TempFile("", "")
-			require.NoError(t, err)
-			require.NoError(t, f.Close())
-			require.NoError(t, os.Remove(f.Name()))
-			svc := document.NewInMemoryService()
-			return New(svc, f.Name(), testConfig())
-		})
-	})
+	for name, _marshaler := range map[string]encoding.Marshaler{
+		"bson": bson.Marshaler(),
+		"json": json.Marshaler(),
+		"toml": toml.Marshaler(),
+	} {
+		marshaler := _marshaler
+		t.Run(name, func(t *testing.T) {
+			t.Run("single instance assumes leader", func(t *testing.T) {
+				test.TestDocumentService(t, func(t *testing.T) document.Service {
+					f, err := ioutil.TempFile("", "")
+					require.NoError(t, err)
+					require.NoError(t, f.Close())
+					require.NoError(t, os.Remove(f.Name()))
+					cfg := testConfig()
+					cfg.Marshaler = marshaler
+					svc := document.NewInMemoryServiceWithMarshaler(marshaler)
+					return New(svc, f.Name(), cfg)
+				})
+			})
 
-	t.Run("two instances, seconds assumes follower", func(t *testing.T) {
-		test.TestDocumentService(t, func(t *testing.T) document.Service {
-			f, err := ioutil.TempFile("", "")
-			require.NoError(t, err)
-			require.NoError(t, f.Close())
-			require.NoError(t, os.Remove(f.Name()))
-			svc := document.NewInMemoryService()
-			leader := New(svc, f.Name(), testConfig())
-			// ensure leader is available
-			var temp testStruct
-			err = leader.Get(context.Background(), f.Name(), &temp)
-			require.Equal(t, document.ErrNotFound, err)
-			follower := New(svc, f.Name(), testConfig())
-			return follower
+			t.Run("two instances, seconds assumes follower", func(t *testing.T) {
+				test.TestDocumentService(t, func(t *testing.T) document.Service {
+					f, err := ioutil.TempFile("", "")
+					require.NoError(t, err)
+					require.NoError(t, f.Close())
+					require.NoError(t, os.Remove(f.Name()))
+					svc := document.NewInMemoryServiceWithMarshaler(marshaler)
+					cfg := testConfig()
+					cfg.Marshaler = marshaler
+					leader := New(svc, f.Name(), cfg)
+					// ensure leader is available
+					var temp testStruct
+					err = leader.Get(context.Background(), f.Name(), &temp)
+					require.Equal(t, document.ErrNotFound, err)
+					follower := New(svc, f.Name(), cfg)
+					return follower
+				})
+			})
 		})
-	})
+	}
 
 	t.Run("single instance eventually assumes leader if leader is non-responsive (lock leaked)", func(t *testing.T) {
 		test.TestDocumentService(t, func(t *testing.T) document.Service {

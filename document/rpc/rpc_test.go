@@ -11,6 +11,8 @@ import (
 	documenttest "github.com/ernestrc/blue/document/test"
 	"github.com/ernestrc/blue/encoding"
 	"github.com/ernestrc/blue/encoding/bson"
+	"github.com/ernestrc/blue/encoding/json"
+	"github.com/ernestrc/blue/encoding/toml"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -20,9 +22,11 @@ func tcpListener() (net.Listener, error) {
 }
 
 func runDatastoreServerOverListener(
-	t *testing.T, other document.Service, listener func() (net.Listener, error),
+	t *testing.T, other document.Service,
+	listener func() (net.Listener, error),
+	marshaler encoding.Marshaler,
 ) (net.Addr, func()) {
-	srv := NewServer(other, bson.Marshaler())
+	srv := NewServer(other, marshaler)
 	lis, err := listener()
 	require.NoError(t, err)
 
@@ -36,19 +40,25 @@ func runDatastoreServerOverListener(
 	return lis.Addr(), teardown
 }
 
-func runDatastoreServer(t *testing.T, other document.Service) (net.Addr, func()) {
-	return runDatastoreServerOverListener(t, other, tcpListener)
+func runDatastoreServer(
+	t *testing.T, other document.Service, marshaler encoding.Marshaler,
+) (net.Addr, func()) {
+	return runDatastoreServerOverListener(t, other, tcpListener, marshaler)
 }
 
-func testRPCDatastoreOverListener(t *testing.T, listener func() (net.Listener, error)) {
+func testRPCDatastoreOverListener(
+	t *testing.T, listener func() (net.Listener, error),
+	marshaler encoding.Marshaler,
+) {
 	teardowns := []func(){}
 
 	documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
-		cache := document.NewInMemoryService()
-		addr, teardown := runDatastoreServerOverListener(t, cache, listener)
+		cache := document.NewInMemoryServiceWithMarshaler(marshaler)
+		addr, teardown := runDatastoreServerOverListener(t, cache,
+			listener, marshaler)
 		teardowns = append(teardowns, teardown)
 
-		store, err := NewClient(addr, bson.Marshaler(), grpc.WithInsecure())
+		store, err := NewClient(addr, marshaler, grpc.WithInsecure())
 		require.NoError(t, err)
 
 		return store
@@ -87,11 +97,11 @@ func tempUnixListener() (net.Listener, error) {
 
 func TestRPC(t *testing.T) {
 	t.Run("over TCP", func(t *testing.T) {
-		testRPCDatastoreOverListener(t, tcpListener)
+		testRPCDatastoreOverListener(t, tcpListener, bson.Marshaler())
 	})
 
 	t.Run("over Unix domain sockets", func(t *testing.T) {
-		testRPCDatastoreOverListener(t, tempUnixListener)
+		testRPCDatastoreOverListener(t, tempUnixListener, bson.Marshaler())
 	})
 }
 
@@ -139,14 +149,22 @@ func (h interopHelper) Close() error {
 func TestRPCInterop(t *testing.T) {
 	teardowns := []func(){}
 
+	t.Cleanup(func() {
+		for _, fn := range teardowns {
+			fn()
+		}
+	})
+
 	for name, marshaler := range map[string]encoding.Marshaler{
 		"bson": bson.Marshaler(),
+		"toml": toml.Marshaler(),
+		"json": json.Marshaler(),
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Run("writes by client/server are readable by underlying service", func(t *testing.T) {
 				documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
 					cache := document.NewInMemoryServiceWithMarshaler(marshaler)
-					addr, teardown := runDatastoreServer(t, cache)
+					addr, teardown := runDatastoreServer(t, cache, marshaler)
 					teardowns = append(teardowns, teardown)
 
 					store, err := NewClient(addr, marshaler, grpc.WithInsecure())
@@ -159,7 +177,7 @@ func TestRPCInterop(t *testing.T) {
 			t.Run("writes by underlying service are readable by client/server", func(t *testing.T) {
 				documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
 					cache := document.NewInMemoryServiceWithMarshaler(marshaler)
-					addr, teardown := runDatastoreServer(t, cache)
+					addr, teardown := runDatastoreServer(t, cache, marshaler)
 					teardowns = append(teardowns, teardown)
 
 					store, err := NewClient(addr, marshaler, grpc.WithInsecure())
@@ -169,9 +187,5 @@ func TestRPCInterop(t *testing.T) {
 				})
 			})
 		})
-	}
-
-	for _, fn := range teardowns {
-		fn()
 	}
 }
