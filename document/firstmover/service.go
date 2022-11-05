@@ -33,8 +33,9 @@ type service struct {
 	retryStrategy        retry.Strategy
 	connectRetryStrategy retry.Strategy
 
-	closed bool
-	quitCh chan struct{}
+	closed      bool
+	quitCh      chan struct{}
+	closeWaitCh chan struct{}
 
 	followFailures int
 	active         document.Service
@@ -73,6 +74,7 @@ func (s *service) init(svc document.Service, lockFile string, cfg Config) {
 	s.connectRetryStrategy = retry.SequentialStrategy(cfg.ConnectRetryCadence)
 
 	s.quitCh = make(chan struct{})
+	s.closeWaitCh = make(chan struct{})
 
 	s.mu.Lock()
 	go s.leadOrFollow()
@@ -304,6 +306,7 @@ func (s *service) log(level log.Level, msg string, args ...interface{}) {
 
 func (s *service) leadOrFollow() {
 	quitCh := s.quitCh
+	defer close(s.closeWaitCh)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
@@ -373,5 +376,8 @@ func (s *service) Close() (ret error) {
 	if err := s.svc.Close(); err != nil {
 		ret = multierr.Append(ret, err)
 	}
+	// wait until we're sure that lock has been removed
+	// if we're the leader
+	<-s.closeWaitCh
 	return
 }
