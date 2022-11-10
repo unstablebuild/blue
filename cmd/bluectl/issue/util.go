@@ -9,9 +9,9 @@ import (
 	"os/user"
 
 	"github.com/ernestrc/blue/issue"
+	multierr "github.com/ernestrc/go-multierror"
 	"github.com/ernestrc/sensible/editor"
 	log "github.com/sirupsen/logrus"
-	"go.uber.org/multierr"
 	"gopkg.in/yaml.v3"
 )
 
