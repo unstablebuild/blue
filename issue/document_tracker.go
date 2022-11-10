@@ -54,6 +54,17 @@ func (r ReportDocument) ID() string {
 	return id
 }
 
+func (r ReportDocument) WithID(id string) ReportDocument {
+	// clone metadata
+	m := make(map[string]string)
+	for k, v := range r.Report.Metadata {
+		m[k] = v
+	}
+	r.Report.Metadata = m
+	r.Report.Metadata[ReportMetadataIDField] = id
+	return r
+}
+
 // NewDocumentTracker returns a Tracker backed by a document.Service.
 func NewDocumentTracker(db document.Service) Tracker {
 	ret := new(documentTracker)
