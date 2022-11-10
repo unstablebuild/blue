@@ -15,6 +15,7 @@ type Report struct {
 	Notes     string
 	Build     debug.BuildInfo `yaml:"build,omitempty"`
 	CreatedAt time.Time       `yaml:"created_at,omitempty"`
+	UpdatedAt time.Time       `yaml:"-,omitempty"`
 	Closed    bool            `yaml:"closed,omitempty"`
 	ClosedAt  time.Time       `yaml:"closed_at,omitempty"`
 	Metadata  map[string]string

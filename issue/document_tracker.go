@@ -45,6 +45,10 @@ type ReportDocument struct {
 	Report Report
 }
 
+func (r ReportDocument) UpdatedTime() time.Time {
+	return r.Report.UpdatedAt
+}
+
 func (r ReportDocument) ID() string {
 	id, _ := r.Report.Metadata[ReportMetadataIDField]
 	return id
