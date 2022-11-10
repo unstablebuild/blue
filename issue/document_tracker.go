@@ -39,9 +39,15 @@ type documentTracker struct {
 	lastIssueNumber map[string]int
 }
 
-type reportDocument struct {
+// ReportDocument is the in-storage representation of a Report.
+type ReportDocument struct {
 	Type   documentType
 	Report Report
+}
+
+func (r ReportDocument) ID() string {
+	id, _ := r.Report.Metadata[ReportMetadataIDField]
+	return id
 }
 
 // NewDocumentTracker returns a Tracker backed by a document.Service.
@@ -125,7 +131,7 @@ func (d *documentTracker) CreateReport(
 		report.Metadata[ReportMetadataIDField] = id
 		report.Metadata[reportMetadataIssueNumberField] = strconv.Itoa(lastIssueNumber)
 
-		p := reportDocument{
+		p := ReportDocument{
 			Type:   documentTypeReport,
 			Report: report,
 		}
@@ -148,8 +154,8 @@ func (d *documentTracker) list(ctx context.Context, filters []document.Filter) (
 		return nil, fmt.Errorf("document.Service.List: %v", err)
 	}
 
-	docIter := iterator.FromDocumentIterator[reportDocument](it)
-	reportIter := iterator.Map[reportDocument, Report](docIter, func(doc reportDocument) Report {
+	docIter := iterator.FromDocumentIterator[ReportDocument](it)
+	reportIter := iterator.Map(docIter, func(doc ReportDocument) Report {
 		return doc.Report
 	})
 	return reportIter, nil
@@ -173,7 +179,7 @@ func (d *documentTracker) ListPackageReports(
 }
 
 func (m *documentTracker) GetReport(ctx context.Context, id string) (Report, error) {
-	var doc reportDocument
+	var doc ReportDocument
 	err := m.db.Get(ctx, id, &doc)
 	if err != nil {
 		return Report{}, err
@@ -182,7 +188,7 @@ func (m *documentTracker) GetReport(ctx context.Context, id string) (Report, err
 }
 
 func (d *documentTracker) DeleteReport(ctx context.Context, id string) error {
-	var doc reportDocument
+	var doc ReportDocument
 	err := d.db.Get(ctx, id, &doc)
 	if err != nil {
 		return err
@@ -236,7 +242,7 @@ func (d *documentTracker) UpdateReport(
 	report.Metadata[ReportMetadataIDField] = id
 	report.Metadata[reportMetadataIssueNumberField] = strconv.Itoa(lastIssueNumber)
 
-	p := reportDocument{
+	p := ReportDocument{
 		Type:   documentTypeReport,
 		Report: report,
 	}
