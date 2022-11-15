@@ -44,7 +44,8 @@ func TestSync(t *testing.T) {
 		f, err := Open(client, "a", os.O_RDWR|os.O_CREATE)
 		require.NoError(t, err)
 
-		require.NoError(t, f.Sync())
+		_, err = f.Sync()
+		require.NoError(t, err)
 	})
 
 	t.Run("versions eventual consistency", func(t *testing.T) {
@@ -62,7 +63,8 @@ func TestSync(t *testing.T) {
 		f, err := Open(client, "a", os.O_RDWR|os.O_CREATE)
 		require.NoError(t, err)
 
-		require.NoError(t, f.Sync())
+		_, err = f.Sync()
+		require.NoError(t, err)
 	})
 
 	t.Run("create eventual consistency", func(t *testing.T) {
@@ -83,7 +85,8 @@ func TestSync(t *testing.T) {
 		f, err := Open(client, "a", os.O_RDWR|os.O_CREATE)
 		require.NoError(t, err)
 
-		require.NoError(t, f.Sync())
+		_, err = f.Sync()
+		require.NoError(t, err)
 	})
 
 	t.Run("bubbles up first Put error", func(t *testing.T) {
@@ -100,7 +103,8 @@ func TestSync(t *testing.T) {
 		f, err := Open(client, "a", os.O_RDWR|os.O_CREATE)
 		require.NoError(t, err)
 
-		require.Error(t, f.Sync())
+		_, err = f.Sync()
+		require.Error(t, err)
 	})
 
 	t.Run("bubbles up exhaustion of retries", func(t *testing.T) {
@@ -125,7 +129,8 @@ func TestSync(t *testing.T) {
 		f, err := Open(client, "a", os.O_RDWR|os.O_CREATE)
 		require.NoError(t, err)
 
-		require.Error(t, f.Sync())
+		_, err = f.Sync()
+		require.Error(t, err)
 	})
 }
 
@@ -138,7 +143,10 @@ func TestWrite(t *testing.T) {
 		method func(*File) error
 	}{
 		{"Close", (*File).Close},
-		{"Sync", (*File).Sync},
+		{"Sync", func(f *File) error {
+			_, err := f.Sync()
+			return err
+		}},
 		{"Truncate+Write+Sync", func(f *File) error {
 			if err := f.Truncate(4); err != nil {
 				return err
@@ -146,7 +154,9 @@ func TestWrite(t *testing.T) {
 			if _, err := f.Write([]byte(dummyData[4:])); err != nil {
 				return err
 			}
-			return f.Sync()
+
+			_, err := f.Sync()
+			return err
 		}},
 	}
 
@@ -334,7 +344,8 @@ func expectFileContent(t *testing.T, f *File, client *dummyClient, expected stri
 	require.NoError(t, err)
 	assert.Equal(t, expected, string(got))
 
-	require.NoError(t, f.Sync())
+	_, err = f.Sync()
+	require.NoError(t, err)
 	assert.Equal(t, expected, string(client.putData))
 }
 
