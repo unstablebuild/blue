@@ -195,11 +195,12 @@ func (f *File) writeAt(op errors.Op, b []byte, off int64) (n int, err error) {
 }
 
 // Sync writes the accumulated data to a StoreServer, if this file
-// is writeable, otherwise it will return an error.
-func (f *File) Sync() error {
+// is writeable, otherwise it will return an error. It returns the
+// updated DirEntry for the file.
+func (f *File) Sync() (*upspin.DirEntry, error) {
 	seqID, err := f.sync()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// wait for consistency
@@ -207,7 +208,8 @@ func (f *File) Sync() error {
 	ctx, cancel := context.WithTimeout(ctx, syncTimeout)
 	defer cancel()
 
-	return retry.Retry(ctx, syncStrategy, func(ctx context.Context) (retry bool, err error) {
+	var ret *upspin.DirEntry
+	err = retry.Retry(ctx, syncStrategy, func(ctx context.Context) (retry bool, err error) {
 		entry, err := f.client.Lookup(f.Name(), true)
 		if err != nil {
 			return errors.Is(errors.NotExist, err), err
@@ -215,9 +217,10 @@ func (f *File) Sync() error {
 		if entry.Sequence != seqID {
 			return true, fmt.Errorf("expected sequence ID %d but Lookup found %d", entry.Sequence, seqID)
 		}
+		ret = entry
 		return false, nil
 	})
-
+	return ret, err
 }
 
 func (f *File) sync() (int64, error) {
