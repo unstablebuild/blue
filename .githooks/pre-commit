@@ -1,4 +1,13 @@
-#!/bin/sh
+#!/bin/bash
+
+test_pass() {
+    output=`make test`
+    if test $? -ne 0
+    then
+        output=`echo "$output"`
+        exit 1
+    fi
+}
 
 test_fmt() {
     hash gofmt 2>&- || { echo >&2 "gofmt not in PATH."; exit 1; }
@@ -37,6 +46,7 @@ case "$1" in
         echo "Check Go code formatting"
         ;;
     * )
+        test_pass
         test_fmt
         ;;
 esac
