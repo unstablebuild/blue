@@ -14,6 +14,7 @@ import (
 	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/logging"
 	"github.com/ernestrc/blue/logging/trace"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -124,7 +125,9 @@ func (f *fireStore) Update(
 	if !ok {
 		panic(errors.New("invalid UpdatedAt precondition Value"))
 	}
-	precond := firestore.LastUpdateTime(updatedAt)
+	// timestamps cannot have more than microsecond precision or firestore
+	// throws an InvalidArgument
+	precond := firestore.LastUpdateTime(updatedAt.Truncate(time.Microsecond))
 	_, err = coll.Doc(docID).Update(ctx, fUpdates, precond)
 	if err != nil {
 		err = convertError(err)
@@ -224,6 +227,8 @@ func convertError(err error) error {
 		err = document.ErrPreconditionFailed
 	case codes.AlreadyExists:
 		err = document.ErrAlreadyExists
+	default:
+		logrus.Warningf("err %s: code %v", err, status.Code(err))
 	}
 	return err
 }
