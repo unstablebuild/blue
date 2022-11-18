@@ -45,7 +45,7 @@ func LogAttempt(traceID trace.ID, callType string, extra ...Field) time.Time {
 	for _, f := range extra {
 		fields[f.Key] = f.Value
 	}
-	log.WithFields(fields).Trace("-")
+	log.WithFields(fields).Trace()
 	return time.Now()
 }
 
@@ -85,11 +85,11 @@ func logResultLevel(
 	}
 	if err == nil {
 		fields[KeyStep] = ValueStepSuccess
-		log.WithFields(fields).Log(level, "-")
+		log.WithFields(fields).Log(level)
 	} else {
 		fields[KeyStep] = ValueStepFailure
 		fields[KeyError] = err.Error()
-		log.WithFields(fields).Error("-")
+		log.WithFields(fields).Error()
 	}
 }
 
