@@ -349,6 +349,29 @@ func testDatastoreDelete(t *testing.T, serviceFactory FnServiceFactory) {
 		err = s.Get(ctx, myID, &myBob)
 		require.Equal(t, document.ErrNotFound, err)
 	})
+
+	t.Run("Delete is idempotent", func(t *testing.T) {
+		s := serviceFactory(t)
+		defer s.Close()
+		myID := "get_delete_notfound"
+
+		err := s.Create(ctx, myID, bob)
+		require.NoError(t, err)
+
+		for i := 0; i < 3; i++ {
+			err = s.Delete(ctx, myID)
+			require.NoError(t, err)
+		}
+	})
+
+	t.Run("Delete for a document that doesn't exist returns no error", func(t *testing.T) {
+		s := serviceFactory(t)
+		defer s.Close()
+		myID := "get_delete_notfound"
+
+		err := s.Delete(ctx, myID)
+		require.NoError(t, err)
+	})
 }
 
 func updateName(newName string) document.Update {
