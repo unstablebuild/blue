@@ -150,6 +150,10 @@ type rpcIterator struct {
 }
 
 func (l *rpcIterator) HasNext() bool {
+	if l.next != nil {
+		return true
+	}
+
 	m := new(proto.ListDocumentResponse)
 	l.nextErr = l.cc.RecvMsg(m)
 	if l.nextErr == io.EOF {
