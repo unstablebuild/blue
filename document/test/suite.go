@@ -595,12 +595,19 @@ func assertListResults(
 	t *testing.T, it document.Iterator, expectedLen int,
 ) {
 	var i int
+	if expectedLen > 0 {
+		// HasNext should be idempotent
+		assert.True(t, it.HasNext())
+	}
+
 	for it.HasNext() {
 		var s Segador
 		err := it.NextTo(&s)
 		require.NoError(t, err)
 		i++
 	}
+	assert.False(t, it.HasNext())
+
 	assert.Equal(t, expectedLen, i)
 	assert.NoError(t, it.Close())
 }
