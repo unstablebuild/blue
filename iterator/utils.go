@@ -63,3 +63,24 @@ func (i *sliceIter[T]) Next() (ret T, ok bool) {
 func (i *sliceIter[T]) Err() error {
 	return nil
 }
+
+// IsEmpty consumes the first element in i and returns whether it is empty
+// or not and returns a new iterator that should be used instead of i.
+func IsEmpty[T any](i Iterator[T]) (Iterator[T], bool) {
+	el, ok := i.Next()
+	if !ok {
+		return FromSlice[T](nil), false
+	}
+
+	return FromFunc(func() (T, bool, error) {
+		if ok {
+			ok = false
+			return el, true, nil
+		}
+		iEl, iOk := i.Next()
+		if !iOk {
+			return iEl, false, i.Err()
+		}
+		return iEl, iOk, nil
+	}), true
+}
