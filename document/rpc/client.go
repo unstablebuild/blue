@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"reflect"
+	"runtime"
 	"time"
 
 	"github.com/ernestrc/blue/document"
@@ -43,6 +44,7 @@ func NewClient(addr net.Addr, m encoding.Marshaler, opts ...grpc.DialOption) (do
 	}
 
 	ret := new(Client)
+	runtime.SetFinalizer(ret, func(c *Client) { c.Close() })
 	ret.Init(cc, m)
 	return ret, nil
 }
@@ -63,6 +65,7 @@ func (c *Client) Create(
 
 	req := proto.CreateDocumentRequest{Id: ID, Data: bytes}
 	res, err := c.pb.Create(ctx, &req)
+	runtime.KeepAlive(c)
 	if err != nil {
 		return err
 	}
@@ -82,6 +85,7 @@ func (c *Client) Set(
 
 	req := proto.SetDocumentRequest{Id: ID, Data: bytes}
 	_, err = c.pb.Set(ctx, &req)
+	runtime.KeepAlive(c)
 	if err != nil {
 		return err
 	}
@@ -99,6 +103,7 @@ func (c *Client) Update(
 	p := makeProtoPreconditions(c.marshaler, preconds...)
 	req := proto.UpdateDocumentRequest{Id: ID, Updates: u, Preconditions: p}
 	res, err := c.pb.Update(ctx, &req)
+	runtime.KeepAlive(c)
 	if err != nil {
 		return err
 	}
@@ -116,6 +121,7 @@ func (c *Client) Get(
 ) error {
 	req := proto.GetDocumentRequest{Id: ID}
 	res, err := c.pb.Get(ctx, &req)
+	runtime.KeepAlive(c)
 	if err != nil {
 		return err
 	}
@@ -136,6 +142,7 @@ func (c *Client) Delete(
 ) error {
 	req := proto.DeleteDocumentRequest{Id: ID}
 	_, err := c.pb.Delete(ctx, &req)
+	runtime.KeepAlive(c)
 	if err != nil {
 		return err
 	}
@@ -196,6 +203,7 @@ func (c *Client) List(
 	}
 	req := proto.ListDocumentRequest{Filters: f}
 	res, err := c.pb.List(ctx, &req)
+	runtime.KeepAlive(c)
 	if err != nil {
 		return nil, err
 	}
