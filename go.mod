@@ -18,7 +18,7 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pion/dtls/v2 v2.0.2
 	github.com/sirupsen/logrus v1.6.0
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.8.0
 	github.com/willf/pad v0.0.0-20200313202418-172aa767f2a4
 	go.etcd.io/bbolt v1.3.4
 	go.uber.org/config v1.4.0
@@ -55,6 +55,7 @@ require (
 	github.com/rivo/uniseg v0.4.2 // indirect
 	go.opencensus.io v0.22.4 // indirect
 	go.uber.org/atomic v1.5.0 // indirect
+	go.uber.org/goleak v1.2.0 // indirect
 	go.uber.org/multierr v1.4.0 // indirect
 	go.uber.org/tools v0.0.0-20190618225709-2cfd321de3ee // indirect
 	golang.org/x/arch v0.0.0-20190927153633-4e8777c89be4 // indirect
