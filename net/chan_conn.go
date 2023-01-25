@@ -1,4 +1,4 @@
-package proto
+package net
 
 import (
 	"context"
@@ -11,8 +11,13 @@ import (
 	multierr "github.com/ernestrc/go-multierror"
 )
 
+type Result struct {
+	Data  []byte
+	Error error
+}
+
 // ChanConn returns an implementation of net.Conn backed by two channels.
-func ChanConn(local, remote net.Addr, read <-chan []byte, write chan<- []byte) net.Conn {
+func ChanConn(local, remote net.Addr, read <-chan Result, write chan<- Result) net.Conn {
 	ret := &chanConn{
 		local:            local,
 		remote:           remote,
@@ -27,24 +32,11 @@ func ChanConn(local, remote net.Addr, read <-chan []byte, write chan<- []byte) n
 	return ret
 }
 
-// satisfy net.Error
-var errTimeout error = &timeoutError{}
-
-type timeoutError struct{}
-
-func (e *timeoutError) Error() string   { return "i/o timeout" }
-func (e *timeoutError) Timeout() bool   { return true }
-func (e *timeoutError) Temporary() bool { return true }
-
-func (e *timeoutError) Is(err error) bool {
-	return err == context.DeadlineExceeded
-}
-
 type chanConn struct {
 	mu            sync.Mutex
 	local, remote net.Addr
-	read          <-chan []byte
-	write         chan<- []byte
+	read          <-chan Result
+	write         chan<- Result
 	pending       []byte
 
 	closeCtx       context.Context
@@ -107,21 +99,25 @@ func (c *chanConn) Read(b []byte) (n int, err error) {
 		case <-timer.C:
 			err = &timeoutError{}
 			return
-		case bytes, ok := <-c.read:
+		case result, ok := <-c.read:
 			if !ok {
 				err = io.EOF
+				return
+			}
+			if result.Error != nil {
+				err = result.Error
 				return
 			}
 
 			c.mu.Lock()
 			defer c.mu.Unlock()
 
-			m := copy(b, bytes)
+			m := copy(b, result.Data)
 			n += m
-			if len(bytes) == m {
+			if len(result.Data) == m {
 				return
 			}
-			c.pending = append(c.pending, bytes[m:]...)
+			c.pending = append(c.pending, result.Data[m:]...)
 			return
 		}
 	}
@@ -180,7 +176,7 @@ func (c *chanConn) Write(b []byte) (n int, err error) {
 		case <-timer.C:
 			err = &timeoutError{}
 			return
-		case c.write <- temp:
+		case c.write <- Result{Data: temp}:
 			return len(temp), nil
 		}
 	}
