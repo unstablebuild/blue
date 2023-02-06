@@ -8,7 +8,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/nettest"
@@ -37,17 +36,19 @@ func TestMuxDecode(t *testing.T) {
 	for _, tcase := range tsuite {
 		t.Run(tcase.desc, func(t *testing.T) {
 			var buf bytes.Buffer
-			err := doWriteBuffer(&buf, tcase.payload, tcase.id)
+			err := doWriteWriter(&buf, tcase.payload, tcase.id)
 			require.NoError(t, err)
-			actualID, actualPayload, err := doReadBuffer(&buf)
+			actualID, idOk, actualPayload, err := doReadReader(&buf)
 			require.NoError(t, err)
+			assert.True(t, idOk)
 			assert.Equal(t, tcase.id, actualID)
 			assert.Equal(t, tcase.payload, actualPayload)
 
-			err = doWriteBuffer(&buf, actualPayload, actualID)
+			err = doWriteWriter(&buf, actualPayload, actualID)
 			require.NoError(t, err)
-			actualID, actualPayload, err = doReadBuffer(&buf)
+			actualID, idOk, actualPayload, err = doReadReader(&buf)
 			require.NoError(t, err)
+			assert.True(t, idOk)
 			assert.Equal(t, tcase.id, actualID)
 			assert.Equal(t, tcase.payload, actualPayload)
 		})
@@ -55,7 +56,7 @@ func TestMuxDecode(t *testing.T) {
 }
 
 func TestMuxConn(t *testing.T) {
-	logrus.SetLevel(logrus.TraceLevel)
+	// logrus.SetLevel(logrus.TraceLevel)
 	t.Run("test scaffold", func(t *testing.T) {
 		nettest.TestConn(t, mp)
 	})

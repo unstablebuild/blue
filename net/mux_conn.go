@@ -63,13 +63,13 @@ func (c *MuxConn) Dial(id uint16) (net.Conn, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// NOTE: send a control msg to test if connection exists
+	// TODO: send a control msg to test if connection exists
 	return c.newChanConn(id), nil
 }
 
 func (c *MuxConn) newChanConn(id uint16) net.Conn {
-	read := make(chan Result, readChanBuffer)
-	write := make(chan Result, writeChanBuffer)
+	read := make(chan ReadResult, readChanBuffer)
+	write := make(chan ReadResult, writeChanBuffer)
 	chanConn := ChanConn(c.root.LocalAddr(), c.root.RemoteAddr(), read, write)
 	c.connections[id] = chanConnPair{
 		readCh: read,
@@ -192,12 +192,16 @@ func (c *MuxConn) master() (net.Conn, error) {
 	if c.connections == nil {
 		return nil, net.ErrClosed
 	}
-	return c.connections[masterConnID].conn, nil
+	masterConn, ok := c.connections[masterConnID]
+	if !ok {
+		return nil, net.ErrClosed
+	}
+	return masterConn.conn, nil
 }
 
 type chanConnPair struct {
 	conn   net.Conn
-	readCh chan Result
+	readCh chan ReadResult
 }
 
 type connectionData struct {
@@ -222,7 +226,7 @@ func encodeLen(b []byte, length int32, id uint16) {
 	b[5] = byte(id)
 }
 
-func doWriteBuffer(writer io.Writer, msgBytes []byte, id uint16) (err error) {
+func doWriteWriter(writer io.Writer, msgBytes []byte, id uint16) (err error) {
 	buf := make([]byte, len(msgBytes)+lengthPrefixHeaderLen)
 	encodeLen(buf[:lengthPrefixHeaderLen], int32(len(msgBytes)), id)
 	copy(buf[lengthPrefixHeaderLen:], msgBytes)
@@ -230,7 +234,7 @@ func doWriteBuffer(writer io.Writer, msgBytes []byte, id uint16) (err error) {
 	return
 }
 
-func doReadBuffer(reader io.Reader) (id uint16, buf []byte, err error) {
+func doReadReader(reader io.Reader) (id uint16, idOk bool, buf []byte, err error) {
 	var lengthPrefixBuf [lengthPrefixHeaderLen]byte
 
 	_, err = io.ReadFull(reader, lengthPrefixBuf[:])
@@ -240,6 +244,7 @@ func doReadBuffer(reader io.Reader) (id uint16, buf []byte, err error) {
 
 	var length int32
 	length, id = decodeLen(lengthPrefixBuf[:])
+	idOk = true
 	if length == 0 {
 		return
 	}
@@ -256,15 +261,19 @@ func (c *MuxConn) log(level logrus.Level, msg string, args ...interface{}) {
 
 func (c *MuxConn) read() {
 	for {
-		id, bytes, err := doReadBuffer(c.root)
-		c.log(logrus.TraceLevel, "network connection read %d, %d, %v", id, len(bytes), err)
+		id, idOk, bytes, err := doReadReader(c.root)
 		if err == io.EOF {
 			c.mu.Lock()
-			defer c.mu.Unlock()
 			for _, conn := range c.connections {
 				close(conn.readCh) // force EOF on all connections
 			}
+			c.mu.Unlock()
 			c.log(logrus.DebugLevel, "forced EOF on al muxed connections: %v", err)
+			return
+		}
+
+		if err != nil && !idOk {
+			c.log(logrus.DebugLevel, "unexpected error while reading header %v", err)
 			return
 		}
 
@@ -281,16 +290,21 @@ func (c *MuxConn) read() {
 			continue
 		}
 
-		// trust that the buffered chan has been configured correctly
+		res := ReadResult{Error: err, Data: bytes, Ch: make(chan struct{})}
 		select {
-		case conn.readCh <- Result{Error: err, Data: bytes}:
+		case conn.readCh <- res:
+			select {
+			case <-c.quitChan:
+				return
+			case <-res.Ch:
+			}
 		case <-c.quitChan:
 			return
 		}
 	}
 }
 
-func (c *MuxConn) writeChanConn(id uint16, write <-chan Result) {
+func (c *MuxConn) writeChanConn(id uint16, write <-chan ReadResult) {
 	defer c.wg.Done()
 
 	for {
@@ -304,7 +318,7 @@ func (c *MuxConn) writeChanConn(id uint16, write <-chan Result) {
 					c.log(logrus.ErrorLevel, "marshal control msg error: %v", err)
 					return
 				}
-				err = doWriteBuffer(c.root, data, controlMessageID)
+				err = doWriteWriter(c.root, data, controlMessageID)
 				if err != nil {
 					c.log(logrus.DebugLevel, "write control msg net error: %v", err)
 				}
@@ -312,9 +326,13 @@ func (c *MuxConn) writeChanConn(id uint16, write <-chan Result) {
 			}
 			if result.Error != nil {
 				c.log(logrus.DebugLevel, "channel result error: %v", result.Error)
+				close(result.Ch)
 				continue
 			}
-			err := doWriteBuffer(c.root, result.Data, id)
+			err := doWriteWriter(c.root, result.Data, id)
+			// unblock write such that Close is now safe to call
+			// in that it would follow the same semantics as net.Conn
+			close(result.Ch)
 			if err != nil {
 				c.log(logrus.DebugLevel, "write net error: %v", err)
 			}
@@ -341,14 +359,15 @@ func (c *MuxConn) readControlMessage(bytes []byte) {
 	switch msg.Type {
 	case controlTypeClose:
 		c.mu.Lock()
-		defer c.mu.Unlock()
 		conn, ok := c.connections[msg.ID]
 		if !ok {
+			c.mu.Unlock()
 			c.log(logrus.DebugLevel, "could not find connection with id for closing read %d", msg.ID)
 			return
 		}
 		close(conn.readCh)
 		delete(c.connections, msg.ID)
+		c.mu.Unlock()
 	default:
 		c.log(logrus.DebugLevel, "unknown message type %v", msg.Type)
 	}

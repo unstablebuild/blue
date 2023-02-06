@@ -11,13 +11,18 @@ import (
 	multierr "github.com/ernestrc/go-multierror"
 )
 
-type Result struct {
+// ReadResult represents the result of a net.Conn Read. Ch is used
+// to notify the write-side that it's safe for Write to return
+// by means of closing the channel, so there's no need to drain if
+// an ack is not required.
+type ReadResult struct {
 	Data  []byte
 	Error error
+	Ch    chan struct{}
 }
 
 // ChanConn returns an implementation of net.Conn backed by two channels.
-func ChanConn(local, remote net.Addr, read <-chan Result, write chan<- Result) net.Conn {
+func ChanConn(local, remote net.Addr, read <-chan ReadResult, write chan<- ReadResult) net.Conn {
 	ret := &chanConn{
 		local:            local,
 		remote:           remote,
@@ -35,8 +40,8 @@ func ChanConn(local, remote net.Addr, read <-chan Result, write chan<- Result) n
 type chanConn struct {
 	mu            sync.Mutex
 	local, remote net.Addr
-	read          <-chan Result
-	write         chan<- Result
+	read          <-chan ReadResult
+	write         chan<- ReadResult
 	pending       []byte
 
 	closeCtx       context.Context
@@ -104,6 +109,8 @@ func (c *chanConn) Read(b []byte) (n int, err error) {
 				err = io.EOF
 				return
 			}
+			close(result.Ch)
+
 			if result.Error != nil {
 				err = result.Error
 				return
@@ -148,6 +155,7 @@ func (c *chanConn) Write(b []byte) (n int, err error) {
 
 	timer := time.NewTimer(deadline.Sub(now))
 	for {
+		res := ReadResult{Data: temp, Ch: make(chan struct{})}
 		select {
 		case <-deadlineChan:
 			// if we are closing and at the same time a deadline expires:
@@ -176,8 +184,29 @@ func (c *chanConn) Write(b []byte) (n int, err error) {
 		case <-timer.C:
 			err = &timeoutError{}
 			return
-		case c.write <- Result{Data: temp}:
-			return len(temp), nil
+		case c.write <- res:
+			for {
+				select {
+				case <-res.Ch:
+					return len(temp), nil
+				case <-deadlineChan:
+					c.mu.Lock()
+					deadline = c.writeDeadline
+					deadlineChan = c.newWriteDeadline
+					c.mu.Unlock()
+					if !timer.Stop() {
+						<-timer.C
+					}
+					timer.Reset(deadline.Sub(time.Now()))
+					continue
+				case <-c.closeCtx.Done():
+					err = net.ErrClosed
+					return
+				case <-timer.C:
+					err = &timeoutError{}
+					return
+				}
+			}
 		}
 	}
 }
