@@ -114,6 +114,48 @@ func TestMuxConn(t *testing.T) {
 			return c1, c2, stop, nil
 		})
 	})
+	t.Run("pair of muxed connections over a muxed connection", func(t *testing.T) {
+		nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
+			x1, x2, mpstop, err := mp()
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			m1, err := NewMuxConn(x1, true)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			m2, err := NewMuxConn(x2, false)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			var id uint16
+			id, c1, err = m1.Mux()
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			c2, err = m2.Dial(id)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			m3, err := NewMuxConn(c1, true)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			m4, err := NewMuxConn(c2, false)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			stop = func() {
+				_ = c1.Close()
+				_ = c2.Close()
+				_ = m1.Close()
+				_ = m2.Close()
+				mpstop()
+			}
+			return m3, m4, stop, nil
+		})
+	})
 	/*t.Run("TODO setup test correctly many concurrent muxed connections", func(t *testing.T) {
 		x1, x2, mpstop, err := mp()
 		require.NoError(t, err)
