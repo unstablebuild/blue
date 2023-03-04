@@ -1,7 +1,10 @@
 package net
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net"
@@ -14,19 +17,27 @@ import (
 )
 
 const (
-	readChanBuffer   = 1
-	writeChanBuffer  = 1
-	controlMessageID = 0
-	masterConnID     = 1
+	readChanBuffer          = 1
+	writeChanBuffer         = 1
+	controlMessageID        = 0
+	masterConnID            = 1
+	acceptBackpressureThres = 10
+)
+
+var (
+	_ net.Conn     = (*MuxConn)(nil)
+	_ net.Listener = (*MuxConn)(nil)
 )
 
 // MuxConn implements a net.Conn capable of multiplexing
 // multiple logical connections, bidirectionally, over the
-// same underlying net.Conn.
+// same underlying net.Conn. It also satisfies net.Listener.
 type MuxConn struct {
 	root     net.Conn
 	nextID   uint16
-	quitChan chan struct{}
+	quitCh   chan struct{}
+	acceptCh chan net.Conn
+	dialChs  map[uint16]chan bool
 
 	wg          sync.WaitGroup
 	mu          sync.Mutex
@@ -39,7 +50,9 @@ type MuxConn struct {
 func NewMuxConn(over net.Conn, host bool) (*MuxConn, error) {
 	ret := new(MuxConn)
 	ret.root = over
-	ret.quitChan = make(chan struct{})
+	ret.quitCh = make(chan struct{})
+	ret.acceptCh = make(chan net.Conn, acceptBackpressureThres)
+	ret.dialChs = make(map[uint16]chan bool)
 	ret.connections = make(map[uint16]chanConnPair, 1)
 	// control commands is id 0, master is 1
 	ret.nextID = masterConnID
@@ -56,31 +69,83 @@ func NewMuxConn(over net.Conn, host bool) (*MuxConn, error) {
 	return ret, nil
 }
 
-// Dial dials to the other end of this MuxConn for a connection
-// with the given id. If the connection does not exist, an error
-// is returned on the next call to Read or Write.
-func (c *MuxConn) Dial(id uint16) (net.Conn, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// Dial dials to a MuxConn with the next random available ID
+// using a context.Context that never cancels.
+func (c *MuxConn) Dial() (net.Conn, error) {
+	return c.DialContext(context.Background())
+}
 
-	// TODO: send a control msg to test if connection exists
-	return c.newChanConn(id), nil
+// DialContext dials to a MuxConn with the next random available ID.
+func (c *MuxConn) DialContext(ctx context.Context) (net.Conn, error) {
+	c.mu.Lock()
+	id := c.nextID
+	c.nextID++
+	c.mu.Unlock()
+	return c.DialConnContext(ctx, id)
+}
+
+// DialConn dials to the other end of this MuxConn with a context
+// that never cancels. See DialConnContext for more details.
+func (c *MuxConn) DialConn(id uint16) (net.Conn, error) {
+	return c.DialConnContext(context.Background(), id)
+}
+
+// DialConnContext dials to the other end of this MuxConn for a connection
+// with the given id. If the connection does not exist, an error
+// is returned on the next call to Read or Write. The context is used
+// to timeout the establishment of the connection.
+func (c *MuxConn) DialConnContext(ctx context.Context, id uint16) (net.Conn, error) {
+	c.mu.Lock()
+
+	_, ok := c.connections[id]
+	if ok {
+		// NOTE: we could, but makes some of the read chan logic hard to
+		// reason about.
+		c.mu.Unlock()
+		return nil, errors.New("cannot dial twice to the same connection")
+	}
+
+	ch := make(chan bool)
+	c.dialChs[id] = ch
+	c.mu.Unlock()
+
+	data, err := marshalControlMessage(controlMessage{ID: id, Type: controlTypeInit})
+	if err != nil {
+		return nil, fmt.Errorf("could not marshal init message %v", err)
+	}
+	err = doWriteWriter(c.root, data, controlMessageID)
+	if err != nil {
+		return nil, fmt.Errorf("could not write init control msg: %v", err)
+	}
+
+	select {
+	case ok := <-ch:
+		if !ok {
+			return nil, errors.New("connection was not accepted")
+		}
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return c.newChanConn(id), nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 func (c *MuxConn) newChanConn(id uint16) net.Conn {
 	read := make(chan ReadResult, readChanBuffer)
 	write := make(chan ReadResult, writeChanBuffer)
 	chanConn := ChanConn(c.root.LocalAddr(), c.root.RemoteAddr(), read, write)
-	c.connections[id] = chanConnPair{
+	pai := chanConnPair{
 		readCh: read,
 		conn:   chanConn,
 	}
+	c.connections[id] = pai
 	c.wg.Add(1)
 	go c.writeChanConn(id, write)
 	return chanConn
 }
 
-// Multiplex creates a new net.Conn on this end of the connection
+// Mux creates a new net.Conn on this end of the connection
 // which can be dialed on the other end of the connection via Dial.
 func (c *MuxConn) Mux() (uint16, net.Conn, error) {
 	c.mu.Lock()
@@ -90,6 +155,12 @@ func (c *MuxConn) Mux() (uint16, net.Conn, error) {
 	chanConn := c.newChanConn(id)
 	c.nextID++
 	return id, chanConn, nil
+}
+
+// Accept waits for and returnds the next connection to the listener.
+func (c *MuxConn) Accept() (net.Conn, error) {
+	conn := <-c.acceptCh
+	return conn, nil
 }
 
 // Read satisfies net.Conn.
@@ -118,6 +189,12 @@ func (c *MuxConn) LocalAddr() net.Addr {
 // RemoteAddr returns the remote net.Addr of the underlying connection.
 func (c *MuxConn) RemoteAddr() net.Addr {
 	return c.root.RemoteAddr()
+}
+
+// Addr returns the virtual listener's address. It is equivalent
+// to LocalAddr.
+func (c *MuxConn) Addr() net.Addr {
+	return c.LocalAddr()
 }
 
 // SetDeadline sets the read and write deadlines of this net.Conn.
@@ -181,7 +258,7 @@ func (c *MuxConn) Close() (ret error) {
 	// and force all worker goroutines to exit
 	c.wg.Wait()
 
-	close(c.quitChan)
+	close(c.quitCh)
 
 	return
 }
@@ -217,7 +294,7 @@ func decodeLen(b []byte) (int32, uint16) {
 }
 
 func encodeLen(b []byte, length int32, id uint16) {
-	_ = b[3] // bounds check hint to compiler; see golang.org/issue/14808
+	_ = b[5] // bounds check hint to compiler; see golang.org/issue/14808
 	b[0] = byte(length >> 24 & 0x00FF)
 	b[1] = byte(length >> 16 & 0x00FF)
 	b[2] = byte(length >> 8 & 0x00FF)
@@ -278,7 +355,10 @@ func (c *MuxConn) read() {
 		}
 
 		if err == nil && id == controlMessageID {
-			c.readControlMessage(bytes)
+			err := c.readControlMessage(bytes)
+			if err != nil {
+				c.log(logrus.ErrorLevel, "failed reading control message: %v", err)
+			}
 			continue
 		}
 
@@ -294,11 +374,11 @@ func (c *MuxConn) read() {
 		select {
 		case conn.readCh <- res:
 			select {
-			case <-c.quitChan:
+			case <-c.quitCh:
 				return
 			case <-res.Ch:
 			}
-		case <-c.quitChan:
+		case <-c.quitCh:
 			return
 		}
 	}
@@ -309,7 +389,7 @@ func (c *MuxConn) writeChanConn(id uint16, write <-chan ReadResult) {
 
 	for {
 		select {
-		case <-c.quitChan:
+		case <-c.quitCh:
 			return
 		case result, ok := <-write:
 			if !ok {
@@ -341,6 +421,7 @@ func (c *MuxConn) writeChanConn(id uint16, write <-chan ReadResult) {
 }
 
 func unmarshalControlMessage(b []byte) (ret controlMessage, err error) {
+	// NOTE: should probably use proto or a more efficient protocol.
 	err = json.Unmarshal(b, &ret)
 	return
 }
@@ -349,11 +430,11 @@ func marshalControlMessage(msg controlMessage) ([]byte, error) {
 	return json.Marshal(msg)
 }
 
-func (c *MuxConn) readControlMessage(bytes []byte) {
+func (c *MuxConn) readControlMessage(bytes []byte) error {
 	msg, err := unmarshalControlMessage(bytes)
 	if err != nil {
-		c.log(logrus.DebugLevel, "could not scan control message len(%d): %v", len(bytes), err)
-		return
+		err = fmt.Errorf("could not scan control message len(%d): %v", len(bytes), err)
+		return err
 	}
 
 	switch msg.Type {
@@ -362,24 +443,79 @@ func (c *MuxConn) readControlMessage(bytes []byte) {
 		conn, ok := c.connections[msg.ID]
 		if !ok {
 			c.mu.Unlock()
-			c.log(logrus.DebugLevel, "could not find connection with id for closing read %d", msg.ID)
-			return
+			c.log(logrus.WarnLevel, "could not find connection with id for closing read %d", msg.ID)
+			return nil
 		}
 		close(conn.readCh)
 		delete(c.connections, msg.ID)
 		c.mu.Unlock()
+		return nil
+	case controlTypeInit:
+		c.mu.Lock()
+		conn, ok := c.connections[msg.ID]
+		if !ok {
+			c.newChanConn(msg.ID)
+			conn, _ = c.connections[msg.ID]
+		}
+		c.mu.Unlock()
+
+		select {
+		case c.acceptCh <- conn.conn:
+			data, err := marshalControlMessage(controlMessage{ID: msg.ID, Type: controlTypeInitAck})
+			if err != nil {
+				err = fmt.Errorf("failed to marshal control message: %v", err)
+				return err
+			}
+			err = doWriteWriter(c.root, data, controlMessageID)
+			if err != nil {
+				err = fmt.Errorf("failed accepting init control message: %v", err)
+				return err
+			}
+			return nil
+		default:
+			msg := controlMessage{ID: msg.ID, Type: controlTypeInitAck, Err: true}
+			data, werr := marshalControlMessage(msg)
+			if werr != nil {
+				err = multierr.Append(err, werr)
+				return err
+			}
+			err = doWriteWriter(c.root, data, controlMessageID)
+			if err != nil {
+				err = fmt.Errorf("failed rejecting init control message: %v", err)
+				return err
+			}
+			return nil
+		}
+	case controlTypeInitAck:
+		c.mu.Lock()
+		dialCh, ok := c.dialChs[msg.ID]
+		delete(c.dialChs, msg.ID)
+		c.mu.Unlock()
+		if !ok {
+			c.log(logrus.WarnLevel, "could not find any dial ch waiting for ack: %v", msg.ID)
+			return nil
+		}
+		select {
+		case dialCh <- !msg.Err:
+		default:
+		}
+		return nil
 	default:
-		c.log(logrus.DebugLevel, "unknown message type %v", msg.Type)
+		err = fmt.Errorf("unknown message type %v", msg.Type)
+		return err
 	}
 }
 
 type controlMessage struct {
 	ID   uint16
 	Type controlType
+	Err  bool
 }
 
 type controlType uint8
 
 const (
 	controlTypeClose = iota
+	controlTypeInit
+	controlTypeInitAck
 )

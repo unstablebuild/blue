@@ -7,8 +7,10 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"sync"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/nettest"
@@ -56,8 +58,11 @@ func TestMuxDecode(t *testing.T) {
 	}
 }
 
+func init() {
+	logrus.SetLevel(logrus.TraceLevel)
+}
+
 func TestMuxConn(t *testing.T) {
-	// logrus.SetLevel(logrus.TraceLevel)
 	t.Run("test scaffold", func(t *testing.T) {
 		nettest.TestConn(t, mp)
 	})
@@ -102,7 +107,7 @@ func TestMuxConn(t *testing.T) {
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			c2, err = m2.Dial(id)
+			c2, err = m2.DialConn(id)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -114,6 +119,46 @@ func TestMuxConn(t *testing.T) {
 			return c1, c2, stop, nil
 		})
 	})
+	t.Run("pair of muxed connections via accept", func(t *testing.T) {
+		nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
+			x1, x2, mpstop, err := mp()
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			m1, err := NewMuxConn(x1, true)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			m2, err := NewMuxConn(x2, false)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			var cc1 net.Conn
+			var cerr error
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				cc1, cerr = m1.Accept()
+			}()
+			c2, err = m2.Dial()
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			wg.Wait()
+			if cerr != nil {
+				return nil, nil, nil, cerr
+			}
+			c1 = cc1
+			stop = func() {
+				_ = m1.Close()
+				_ = m2.Close()
+				mpstop()
+			}
+			return c1, c2, stop, nil
+		})
+	})
+
 	t.Run("pair of muxed connections over a muxed connection", func(t *testing.T) {
 		nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
 			x1, x2, mpstop, err := mp()
@@ -133,7 +178,7 @@ func TestMuxConn(t *testing.T) {
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			c2, err = m2.Dial(id)
+			c2, err = m2.DialConn(id)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -156,41 +201,6 @@ func TestMuxConn(t *testing.T) {
 			return m3, m4, stop, nil
 		})
 	})
-	/*t.Run("TODO setup test correctly many concurrent muxed connections", func(t *testing.T) {
-		x1, x2, mpstop, err := mp()
-		require.NoError(t, err)
-		m1, err := NewMuxConn(x1, true)
-		require.NoError(t, err)
-		m2, err := NewMuxConn(x2, false)
-		require.NoError(t, err)
-
-		var wg sync.WaitGroup
-
-		n := 10
-		wg.Add(n)
-		for i := 0; i < n; i++ {
-			go nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
-				var id uint16
-				id, c1, err = m1.Mux()
-				if err != nil {
-					return nil, nil, nil, err
-				}
-				c2, err = m2.Dial(id)
-				if err != nil {
-					return nil, nil, nil, err
-				}
-				stop = func() {
-					defer wg.Done()
-					_ = c1.Close()
-					_ = c2.Close()
-				}
-				return c1, c2, stop, nil
-			})
-		}
-
-		wg.Wait()
-		mpstop()
-	})*/
 }
 
 const (
@@ -275,7 +285,7 @@ func benchmarkMuxConn(b *testing.B, bufferSize int, bench func(*testing.B, net.C
 	if err != nil {
 		b.Errorf("new mux conn 3")
 	}
-	c2, err := m2.Dial(id)
+	c2, err := m2.DialConn(id)
 	if err != nil {
 		b.Errorf("dial conn 3")
 	}
