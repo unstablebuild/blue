@@ -109,7 +109,9 @@ func (c *chanConn) Read(b []byte) (n int, err error) {
 				err = io.EOF
 				return
 			}
-			close(result.Ch)
+			if result.Ch != nil {
+				close(result.Ch)
+			}
 
 			if result.Error != nil {
 				err = result.Error
@@ -185,6 +187,9 @@ func (c *chanConn) Write(b []byte) (n int, err error) {
 			err = &timeoutError{}
 			return
 		case c.write <- res:
+			if res.Ch == nil {
+				return len(temp), nil
+			}
 			for {
 				select {
 				case <-res.Ch:
