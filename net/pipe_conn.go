@@ -33,6 +33,20 @@ func PipeConn(r *os.File, w *os.File) (net.Conn, error) {
 	}, nil
 }
 
+// StdioConn is a specialized version of PipeConn which uses
+// os.Stdin as reader and os.Stdout as the writer.
+//
+// Calls to SetDeadline, SetReadDeadline and SetWriteDeadline
+// always fail, as stdio files are not files created via Pipe.
+func StdioConn() net.Conn {
+	return &pipesConn{
+		local:  newStdinAddr("stdio"),
+		remote: newStdinAddr("stdio"),
+		r:      os.Stdin,
+		w:      os.Stdout,
+	}
+}
+
 type pipesConn struct {
 	r      *os.File
 	w      *os.File
