@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ernestrc/blue/auth"
 	"github.com/ernestrc/blue/cli"
 	"github.com/ernestrc/blue/cmd/bluectl/gps"
 	issueCLI "github.com/ernestrc/blue/cmd/bluectl/issue"
 	packageCLI "github.com/ernestrc/blue/cmd/bluectl/package"
 	releaseCLI "github.com/ernestrc/blue/cmd/bluectl/release"
+	secretCLI "github.com/ernestrc/blue/cmd/bluectl/secret"
 	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/document/firestore"
 	"github.com/ernestrc/blue/issue"
@@ -103,10 +105,19 @@ func (c *blueCtl) initializeCli() error {
 	releaseManager := release.NewDocumentManager(docDB)
 	issueTracker := issue.NewDocumentTracker(trackerDB)
 
+	secretDB, err := firestore.New(config.Auth.ProjectID,
+		config.Secret.Collection, config.Auth.CredentialsFile)
+	if err != nil {
+		return err
+	}
+
+	secretStore := auth.NewStore(secretDB)
+
 	c.cmds = map[string]cli.CLI{
 		"init":     init,
 		"release":  releaseCLI.NewCLI(releaseManager),
 		"package":  packageCLI.NewCLI(releaseManager),
+		"secret":   secretCLI.NewCLI(secretStore),
 		"gps":      gps.NewCLI(),
 		"analysis": newAnalysisCli(),
 		"issue":    issueCLI.NewCLI(issueTracker, Tag),
