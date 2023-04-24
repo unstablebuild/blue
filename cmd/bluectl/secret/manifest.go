@@ -85,6 +85,15 @@ func tempSecret(
 		return ret, fmt.Errorf("read data file: %w", err)
 	}
 
+	if len(secretData) == 0 {
+		return ret, errors.New("empty data file")
+	}
+
+	// remove last EOL
+	if secretData[len(secretData)-1] == '\n' {
+		secretData = secretData[:len(secretData)-1]
+	}
+
 	m := manifest{ID: id, Data: secretData, Metadata: mdata}
 	dataIn, err := yaml.Marshal(&m)
 	if err != nil {
