@@ -10,6 +10,8 @@ release:
   collection: blue-release
 issue:
   collection: blue-issue
+secret:
+  collection: blue-secret
 `
 
 type authConfig struct {
@@ -25,6 +27,7 @@ type cliConfig struct {
 	Auth    authConfig       `yaml:"auth"`
 	Release collectionConfig `yaml:"release"`
 	Issue   collectionConfig `yaml:"issue"`
+	Secret  collectionConfig `yaml:"secret"`
 }
 
 func sourceConfig(overridesConfigPath string) (
@@ -47,6 +50,7 @@ func sourceConfigFromProvider(provider config.Provider) (
 		config.Section{Name: "auth", Target: &c.Auth},
 		config.Section{Name: "release", Target: &c.Release},
 		config.Section{Name: "issue", Target: &c.Issue},
+		config.Section{Name: "secret", Target: &c.Secret},
 	)
 	return
 }
