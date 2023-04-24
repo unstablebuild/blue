@@ -39,7 +39,7 @@ func main() {
 
 	err = cli.Run(context.Background(), ctl)
 	if err != nil {
-		fmt.Fprint(os.Stderr, err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 }
