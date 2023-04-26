@@ -20,18 +20,23 @@ import (
 // forwarding the request to an upstream channel and intercepting an id token to associate
 // with the returned access token. This function returns an error if the given upstreamURL
 // could not be parsed as a url.URL.
-func TokenHTTPHandler(signKey []byte, store *Store) http.Handler {
-	return tokenHandler{store: store, signKey: signKey}
+//
+// It uses the given granter to
+func TokenHTTPHandler[T any](
+	signKey []byte, store *Store, granter Granter[T],
+) http.Handler {
+	return tokenHandler[T]{store: store, signKey: signKey, granter: granter}
 }
 
 const tokenCallType = "RedeemToken"
 
-type tokenHandler struct {
+type tokenHandler[T any] struct {
 	store   *Store
 	signKey []byte
+	granter Granter[T]
 }
 
-func (h tokenHandler) ServeHTTP(
+func (h tokenHandler[T]) ServeHTTP(
 	w http.ResponseWriter, in *http.Request,
 ) {
 	traceID, ctx := trace.FromContextOrNew(in.Context())
@@ -135,7 +140,14 @@ func (h tokenHandler) ServeHTTP(
 	}
 
 	// override access_token with own token, that we can decode and introspect on middleware
-	redeem.AccessToken, err = SignToken(h.signKey, claims.Subject, claims.Email, RoleAdmin)
+	extra, err := h.granter.Grant(ctx, claims.Subject, claims.Email)
+	if err != nil {
+		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
+			response{Message: fmt.Sprintf("grant token: %v", err.Error())})
+		return
+	}
+
+	redeem.AccessToken, err = SignToken(h.signKey, claims.Subject, claims.Email, extra)
 	if err != nil {
 		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
 			response{Message: fmt.Sprintf("sign token: %v", err.Error())})
@@ -151,7 +163,7 @@ func (h tokenHandler) ServeHTTP(
 	writeRedeemResponse(ctx, traceID, attemptAt, w, in, redeem)
 }
 
-func (h tokenHandler) validateSecret(
+func (h tokenHandler[T]) validateSecret(
 	ctx context.Context, traceID trace.ID,
 	attemptAt time.Time, w http.ResponseWriter, in *http.Request,
 	clientID, clientSecret string,

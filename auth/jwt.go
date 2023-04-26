@@ -9,14 +9,7 @@ import (
 	"gopkg.in/go-jose/go-jose.v2/jwt"
 )
 
-// Role defines a user role.
-type Role string
-
 const (
-	RoleFreeAccount Role = "free"
-	RolePaidAccount Role = "superuser"
-	RoleAdmin       Role = "god"
-
 	defaultIssuer         = "hopper-auth"
 	defaultExpireDuration = 24 * time.Hour
 )
@@ -26,19 +19,19 @@ var (
 )
 
 // UserClaims represent the user claims.
-type UserClaims struct {
+type UserClaims[T any] struct {
 	jwt.Claims
 	Email  string `json:"email"`
 	UserID string `json:"user_id"`
-	Role   Role   `json:"role"`
+	Extra  T      `json:"extra"`
 }
 
 // SignToken creates a new JWT token with the given user, email and role claims.
-func SignToken(key []byte, userID, email string, role Role) (string, error) {
-	claims := UserClaims{
+func SignToken[T any](key []byte, userID, email string, extraClaims T) (string, error) {
+	claims := UserClaims[T]{
 		Email:  email,
 		UserID: userID,
-		Role:   role,
+		Extra:  extraClaims,
 		Claims: jwt.Claims{
 			Expiry:    jwt.NewNumericDate(time.Now().Add(defaultExpireDuration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -64,15 +57,16 @@ func SignToken(key []byte, userID, email string, role Role) (string, error) {
 
 // VerifyToken verifies that the given token was signed by key
 // and validates that it was generated using SignToken.
-func VerifyToken(key []byte, token string) (UserClaims, error) {
+func VerifyToken[T any](key []byte, token string) (UserClaims[T], error) {
+
 	tok, err := jwt.ParseSigned(token)
 	if err != nil {
-		return UserClaims{}, fmt.Errorf("parse signed: %v", err)
+		return UserClaims[T]{}, fmt.Errorf("parse signed: %v", err)
 	}
 
-	var cl UserClaims
+	var cl UserClaims[T]
 	if err := tok.Claims(key, &cl); err != nil {
-		return UserClaims{}, fmt.Errorf("verify signature: %v", err)
+		return UserClaims[T]{}, fmt.Errorf("verify signature: %v", err)
 	}
 
 	expected := jwt.Expected{
@@ -80,11 +74,11 @@ func VerifyToken(key []byte, token string) (UserClaims, error) {
 		Audience: defaultAudience,
 	}
 	if err := cl.Validate(expected); err != nil {
-		return UserClaims{}, fmt.Errorf("validate: %v", err)
+		return UserClaims[T]{}, fmt.Errorf("validate: %v", err)
 	}
 
 	if time.Now().After(cl.Expiry.Time()) {
-		return UserClaims{}, fmt.Errorf("token expired on %s", cl.Expiry.Time().String())
+		return UserClaims[T]{}, fmt.Errorf("token expired on %s", cl.Expiry.Time().String())
 	}
 
 	return cl, nil

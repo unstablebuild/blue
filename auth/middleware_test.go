@@ -12,14 +12,14 @@ import (
 var (
 	testSignKey = []byte("1234")
 	validToken  string
-	denyAll     = FuncAuthorizer(func(context.Context, UserClaims, string) error {
+	denyAll     = FuncAuthorizer(func(context.Context, UserClaims[User], string) error {
 		return ErrForbidden
 	})
 )
 
 func init() {
 	var err error
-	validToken, err = SignToken(testSignKey, "1234", "1234", RoleAdmin)
+	validToken, err = SignToken(testSignKey, "1234", "1234", User{Role: "Admin"})
 	if err != nil {
 		panic(err)
 	}
@@ -29,11 +29,11 @@ func TestAuthMiddleware(t *testing.T) {
 	suite := []struct {
 		description         string
 		authorizationHeader string
-		authorizer          Authorizer[UserClaims]
+		authorizer          Authorizer[User]
 		expectCallsNext     bool // or !ExpectForbidden
 	}{
-		{"rejects missing authorization header", "", AuthorizeAll[UserClaims](), false},
-		{"accepts if valid token and authorizer grants", "Bearer " + validToken, AuthorizeAll[UserClaims](), true},
+		{"rejects missing authorization header", "", AuthorizeAll[User](), false},
+		{"accepts if valid token and authorizer grants", "Bearer " + validToken, AuthorizeAll[User](), true},
 		{"reject if valid token and authorizer does not grant", "Bearer " + validToken, denyAll, false},
 		{"reject if invalid token and authorizer does not grant", "", denyAll, false},
 	}
@@ -46,7 +46,7 @@ func TestAuthMiddleware(t *testing.T) {
 				called = true
 				w.WriteHeader(http.StatusOK)
 			})
-			sut := WithMiddleware(handler, MiddlewareConfig{SignKey: testSignKey, Authorizer: test.authorizer})
+			sut := WithMiddleware(handler, MiddlewareConfig[User]{SignKey: testSignKey, Authorizer: test.authorizer})
 
 			req := httptest.NewRequest("GET", "http://localhost:3001/foo", nil)
 			if test.authorizationHeader != "" {

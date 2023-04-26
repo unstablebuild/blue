@@ -30,9 +30,9 @@ func GRPCClientWithOauth2(
 
 // GRPCServerWithOauth2 returns a set of grpc.ServerOption that configure the server
 // to allow oauth2 requests only.
-func GRPCServerWithOauth2(
+func GRPCServerWithOauth2[T any](
 	signKey []byte,
-	authorizer auth.Authorizer[auth.UserClaims],
+	authorizer auth.Authorizer[T],
 	creds credentials.TransportCredentials,
 ) []grpc.ServerOption {
 	return []grpc.ServerOption{
@@ -41,8 +41,8 @@ func GRPCServerWithOauth2(
 	}
 }
 
-func oauth2UnaryInterceptor(
-	signKey []byte, authorizer auth.Authorizer[auth.UserClaims],
+func oauth2UnaryInterceptor[T any](
+	signKey []byte, authorizer auth.Authorizer[T],
 ) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context, req interface{},
@@ -87,7 +87,7 @@ func oauth2UnaryInterceptor(
 		}
 
 		authToken := bearerAuthToken[len(bearerPrefix):]
-		claims, err := auth.VerifyToken(signKey, authToken)
+		claims, err := auth.VerifyToken[T](signKey, authToken)
 		if err != nil {
 			err := status.Errorf(codes.PermissionDenied, err.Error())
 			logging.LogResult(err, attemptAt, traceID, callType, fields...)
