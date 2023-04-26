@@ -30,7 +30,7 @@ const (
 func NewClient(
 	ctx context.Context, conf oauth2.Config,
 	visitURLCallback func(string), successBrowserCopy string,
-) (*http.Client, error) {
+) (*http.Client, oauth2.TokenSource, error) {
 	const oauth2FlowTimeout = 60 * time.Second
 	ctx, cancel := context.WithTimeout(ctx, oauth2FlowTimeout)
 	defer cancel()
@@ -47,7 +47,7 @@ func NewClient(
 
 	readyResult := <-readyChan
 	if readyResult.err != nil {
-		return nil, fmt.Errorf("serve: %v", readyResult.err)
+		return nil, nil, fmt.Errorf("serve: %v", readyResult.err)
 	}
 
 	conf.RedirectURL = fmt.Sprintf("http://localhost:%d/o/oauth2/redirect",
@@ -65,11 +65,12 @@ func NewClient(
 
 	tok, err := conf.Exchange(ctx, result.data)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	refreshCtx := context.Background()
-	return conf.Client(refreshCtx, tok), nil
+	source := conf.TokenSource(refreshCtx, tok)
+	return oauth2.NewClient(refreshCtx, source), source, nil
 }
 
 type response struct {
