@@ -28,6 +28,9 @@ var (
 	validJWKS     = jose.JSONWebKeySet{}
 	rsaPrivateKey *rsa.PrivateKey
 	rsaPublicKey  *rsa.PublicKey
+	grantAll      = FuncGranter(func(context.Context, string, string) (User, error) {
+		return User{Role: "admin"}, nil
+	})
 )
 
 func init() {
@@ -127,7 +130,7 @@ func TestTokenHandler(t *testing.T) {
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 			w := httptest.NewRecorder()
-			sut := TokenHTTPHandler(testSignKey, store)
+			sut := TokenHTTPHandler(testSignKey, store, grantAll)
 			sut.ServeHTTP(w, req)
 
 			resp := w.Result()
@@ -142,7 +145,7 @@ func TestTokenHandler(t *testing.T) {
 			err := json.Unmarshal(body, &actualOut)
 			require.NoError(t, err)
 
-			_, err = VerifyToken(testSignKey, actualOut.AccessToken)
+			_, err = VerifyToken[User](testSignKey, actualOut.AccessToken)
 			require.NoError(t, err)
 
 			assert.NotZero(t, actualOut.ExpiresIn)

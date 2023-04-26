@@ -17,9 +17,11 @@ import (
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
+type user struct{}
+
 var (
 	testSignKey = []byte("1234")
-	denyAll     = auth.FuncAuthorizer(func(context.Context, auth.UserClaims, string) error {
+	denyAll     = auth.FuncAuthorizer(func(context.Context, auth.UserClaims[user], string) error {
 		return auth.ErrForbidden
 	})
 )
@@ -36,11 +38,11 @@ func TestClientServer(t *testing.T) {
 	suite := []struct {
 		description     string
 		setClientOpts   bool
-		authorizer      auth.Authorizer[auth.UserClaims]
+		authorizer      auth.Authorizer[user]
 		expectForbidden bool
 	}{
-		{"rejects missing authorization header", false, auth.AuthorizeAll[auth.UserClaims](), true},
-		{"accepts if valid token and authorizer grants", true, auth.AuthorizeAll[auth.UserClaims](), false},
+		{"rejects missing authorization header", false, auth.AuthorizeAll[user](), true},
+		{"accepts if valid token and authorizer grants", true, auth.AuthorizeAll[user](), false},
 		{"reject if valid token and authorizer does not grant", true, denyAll, true},
 		{"reject if invalid token and authorizer does not grant", false, denyAll, true},
 	}
@@ -66,7 +68,7 @@ func TestClientServer(t *testing.T) {
 			clientCreds, err := credentials.NewClientTLSFromFile(data.Path("x509/ca_cert.pem"), "x.test.example.com")
 			require.NoError(t, err)
 
-			idToken, err := auth.SignToken(testSignKey, "1234", "it@unstable.build", auth.RoleAdmin)
+			idToken, err := auth.SignToken(testSignKey, "1234", "it@unstable.build", user{})
 			require.NoError(t, err)
 			oauthToken := oauth2.Token{AccessToken: idToken}
 

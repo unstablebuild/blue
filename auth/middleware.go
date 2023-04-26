@@ -15,31 +15,31 @@ const (
 )
 
 // MiddlewareConfig configures the middleware returned by WithMiddleware.
-type MiddlewareConfig struct {
+type MiddlewareConfig[T any] struct {
 	SignKey    []byte
-	Authorizer Authorizer[UserClaims]
+	Authorizer Authorizer[T]
 }
 
 // WithMiddleware wraps next with a middleware that expects an oauth2 Authorization
 // header to authenticate and extract user details to authorize a user.
 // The Authorizer set in the config determines to what resources each user role
 // has access to.
-func WithMiddleware(next http.Handler, config MiddlewareConfig) http.Handler {
-	return &middleware{
+func WithMiddleware[T any](next http.Handler, config MiddlewareConfig[T]) http.Handler {
+	return &middleware[T]{
 		signKey:    config.SignKey,
 		authorizer: config.Authorizer,
 		next:       next,
 	}
 }
 
-type middleware struct {
+type middleware[T any] struct {
 	signKey    []byte
-	authorizer Authorizer[UserClaims]
+	authorizer Authorizer[T]
 	client     http.Client
 	next       http.Handler
 }
 
-func (m *middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (m *middleware[T]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	const bearerPrefix = "Bearer "
 
 	traceID, ctx := trace.FromContextOrNew(r.Context())
@@ -55,7 +55,7 @@ func (m *middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	authToken := bearerAuthToken[len(bearerPrefix):]
-	claims, err := VerifyToken(m.signKey, authToken)
+	claims, err := VerifyToken[T](m.signKey, authToken)
 	if err != nil {
 		m.forbidden(err, w, r, attemptAt, traceID)
 		return
@@ -69,7 +69,7 @@ func (m *middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	m.next.ServeHTTP(w, r)
 }
 
-func (m *middleware) forbidden(
+func (m *middleware[T]) forbidden(
 	err error, w http.ResponseWriter, r *http.Request, attemptAt time.Time,
 	traceID trace.ID, fields ...logging.Field,
 ) {
