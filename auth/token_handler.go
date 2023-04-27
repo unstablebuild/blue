@@ -23,16 +23,16 @@ import (
 //
 // It uses the given granter to
 func TokenHTTPHandler[T any](
-	signKey []byte, store *Store, granter Granter[T],
+	keys Keys, store *Store, granter Granter[T],
 ) http.Handler {
-	return tokenHandler[T]{store: store, signKey: signKey, granter: granter}
+	return tokenHandler[T]{store: store, signKey: keys, granter: granter}
 }
 
 const tokenCallType = "RedeemToken"
 
 type tokenHandler[T any] struct {
 	store   *Store
-	signKey []byte
+	signKey Keys
 	granter Granter[T]
 }
 
@@ -147,7 +147,14 @@ func (h tokenHandler[T]) ServeHTTP(
 		return
 	}
 
-	redeem.AccessToken, err = SignToken(h.signKey, claims.Subject, claims.Email, extra)
+	key, err := h.signKey.Sign(ctx)
+	if err != nil {
+		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
+			response{Message: fmt.Sprintf("get sign key: %v", err.Error())})
+		return
+	}
+
+	redeem.AccessToken, err = SignToken(key, claims.Subject, claims.Email, extra)
 	if err != nil {
 		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
 			response{Message: fmt.Sprintf("sign token: %v", err.Error())})

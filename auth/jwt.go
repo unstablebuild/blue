@@ -27,7 +27,7 @@ type UserClaims[T any] struct {
 }
 
 // SignToken creates a new JWT token with the given user, email and role claims.
-func SignToken[T any](key []byte, userID, email string, extraClaims T) (string, error) {
+func SignToken[T any](key Key, userID, email string, extraClaims T) (string, error) {
 	claims := UserClaims[T]{
 		Email:  email,
 		UserID: userID,
@@ -43,7 +43,7 @@ func SignToken[T any](key []byte, userID, email string, extraClaims T) (string, 
 		},
 	}
 
-	sig, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.HS256, Key: key},
+	sig, err := jose.NewSigner(jose.SigningKey{Algorithm: key.algo, Key: key.key},
 		(&jose.SignerOptions{}).WithType("JWT"))
 	if err != nil {
 		return "", fmt.Errorf("new jwt signer: %v", err)
@@ -57,15 +57,14 @@ func SignToken[T any](key []byte, userID, email string, extraClaims T) (string, 
 
 // VerifyToken verifies that the given token was signed by key
 // and validates that it was generated using SignToken.
-func VerifyToken[T any](key []byte, token string) (UserClaims[T], error) {
-
+func VerifyToken[T any](key Key, token string) (UserClaims[T], error) {
 	tok, err := jwt.ParseSigned(token)
 	if err != nil {
 		return UserClaims[T]{}, fmt.Errorf("parse signed: %v", err)
 	}
 
 	var cl UserClaims[T]
-	if err := tok.Claims(key, &cl); err != nil {
+	if err := tok.Claims(key.key, &cl); err != nil {
 		return UserClaims[T]{}, fmt.Errorf("verify signature: %v", err)
 	}
 

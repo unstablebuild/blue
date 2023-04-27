@@ -31,18 +31,18 @@ func GRPCClientWithOauth2(
 // GRPCServerWithOauth2 returns a set of grpc.ServerOption that configure the server
 // to allow oauth2 requests only.
 func GRPCServerWithOauth2[T any](
-	signKey []byte,
+	verifyKeys auth.Keys,
 	authorizer auth.Authorizer[T],
 	creds credentials.TransportCredentials,
 ) []grpc.ServerOption {
 	return []grpc.ServerOption{
-		grpc.UnaryInterceptor(oauth2UnaryInterceptor(signKey, authorizer)),
+		grpc.UnaryInterceptor(oauth2UnaryInterceptor(verifyKeys, authorizer)),
 		grpc.Creds(creds),
 	}
 }
 
 func oauth2UnaryInterceptor[T any](
-	signKey []byte, authorizer auth.Authorizer[T],
+	verifyKeys auth.Keys, authorizer auth.Authorizer[T],
 ) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context, req interface{},
@@ -86,8 +86,22 @@ func oauth2UnaryInterceptor[T any](
 			return nil, err
 		}
 
+		keys, err := verifyKeys.Verify(ctx)
+		if err != nil {
+			err = fmt.Errorf("get verify keys: %v", err)
+			err := status.Errorf(codes.PermissionDenied, err.Error())
+			logging.LogResult(err, attemptAt, traceID, callType, fields...)
+			return nil, err
+		}
+
 		authToken := bearerAuthToken[len(bearerPrefix):]
-		claims, err := auth.VerifyToken[T](signKey, authToken)
+		var claims auth.UserClaims[T]
+		for _, k := range keys {
+			claims, err = auth.VerifyToken[T](k, authToken)
+			if err == nil {
+				break
+			}
+		}
 		if err != nil {
 			err := status.Errorf(codes.PermissionDenied, err.Error())
 			logging.LogResult(err, attemptAt, traceID, callType, fields...)

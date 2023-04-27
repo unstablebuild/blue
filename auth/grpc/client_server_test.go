@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,32 +21,30 @@ import (
 
 type user struct{}
 
-var (
-	testSignKey = []byte("1234")
-	denyAll     = auth.FuncAuthorizer(func(context.Context, auth.UserClaims[user], string) error {
+func TestClientServer(t *testing.T) {
+	testSignKey := auth.SymmetricKey([]byte("1234"))
+	testSignKeys := auth.StaticSymmetricKeys(testSignKey)
+	denyAll := auth.FuncAuthorizer(func(context.Context, auth.UserClaims[user], string) error {
 		return auth.ErrForbidden
 	})
-)
+	priv := loadKey(t, "./testdata/jwk-priv.json")
+	pub1 := loadKey(t, "./testdata/jwk-pub1.json.pub")
+	pub2 := loadKey(t, "./testdata/jwk-pub2.json.pub")
+	pub3 := loadKey(t, "./testdata/jwk-pub3.json.pub")
+	multiKeys := auth.StaticAsymmetricKeys(priv, pub1, pub2, pub3)
 
-type ecServer struct {
-	pb.UnimplementedEchoServer
-}
-
-func (s *ecServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
-	return &pb.EchoResponse{Message: req.Message}, nil
-}
-
-func TestClientServer(t *testing.T) {
 	suite := []struct {
 		description     string
 		setClientOpts   bool
 		authorizer      auth.Authorizer[user]
 		expectForbidden bool
+		keys            auth.Keys
 	}{
-		{"rejects missing authorization header", false, auth.AuthorizeAll[user](), true},
-		{"accepts if valid token and authorizer grants", true, auth.AuthorizeAll[user](), false},
-		{"reject if valid token and authorizer does not grant", true, denyAll, true},
-		{"reject if invalid token and authorizer does not grant", false, denyAll, true},
+		{"rejects missing authorization header", false, auth.AuthorizeAll[user](), true, testSignKeys},
+		{"reject if valid token and authorizer does not grant", true, denyAll, true, testSignKeys},
+		{"reject if invalid token and authorizer does not grant", false, denyAll, true, testSignKeys},
+		{"accepts if exactly one of the keys verifies token and authorizer grants", true, auth.AuthorizeAll[user](), false, testSignKeys},
+		{"accepts if at least one of the keys verifies token and authorizer grants", true, auth.AuthorizeAll[user](), false, multiKeys},
 	}
 
 	for _, test := range suite {
@@ -53,7 +53,7 @@ func TestClientServer(t *testing.T) {
 			cert, err := tls.LoadX509KeyPair(data.Path("x509/server_cert.pem"), data.Path("x509/server_key.pem"))
 			require.NoError(t, err)
 
-			serverOpts := GRPCServerWithOauth2(testSignKey, test.authorizer, credentials.NewServerTLSFromCert(&cert))
+			serverOpts := GRPCServerWithOauth2(test.keys, test.authorizer, credentials.NewServerTLSFromCert(&cert))
 
 			s := grpc.NewServer(serverOpts...)
 			pb.RegisterEchoServer(s, &ecServer{})
@@ -68,7 +68,10 @@ func TestClientServer(t *testing.T) {
 			clientCreds, err := credentials.NewClientTLSFromFile(data.Path("x509/ca_cert.pem"), "x.test.example.com")
 			require.NoError(t, err)
 
-			idToken, err := auth.SignToken(testSignKey, "1234", "it@unstable.build", user{})
+			signKey, err := test.keys.Sign(context.Background())
+			require.NoError(t, err)
+
+			idToken, err := auth.SignToken(signKey, "1234", "it@unstable.build", user{})
 			require.NoError(t, err)
 			oauthToken := oauth2.Token{AccessToken: idToken}
 
@@ -96,4 +99,26 @@ func TestClientServer(t *testing.T) {
 			}
 		})
 	}
+}
+
+func loadKey(t *testing.T, filename string) auth.Key {
+	data, err := os.ReadFile(filename)
+	require.NoError(t, err)
+
+	var key auth.Key
+	if strings.HasSuffix(filename, ".pub") {
+		key, err = auth.LoadPublicKey(data)
+	} else {
+		key, err = auth.LoadPrivateKey(data)
+	}
+	require.NoError(t, err)
+	return key
+}
+
+type ecServer struct {
+	pb.UnimplementedEchoServer
+}
+
+func (s *ecServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+	return &pb.EchoResponse{Message: req.Message}, nil
 }

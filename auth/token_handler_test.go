@@ -24,19 +24,16 @@ import (
 
 const keyID = "123893721987389217"
 
-var (
-	validJWKS     = jose.JSONWebKeySet{}
-	rsaPrivateKey *rsa.PrivateKey
-	rsaPublicKey  *rsa.PublicKey
-	grantAll      = FuncGranter(func(context.Context, string, string) (User, error) {
+func TestTokenHandler(t *testing.T) {
+	grantAll := FuncGranter(func(context.Context, string, string) (User, error) {
 		return User{Role: "admin"}, nil
 	})
-)
+	testSignKey := SymmetricKey([]byte("1234"))
+	testSignKeys := StaticSymmetricKeys(testSignKey)
+	rsaPrivateKey, _ := rsa.GenerateKey(rand.Reader, 4096)
+	rsaPublicKey := &rsaPrivateKey.PublicKey
 
-func init() {
-	rsaPrivateKey, _ = rsa.GenerateKey(rand.Reader, 4096)
-	rsaPublicKey = &rsaPrivateKey.PublicKey
-
+	var validJWKS jose.JSONWebKeySet
 	validJWKS.Keys = make([]jose.JSONWebKey, 1)
 	validJWKS.Keys[0] = jose.JSONWebKey{
 		Key:       rsaPublicKey,
@@ -44,9 +41,7 @@ func init() {
 		Use:       "sig",
 		KeyID:     keyID,
 	}
-}
 
-func TestTokenHandler(t *testing.T) {
 	validSecret := []byte("1")
 	validClientID := "id: 1"
 	invalidSecret := []byte("2")
@@ -62,49 +57,49 @@ func TestTokenHandler(t *testing.T) {
 		expectedStatusCode int
 	}{
 		{"missing client_id, client_secret is a bad request",
-			url.Values{}, goodRedeemHandler(validClientID), goodCertsHandler(&validJWKS), http.StatusBadRequest},
+			url.Values{}, goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
 		{"unkown client_id is a bad request",
 			url.Values{"client_id": []string{invalidClientID}},
-			goodRedeemHandler(validClientID), goodCertsHandler(&validJWKS), http.StatusBadRequest},
+			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
 		{"empty client_id is a bad request",
 			url.Values{"client_id": []string{""}},
-			goodRedeemHandler(validClientID), goodCertsHandler(&validJWKS), http.StatusBadRequest},
+			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
 		{"empty client_id is a bad request",
 			url.Values{"client_id": []string{""}},
-			goodRedeemHandler(validClientID), goodCertsHandler(&validJWKS), http.StatusBadRequest},
+			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
 		{"client_id with bad client_secret is a bad request",
 			url.Values{"client_id": []string{validClientID}, "client_secret": []string{string(invalidSecret)}},
-			goodRedeemHandler(validClientID), goodCertsHandler(&validJWKS), http.StatusBadRequest},
+			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
 		{"client_id with empty client_secret is a bad request",
 			url.Values{"client_id": []string{validClientID}, "client_secret": []string{""}},
-			goodRedeemHandler(validClientID), goodCertsHandler(&validJWKS), http.StatusBadRequest},
+			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
 		{"client_id with valid client_secret but missing urls in auth store is 500",
 			url.Values{"client_id": []string{clientIDMissingURLS}, "client_secret": []string{string(secretMissingURLS)}},
-			goodRedeemHandler(validClientID), goodCertsHandler(&validJWKS), http.StatusInternalServerError},
+			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusInternalServerError},
 		{"happy path",
 			url.Values{"client_id": []string{validClientID}, "client_secret": []string{string(validSecret)}},
-			goodRedeemHandler(validClientID), goodCertsHandler(&validJWKS), http.StatusOK},
+			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusOK},
 		{"retries redeem endpoints 5xx",
 			url.Values{"client_id": []string{validClientID}, "client_secret": []string{string(validSecret)}},
-			flakyRedeemHandler(validClientID), goodCertsHandler(&validJWKS), http.StatusOK},
+			flakyRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusOK},
 		{"retries certs endpoint 5xx",
 			url.Values{"client_id": []string{validClientID}, "client_secret": []string{string(validSecret)}},
-			goodRedeemHandler(validClientID), flakyCertsHandler(&validJWKS), http.StatusOK},
+			goodRedeemHandler(validClientID, rsaPrivateKey), flakyCertsHandler(&validJWKS), http.StatusOK},
 		{"malformed redeem endpoint response is 502",
 			url.Values{"client_id": []string{validClientID}, "client_secret": []string{string(validSecret)}},
 			malformedHandler(), goodCertsHandler(&validJWKS), http.StatusBadGateway},
 		{"malformed certs endpoint response is 502",
 			url.Values{"client_id": []string{validClientID}, "client_secret": []string{string(validSecret)}},
-			goodRedeemHandler(validClientID), malformedHandler(), http.StatusBadGateway},
+			goodRedeemHandler(validClientID, rsaPrivateKey), malformedHandler(), http.StatusBadGateway},
 		{"missing keys from certs endpoint response is 502",
 			url.Values{"client_id": []string{validClientID}, "client_secret": []string{string(validSecret)}},
-			goodRedeemHandler(validClientID), goodCertsHandler(&jose.JSONWebKeySet{}), http.StatusBadGateway},
+			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&jose.JSONWebKeySet{}), http.StatusBadGateway},
 		{"redeem provider token audience does not match clientID is 424",
 			url.Values{"client_id": []string{validClientID}, "client_secret": []string{string(validSecret)}},
-			goodRedeemHandler(invalidClientID), goodCertsHandler(&validJWKS), http.StatusFailedDependency},
+			goodRedeemHandler(invalidClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusFailedDependency},
 		{"redeem provider returned expired token is 424",
 			url.Values{"client_id": []string{validClientID}, "client_secret": []string{string(validSecret)}},
-			expiredRedeemHandler(validClientID), goodCertsHandler(&validJWKS), http.StatusFailedDependency},
+			expiredRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusFailedDependency},
 		{"redeem provider returned token with non-matching signature is 424",
 			url.Values{"client_id": []string{validClientID}, "client_secret": []string{string(validSecret)}},
 			badRedeemHandler(validClientID), goodCertsHandler(&validJWKS), http.StatusFailedDependency},
@@ -130,7 +125,7 @@ func TestTokenHandler(t *testing.T) {
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 			w := httptest.NewRecorder()
-			sut := TokenHTTPHandler(testSignKey, store, grantAll)
+			sut := TokenHTTPHandler(testSignKeys, store, grantAll)
 			sut.ServeHTTP(w, req)
 
 			resp := w.Result()
@@ -202,7 +197,7 @@ func writeTestRedeemResponse(
 	w.Write(data)
 }
 
-func goodRedeemHandler(clientID string) http.Handler {
+func goodRedeemHandler(clientID string, rsaPrivateKey *rsa.PrivateKey) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeTestRedeemResponse(w, clientID, 24*time.Hour, rsaPrivateKey)
 	})
@@ -215,13 +210,13 @@ func badRedeemHandler(clientID string) http.Handler {
 	})
 }
 
-func expiredRedeemHandler(clientID string) http.Handler {
+func expiredRedeemHandler(clientID string, rsaPrivateKey *rsa.PrivateKey) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeTestRedeemResponse(w, clientID, -1*time.Hour, rsaPrivateKey)
 	})
 }
 
-func flakyRedeemHandler(clientID string) http.Handler {
+func flakyRedeemHandler(clientID string, rsaPrivateKey *rsa.PrivateKey) http.Handler {
 	var attempt int
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempt++
