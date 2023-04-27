@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -16,7 +17,7 @@ const (
 
 // MiddlewareConfig configures the middleware returned by WithMiddleware.
 type MiddlewareConfig[T any] struct {
-	SignKey    []byte
+	VerifyKeys Keys
 	Authorizer Authorizer[T]
 }
 
@@ -26,14 +27,14 @@ type MiddlewareConfig[T any] struct {
 // has access to.
 func WithMiddleware[T any](next http.Handler, config MiddlewareConfig[T]) http.Handler {
 	return &middleware[T]{
-		signKey:    config.SignKey,
+		verifyKeys: config.VerifyKeys,
 		authorizer: config.Authorizer,
 		next:       next,
 	}
 }
 
 type middleware[T any] struct {
-	signKey    []byte
+	verifyKeys Keys
 	authorizer Authorizer[T]
 	client     http.Client
 	next       http.Handler
@@ -55,7 +56,29 @@ func (m *middleware[T]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	authToken := bearerAuthToken[len(bearerPrefix):]
-	claims, err := VerifyToken[T](m.signKey, authToken)
+
+	keys, err := m.verifyKeys.Verify(ctx)
+	if err != nil {
+		err := fmt.Errorf("get sign key: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		logging.LogResultInfo(err, attemptAt, traceID, authMiddlewareCallType)
+		return
+	}
+
+	if len(keys) == 0 {
+		err := errors.New("no sign keys")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		logging.LogResultInfo(err, attemptAt, traceID, authMiddlewareCallType)
+		return
+	}
+
+	var claims UserClaims[T]
+	for _, key := range keys {
+		claims, err = VerifyToken[T](key, authToken)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		m.forbidden(err, w, r, attemptAt, traceID)
 		return
