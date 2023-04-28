@@ -70,6 +70,19 @@ func newBlueCtl(configFolder string) (*blueCtl, error) {
 
 func (c *blueCtl) Man() cli.Manual {
 	var cmds []cli.Manual
+	// add commands if this is just a -h call so we
+	// can get their documentation
+	if len(c.cmds) == 0 {
+		c.cmds = map[string]cli.CLI{
+			"init":     newInitializer(c.configFolder),
+			"release":  releaseCLI.NewCLI(nil),
+			"package":  packageCLI.NewCLI(nil),
+			"secret":   secretCLI.NewCLI(nil),
+			"gps":      gps.NewCLI(),
+			"analysis": newAnalysisCli(),
+			"issue":    issueCLI.NewCLI(nil, Tag),
+		}
+	}
 	for _, cmd := range c.cmds {
 		cmds = append(cmds, cmd.Man())
 	}
