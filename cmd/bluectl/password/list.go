@@ -1,4 +1,4 @@
-package secret
+package password
 
 import (
 	"context"
@@ -31,15 +31,15 @@ func (i *metaFilters) Set(value string) error {
 	return nil
 }
 
-type secretList struct {
-	store   *auth.Store
+type passwordList struct {
+	store   *auth.PasswordStore
 	fs      *cli.FlagSet
 	filters metaFilters
 	format  string
 }
 
-func newSecretListCLI(store *auth.Store) cli.CLI {
-	l := &secretList{
+func newPasswordListCLI(store *auth.PasswordStore) cli.CLI {
+	l := &passwordList{
 		store:   store,
 		filters: metaFilters(map[string]string{}),
 	}
@@ -49,16 +49,16 @@ func newSecretListCLI(store *auth.Store) cli.CLI {
 	return l
 }
 
-func (s *secretList) Man() cli.Manual {
+func (s *passwordList) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "list",
-		Summary:  "Print secret views to stdout",
+		Summary:  "Print password views to stdout",
 		Options:  *s.fs,
 		Synopsis: "[options]",
 	}
 }
 
-func (s *secretList) Run(ctx context.Context, args []string) error {
+func (s *passwordList) Run(ctx context.Context, args []string) error {
 	_, _, ok, err := cli.ParseUsage(s, s.fs, 0, args)
 	if err != nil || !ok {
 		return err
@@ -67,20 +67,20 @@ func (s *secretList) Run(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, defaultListTimeout)
 	defer cancel()
 
-	packages, err := s.store.ListSecrets(ctx, map[string]string(s.filters))
+	packages, err := s.store.ListPasswords(ctx, map[string]string(s.filters))
 	if err != nil {
 		return err
 	}
 
 	switch strings.ToLower(s.format) {
 	case "json":
-		t := format.JSON[auth.SecretView]()
+		t := format.JSON[auth.PasswordView]()
 		return t.Format(os.Stdout, packages)
 	case "table":
-		t := format.Table[auth.SecretView]([]string{"ID", "CreatedAt", "UpdatedAt", "Revoked", "Metadata"})
+		t := format.Table[auth.PasswordView]([]string{"ID", "CreatedAt", "UpdatedAt", "Revoked", "Metadata"})
 		return t.Format(os.Stdout, packages)
 	default:
-		t, err := format.Template[auth.SecretView](s.format)
+		t, err := format.Template[auth.PasswordView](s.format)
 		if err == nil {
 			return t.Format(os.Stdout, packages)
 		}

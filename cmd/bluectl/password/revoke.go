@@ -1,4 +1,4 @@
-package secret
+package password
 
 import (
 	"context"
@@ -12,28 +12,28 @@ const (
 	revokeTimeout = 10 * time.Second
 )
 
-type secretRevoke struct {
-	store *auth.Store
+type passwordRevoke struct {
+	store *auth.PasswordStore
 	fs    *cli.FlagSet
 }
 
-func newSecretRevokeCLI(s *auth.Store) cli.CLI {
-	return secretRevoke{
+func newPasswordRevokeCLI(s *auth.PasswordStore) cli.CLI {
+	return passwordRevoke{
 		store: s,
 		fs:    cli.NewFlagSet("revoke"),
 	}
 }
 
-func (s secretRevoke) Man() cli.Manual {
+func (s passwordRevoke) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "revoke",
-		Summary:  "Revoke a secret",
+		Summary:  "Revoke a password",
 		Synopsis: "<id>",
 		Options:  *s.fs,
 	}
 }
 
-func (s secretRevoke) Run(ctx context.Context, args []string) error {
+func (s passwordRevoke) Run(ctx context.Context, args []string) error {
 	args, _, ok, err := cli.ParseUsage(s, s.fs, 1, args)
 	if err != nil || !ok {
 		return err

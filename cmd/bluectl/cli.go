@@ -10,8 +10,8 @@ import (
 	"github.com/ernestrc/blue/cmd/bluectl/gps"
 	issueCLI "github.com/ernestrc/blue/cmd/bluectl/issue"
 	packageCLI "github.com/ernestrc/blue/cmd/bluectl/package"
+	passwordCLI "github.com/ernestrc/blue/cmd/bluectl/password"
 	releaseCLI "github.com/ernestrc/blue/cmd/bluectl/release"
-	secretCLI "github.com/ernestrc/blue/cmd/bluectl/secret"
 	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/document/firestore"
 	"github.com/ernestrc/blue/issue"
@@ -77,7 +77,7 @@ func (c *blueCtl) Man() cli.Manual {
 			"init":     newInitializer(c.configFolder),
 			"release":  releaseCLI.NewCLI(nil),
 			"package":  packageCLI.NewCLI(nil),
-			"secret":   secretCLI.NewCLI(nil),
+			"password": passwordCLI.NewCLI(nil),
 			"gps":      gps.NewCLI(),
 			"analysis": newAnalysisCli(),
 			"issue":    issueCLI.NewCLI(nil, Tag),
@@ -124,13 +124,13 @@ func (c *blueCtl) initializeCli() error {
 		return err
 	}
 
-	secretStore := auth.NewStore(secretDB)
+	passwordStore := auth.NewPasswordStore(secretDB)
 
 	c.cmds = map[string]cli.CLI{
 		"init":     init,
 		"release":  releaseCLI.NewCLI(releaseManager),
 		"package":  packageCLI.NewCLI(releaseManager),
-		"secret":   secretCLI.NewCLI(secretStore),
+		"password": passwordCLI.NewCLI(passwordStore),
 		"gps":      gps.NewCLI(),
 		"analysis": newAnalysisCli(),
 		"issue":    issueCLI.NewCLI(issueTracker, Tag),
