@@ -1,4 +1,4 @@
-package secret
+package password
 
 import (
 	"context"
@@ -28,8 +28,8 @@ func (i *metadataFlag) Set(value string) error {
 	return nil
 }
 
-type secretCreate struct {
-	store     *auth.Store
+type passwordCreate struct {
+	store     *auth.PasswordStore
 	fs        *cli.FlagSet
 	mdataFlag metadataFlag
 }
@@ -46,8 +46,8 @@ func getDefaultAuthor() string {
 	return fmt.Sprintf("%s@%s", u.Username, h)
 }
 
-func newSecretCreateCLI(s *auth.Store) cli.CLI {
-	c := &secretCreate{
+func newPasswordCreateCLI(s *auth.PasswordStore) cli.CLI {
+	c := &passwordCreate{
 		store: s,
 	}
 	c.fs = cli.NewFlagSet("create")
@@ -55,16 +55,16 @@ func newSecretCreateCLI(s *auth.Store) cli.CLI {
 	return c
 }
 
-func (s *secretCreate) Man() cli.Manual {
+func (s *passwordCreate) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "create",
-		Summary:  "Create a secret with an ID from data stored in a file",
+		Summary:  "Create a password with an ID from data stored in a file",
 		Synopsis: "<id> <datafile>",
 		Options:  *s.fs,
 	}
 }
 
-func (s *secretCreate) parseMetadataFlag() (map[string]string, error) {
+func (s *passwordCreate) parseMetadataFlag() (map[string]string, error) {
 	ret := make(map[string]string)
 	for _, arg := range s.mdataFlag {
 		kv := strings.Split(arg, "=")
@@ -76,7 +76,7 @@ func (s *secretCreate) parseMetadataFlag() (map[string]string, error) {
 	return ret, nil
 }
 
-func (s *secretCreate) Run(ctx context.Context, args []string) error {
+func (s *passwordCreate) Run(ctx context.Context, args []string) error {
 	args, _, ok, err := cli.ParseUsage(s, s.fs, 2, args)
 	if err != nil || !ok {
 		return err
@@ -90,7 +90,7 @@ func (s *secretCreate) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	m, err := tempSecret(id, dataFile, getDefaultAuthor(), mdata)
+	m, err := tempPassword(id, dataFile, getDefaultAuthor(), mdata)
 	if err != nil {
 		return err
 	}
@@ -98,5 +98,5 @@ func (s *secretCreate) Run(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	return s.store.CreateSecret(ctx, m.ID, m.Data, m.Metadata)
+	return s.store.CreatePassword(ctx, m.ID, m.Data, m.Metadata)
 }

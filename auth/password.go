@@ -16,23 +16,24 @@ import (
 const salt = "DiS!M4r#s$!&"
 
 var (
-	ErrInvalidData = errors.New("secret could not be verified: invalid data")
+	ErrInvalidData = errors.New("password could not be verified: invalid data")
 	ErrNotFound    = document.ErrNotFound
-	ErrRevoked     = errors.New("secret is revoked")
+	ErrRevoked     = errors.New("password is revoked")
 )
 
-// Store is a secrets store.
-type Store struct {
+// PasswordStore stores password hashes for verification. It also allows
+// passwords to be stored with metadata.
+type PasswordStore struct {
 	svc document.Service
 }
 
-// NewStore allocates storage for a new secrets store and initializes it.
-func NewStore(svc document.Service) *Store {
-	return &Store{svc: svc}
+// NewPasswordStore allocates storage for a new passwords store and initializes it.
+func NewPasswordStore(svc document.Service) *PasswordStore {
+	return &PasswordStore{svc: svc}
 }
 
-// SecretView is a view over a secret stored in the database.
-type SecretView struct {
+// PasswordView is a view over a password stored in the database.
+type PasswordView struct {
 	ID        string
 	Metadata  map[string]string
 	Revoked   bool
@@ -40,8 +41,8 @@ type SecretView struct {
 	UpdatedAt time.Time
 }
 
-// secret represents a secret.
-type secret struct {
+// password represents a password password.
+type password struct {
 	ID        string
 	Data      []byte
 	Revoked   bool
@@ -50,8 +51,8 @@ type secret struct {
 	UpdatedAt time.Time
 }
 
-// CreateSecret creates a secret with the given id and data.
-func (s *Store) CreateSecret(
+// CreatePassword creates a password with the given id and data.
+func (s *PasswordStore) CreatePassword(
 	ctx context.Context, id string, data []byte, metadata map[string]string,
 ) error {
 	if id == "" {
@@ -69,7 +70,7 @@ func (s *Store) CreateSecret(
 	}
 
 	now := time.Now()
-	sec := secret{
+	sec := password{
 		ID:        id,
 		Data:      hashedData,
 		Metadata:  metadata,
@@ -84,19 +85,19 @@ func (s *Store) CreateSecret(
 	return nil
 }
 
-// VerifySecret returns ErrNotFound if a secret with the given id
-// doesn't exist, or ErrInvalidData if the secret data doesn't match data.
-// Also, it returns ErrRevoked if the secret has been revoked.
-// It returns the metadata stored with the secret or nil of there's no metadata
-// stored with the given secret.
-func (s *Store) VerifySecret(
+// VerifyPassword returns ErrNotFound if a password with the given id
+// doesn't exist, or ErrInvalidData if the password data doesn't match data.
+// Also, it returns ErrRevoked if the password has been revoked.
+// It returns the metadata stored with the password or nil of there's no metadata
+// stored with the given password.
+func (s *PasswordStore) VerifyPassword(
 	ctx context.Context, id string, data []byte,
 ) (map[string]string, error) {
 	if id == "" {
 		panic("invalid empty id")
 	}
 
-	var sec secret
+	var sec password
 	if err := s.svc.Get(ctx, id, &sec); err != nil {
 		if err == document.ErrNotFound {
 			return nil, ErrNotFound
@@ -120,11 +121,11 @@ func (s *Store) VerifySecret(
 	return sec.Metadata, nil
 }
 
-// ListSecrets returns an iterator over the secrets stored in the underlying store.
-func (s *Store) ListSecrets(
+// ListPasswords returns an iterator over the passwords stored in the underlying store.
+func (s *PasswordStore) ListPasswords(
 	ctx context.Context, filtersMap map[string]string,
-) (iterator.Iterator[SecretView], error) {
-	filters, err := makeDocumentSecretFilters(filtersMap)
+) (iterator.Iterator[PasswordView], error) {
+	filters, err := makeDocumentPasswordFilters(filtersMap)
 	if err != nil {
 		return nil, err
 	}
@@ -134,9 +135,9 @@ func (s *Store) ListSecrets(
 		return nil, fmt.Errorf("store list: %w", err)
 	}
 
-	return iterator.Map(iterator.FromDocumentIterator[secret](it),
-		func(s secret) SecretView {
-			return SecretView{
+	return iterator.Map(iterator.FromDocumentIterator[password](it),
+		func(s password) PasswordView {
+			return PasswordView{
 				ID:        s.ID,
 				Metadata:  s.Metadata,
 				Revoked:   s.Revoked,
@@ -147,9 +148,9 @@ func (s *Store) ListSecrets(
 	), nil
 }
 
-// Revoke revokes the given secret or returns ErrNotFound if this secret doesn't exist.
+// Revoke revokes the given password or returns ErrNotFound if this password doesn't exist.
 // This method is idempotent.
-func (s *Store) Revoke(ctx context.Context, id string) error {
+func (s *PasswordStore) Revoke(ctx context.Context, id string) error {
 	err := s.svc.Update(ctx, id, []document.Update{
 		{FieldPath: []string{"Revoked"}, Value: true},
 		{FieldPath: []string{document.DefaultUpdatedAtField}, Value: time.Now()},
@@ -160,7 +161,7 @@ func (s *Store) Revoke(ctx context.Context, id string) error {
 	return err
 }
 
-func makeDocumentSecretFilters(
+func makeDocumentPasswordFilters(
 	userFilters map[string]string,
 ) ([]document.Filter, error) {
 	var ret []document.Filter

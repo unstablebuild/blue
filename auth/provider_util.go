@@ -39,10 +39,10 @@ type ProviderClaims struct {
 // given a secret provider. The Certs are fetched from the stored certs_url
 // in the secret metadata. See ValidateIDWithCerts for more details.
 func ValidateProviderIDWithSecret(
-	ctx context.Context, store *Store,
+	ctx context.Context, store *PasswordStore,
 	clientID, clientSecret string, idToken string,
 ) (*ProviderClaims, error) {
-	metadata, err := store.VerifySecret(ctx, clientID, []byte(clientSecret))
+	metadata, err := store.VerifyPassword(ctx, clientID, []byte(clientSecret))
 	if err != nil {
 		return nil, fmt.Errorf("store verify secret: %v", err)
 	}

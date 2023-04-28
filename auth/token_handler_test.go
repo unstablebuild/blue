@@ -113,12 +113,12 @@ func TestTokenHandler(t *testing.T) {
 			certsServer := httptest.NewServer(test.certsProvider)
 			defer certsServer.Close()
 
-			store := NewStore(document.NewInMemoryService())
-			store.CreateSecret(context.Background(), validClientID, validSecret, map[string]string{
+			store := NewPasswordStore(document.NewInMemoryService())
+			store.CreatePassword(context.Background(), validClientID, validSecret, map[string]string{
 				metadataKeyRedeemURL: tokenServer.URL,
 				metadataKeyCertsURL:  certsServer.URL,
 			})
-			store.CreateSecret(context.Background(), clientIDMissingURLS, secretMissingURLS, nil)
+			store.CreatePassword(context.Background(), clientIDMissingURLS, secretMissingURLS, nil)
 
 			req := httptest.NewRequest("POST", "http://localhost:3001/o/oauth2/token",
 				strings.NewReader(test.requestBody.Encode()))

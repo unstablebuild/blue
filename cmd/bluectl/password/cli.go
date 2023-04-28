@@ -1,4 +1,4 @@
-package secret
+package password
 
 import (
 	"context"
@@ -14,39 +14,39 @@ var (
 	actionList     string = "list"
 )
 
-type secretCLI struct {
+type passwordCLI struct {
 	cmds map[string]cli.CLI
 	fs   *cli.FlagSet
 }
 
-// NewCLI allocatest storage for a new secret cli.CLI and
-// initializes it with the given auth.Store.
-func NewCLI(s *auth.Store) cli.CLI {
-	return &secretCLI{
+// NewCLI allocatest storage for a new password cli.CLI and
+// initializes it with the given auth.PasswordStore.
+func NewCLI(s *auth.PasswordStore) cli.CLI {
+	return &passwordCLI{
 		cmds: map[string]cli.CLI{
-			actionCreate: newSecretCreateCLI(s),
-			actionRevoke: newSecretRevokeCLI(s),
-			actionList:   newSecretListCLI(s),
+			actionCreate: newPasswordCreateCLI(s),
+			actionRevoke: newPasswordRevokeCLI(s),
+			actionList:   newPasswordListCLI(s),
 		},
-		fs: cli.NewFlagSet("secret"),
+		fs: cli.NewFlagSet("password"),
 	}
 }
 
-func (s *secretCLI) Man() cli.Manual {
+func (s *passwordCLI) Man() cli.Manual {
 	var cmds []cli.Manual
 	for _, cmd := range s.cmds {
 		cmds = append(cmds, cmd.Man())
 	}
 
 	return cli.Manual{
-		Name:     "secret",
-		Summary:  "Manage blue secrets",
+		Name:     "password",
+		Summary:  "Manage blue passwords",
 		Synopsis: "<cmd>",
 		Commands: cmds,
 		Options:  *s.fs,
 	}
 }
 
-func (s *secretCLI) Run(ctx context.Context, args []string) error {
+func (s *passwordCLI) Run(ctx context.Context, args []string) error {
 	return cli.ParseAndRunCommand(ctx, s, s.fs, s.cmds, args)
 }

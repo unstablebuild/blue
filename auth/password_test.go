@@ -13,65 +13,65 @@ import (
 func TestStore(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("secrets are verifiable", func(t *testing.T) {
+	t.Run("passwords are verifiable", func(t *testing.T) {
 		svc := document.NewInMemoryService()
-		s := NewStore(svc)
+		s := NewPasswordStore(svc)
 
 		myMetadata := map[string]string{"blah": "bleh"}
-		err := s.CreateSecret(ctx, "myId", []byte("1234"), myMetadata)
+		err := s.CreatePassword(ctx, "myId", []byte("1234"), myMetadata)
 		require.NoError(t, err)
 
-		actualMeta, err := s.VerifySecret(ctx, "myId", []byte("1234"))
+		actualMeta, err := s.VerifyPassword(ctx, "myId", []byte("1234"))
 		require.NoError(t, err)
 		assert.Equal(t, myMetadata, actualMeta)
 	})
 
 	t.Run("returns ErrInvalidData if secret doesn't exist", func(t *testing.T) {
 		svc := document.NewInMemoryService()
-		s := NewStore(svc)
+		s := NewPasswordStore(svc)
 
-		err := s.CreateSecret(ctx, "myId", []byte("1234"), nil)
+		err := s.CreatePassword(ctx, "myId", []byte("1234"), nil)
 		require.NoError(t, err)
 
-		_, err = s.VerifySecret(ctx, "myId", []byte("1235"))
+		_, err = s.VerifyPassword(ctx, "myId", []byte("1235"))
 		require.Equal(t, ErrInvalidData, err)
 	})
 
-	t.Run("secrets cannot be retrieved from the store", func(t *testing.T) {
+	t.Run("passwords cannot be retrieved from the store", func(t *testing.T) {
 		svc := document.NewInMemoryService()
-		s := NewStore(svc)
+		s := NewPasswordStore(svc)
 
-		err := s.CreateSecret(ctx, "myId", []byte("1234"), nil)
+		err := s.CreatePassword(ctx, "myId", []byte("1234"), nil)
 		require.NoError(t, err)
 
-		var sec secret
+		var sec password
 		err = s.svc.Get(ctx, "myId", &sec)
 		require.NoError(t, err)
 		assert.NotEqual(t, []byte("1234"), sec.Data)
 	})
 
-	t.Run("CreateSecret returns error if secret with given ID has already been created", func(t *testing.T) {
+	t.Run("CreatePassword returns error if secret with given ID has already been created", func(t *testing.T) {
 		svc := document.NewInMemoryService()
-		s := NewStore(svc)
+		s := NewPasswordStore(svc)
 
-		err := s.CreateSecret(ctx, "myId", []byte("1234"), nil)
+		err := s.CreatePassword(ctx, "myId", []byte("1234"), nil)
 		require.NoError(t, err)
 
-		err = s.CreateSecret(ctx, "myId", []byte("2346"), nil)
+		err = s.CreatePassword(ctx, "myId", []byte("2346"), nil)
 		require.Error(t, err)
 	})
 
-	t.Run("ListSecrets returns all the secrets stored", func(t *testing.T) {
+	t.Run("ListPasswords returns all the passwords stored", func(t *testing.T) {
 		svc := document.NewInMemoryService()
-		s := NewStore(svc)
+		s := NewPasswordStore(svc)
 
 		for i := 0; i < 10; i++ {
-			require.NoError(t, s.CreateSecret(ctx, strconv.Itoa(i), []byte(strconv.Itoa(i)), map[string]string{
+			require.NoError(t, s.CreatePassword(ctx, strconv.Itoa(i), []byte(strconv.Itoa(i)), map[string]string{
 				strconv.Itoa(i): strconv.Itoa(i),
 			}))
 		}
 
-		it, err := s.ListSecrets(ctx, nil)
+		it, err := s.ListPasswords(ctx, nil)
 		require.NoError(t, err)
 
 		var i int
@@ -92,38 +92,38 @@ func TestStore(t *testing.T) {
 
 	t.Run("Revoke revokes a secret and future calls to IsValid return false", func(t *testing.T) {
 		svc := document.NewInMemoryService()
-		s := NewStore(svc)
+		s := NewPasswordStore(svc)
 
-		err := s.CreateSecret(ctx, "myId", []byte("1234"), nil)
+		err := s.CreatePassword(ctx, "myId", []byte("1234"), nil)
 		require.NoError(t, err)
 
 		require.NoError(t, s.Revoke(ctx, "myId"))
 
-		_, err = s.VerifySecret(ctx, "myId", []byte("1234"))
+		_, err = s.VerifyPassword(ctx, "myId", []byte("1234"))
 		require.Equal(t, ErrRevoked, err)
 	})
 
 	t.Run("Revoke returns ErrNotFound if trying to revoke a secret that doesn't exist", func(t *testing.T) {
 		svc := document.NewInMemoryService()
-		s := NewStore(svc)
+		s := NewPasswordStore(svc)
 
 		require.Equal(t, ErrNotFound, s.Revoke(ctx, "myId"))
 	})
 
-	t.Run("ListSecrets returns only non-revoked secrets", func(t *testing.T) {
+	t.Run("ListPasswords returns only non-revoked passwords ", func(t *testing.T) {
 		svc := document.NewInMemoryService()
-		s := NewStore(svc)
+		s := NewPasswordStore(svc)
 
 		for i := 0; i < 10; i++ {
-			require.NoError(t, s.CreateSecret(ctx, strconv.Itoa(i), []byte(strconv.Itoa(i)), map[string]string{
+			require.NoError(t, s.CreatePassword(ctx, strconv.Itoa(i), []byte(strconv.Itoa(i)), map[string]string{
 				strconv.Itoa(i): strconv.Itoa(i),
 			}))
 			require.NoError(t, s.Revoke(ctx, strconv.Itoa(i)))
 		}
 
-		require.NoError(t, s.CreateSecret(ctx, "1234", []byte("1234"), nil))
+		require.NoError(t, s.CreatePassword(ctx, "1234", []byte("1234"), nil))
 
-		it, err := s.ListSecrets(ctx, map[string]string{"Revoked": strconv.FormatBool(false)})
+		it, err := s.ListPasswords(ctx, map[string]string{"Revoked": strconv.FormatBool(false)})
 		require.NoError(t, err)
 
 		var i int

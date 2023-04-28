@@ -23,7 +23,7 @@ import (
 //
 // It uses the given granter to
 func TokenHTTPHandler[T any](
-	keys Keys, store *Store, granter Granter[T],
+	keys Keys, store *PasswordStore, granter Granter[T],
 ) http.Handler {
 	return tokenHandler[T]{store: store, signKey: keys, granter: granter}
 }
@@ -31,7 +31,7 @@ func TokenHTTPHandler[T any](
 const tokenCallType = "RedeemToken"
 
 type tokenHandler[T any] struct {
-	store   *Store
+	store   *PasswordStore
 	signKey Keys
 	granter Granter[T]
 }
@@ -181,7 +181,7 @@ func (h tokenHandler[T]) validateSecret(
 		return
 	}
 
-	metadata, err := h.store.VerifySecret(ctx, clientID, []byte(clientSecret))
+	metadata, err := h.store.VerifyPassword(ctx, clientID, []byte(clientSecret))
 	if err != nil {
 		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusBadRequest,
 			response{Message: fmt.Sprintf("verify secret: %v", err.Error())})
