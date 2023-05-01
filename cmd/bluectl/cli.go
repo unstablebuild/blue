@@ -6,12 +6,14 @@ import (
 	"os"
 
 	"github.com/ernestrc/blue/auth"
+	"github.com/ernestrc/blue/auth/secretmanager"
 	"github.com/ernestrc/blue/cli"
 	"github.com/ernestrc/blue/cmd/bluectl/gps"
 	issueCLI "github.com/ernestrc/blue/cmd/bluectl/issue"
 	packageCLI "github.com/ernestrc/blue/cmd/bluectl/package"
 	passwordCLI "github.com/ernestrc/blue/cmd/bluectl/password"
 	releaseCLI "github.com/ernestrc/blue/cmd/bluectl/release"
+	secretCLI "github.com/ernestrc/blue/cmd/bluectl/secret"
 	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/document/firestore"
 	"github.com/ernestrc/blue/issue"
@@ -78,6 +80,7 @@ func (c *blueCtl) Man() cli.Manual {
 			"release":  releaseCLI.NewCLI(nil),
 			"package":  packageCLI.NewCLI(nil),
 			"password": passwordCLI.NewCLI(nil),
+			"secret":   secretCLI.NewCLI(nil),
 			"gps":      gps.NewCLI(),
 			"analysis": newAnalysisCli(),
 			"issue":    issueCLI.NewCLI(nil, Tag),
@@ -118,13 +121,18 @@ func (c *blueCtl) initializeCli() error {
 	releaseManager := release.NewDocumentManager(docDB)
 	issueTracker := issue.NewDocumentTracker(trackerDB)
 
-	secretDB, err := firestore.New(config.Auth.ProjectID,
-		config.Secret.Collection, config.Auth.CredentialsFile)
+	passwordDB, err := firestore.New(config.Auth.ProjectID,
+		config.Password.Collection, config.Auth.CredentialsFile)
 	if err != nil {
 		return err
 	}
+	passwordStore := auth.NewPasswordStore(passwordDB)
 
-	passwordStore := auth.NewPasswordStore(secretDB)
+	secretManager, err := secretmanager.NewService(config.Auth.ProjectID,
+		config.Auth.CredentialsFile)
+	if err != nil {
+		return err
+	}
 
 	c.cmds = map[string]cli.CLI{
 		"init":     init,
@@ -132,6 +140,7 @@ func (c *blueCtl) initializeCli() error {
 		"package":  packageCLI.NewCLI(releaseManager),
 		"password": passwordCLI.NewCLI(passwordStore),
 		"gps":      gps.NewCLI(),
+		"secret":   secretCLI.NewCLI(secretManager),
 		"analysis": newAnalysisCli(),
 		"issue":    issueCLI.NewCLI(issueTracker, Tag),
 	}

@@ -10,7 +10,7 @@ release:
   collection: blue-release
 issue:
   collection: blue-issue
-secret:
+password:
   collection: blue-secret
 `
 
@@ -24,10 +24,10 @@ type collectionConfig struct {
 }
 
 type cliConfig struct {
-	Auth    authConfig       `yaml:"auth"`
-	Release collectionConfig `yaml:"release"`
-	Issue   collectionConfig `yaml:"issue"`
-	Secret  collectionConfig `yaml:"secret"`
+	Auth     authConfig       `yaml:"auth"`
+	Release  collectionConfig `yaml:"release"`
+	Issue    collectionConfig `yaml:"issue"`
+	Password collectionConfig `yaml:"password"`
 }
 
 func sourceConfig(overridesConfigPath string) (
@@ -50,7 +50,7 @@ func sourceConfigFromProvider(provider config.Provider) (
 		config.Section{Name: "auth", Target: &c.Auth},
 		config.Section{Name: "release", Target: &c.Release},
 		config.Section{Name: "issue", Target: &c.Issue},
-		config.Section{Name: "secret", Target: &c.Secret},
+		config.Section{Name: "password", Target: &c.Password},
 	)
 	return
 }

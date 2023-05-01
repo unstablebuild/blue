@@ -73,7 +73,7 @@ func testInitializerRun(t *testing.T, dirName string, projectID string) {
 	expectedConfig.Auth.ProjectID = projectID
 	expectedConfig.Release.Collection = defaultReleaseCollection
 	expectedConfig.Issue.Collection = defaultIssueCollection
-	expectedConfig.Secret.Collection = defaultSecretsCollection
+	expectedConfig.Password.Collection = defaultSecretsCollection
 
 	assertConfigInitialized(t, i.configFolder, expectedConfig)
 }
@@ -103,7 +103,7 @@ func TestInitializerRun(t *testing.T) {
 		config.Auth.ProjectID = "4321"
 		config.Release.Collection = defaultReleaseCollection
 		config.Issue.Collection = defaultIssueCollection
-		config.Secret.Collection = defaultSecretsCollection
+		config.Password.Collection = defaultSecretsCollection
 		require.NoError(t, encodeConfig(f, &config))
 		require.NoError(t, f.Close())
 
