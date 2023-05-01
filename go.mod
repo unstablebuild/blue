@@ -4,12 +4,13 @@ go 1.19
 
 require (
 	cloud.google.com/go/firestore v1.9.0
+	cloud.google.com/go/secretmanager v1.10.0
 	github.com/BurntSushi/toml v1.2.0
 	github.com/adrianmo/go-nmea v1.2.0
 	github.com/cheggaaa/pb/v3 v3.0.8
 	github.com/ernestrc/go-multierror v1.1.2
 	github.com/ernestrc/logd-go v0.0.0-20180509171507-65871c1d5504
-	github.com/ernestrc/sensible v0.2.2
+	github.com/ernestrc/sensible v0.3.1
 	github.com/go-delve/delve v1.9.1
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
@@ -40,6 +41,7 @@ require (
 	cloud.google.com/go v0.110.0 // indirect
 	cloud.google.com/go/compute v1.19.1 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
+	cloud.google.com/go/iam v0.13.0 // indirect
 	cloud.google.com/go/longrunning v0.4.1 // indirect
 	github.com/VividCortex/ewma v1.1.1 // indirect
 	github.com/cilium/ebpf v0.7.0 // indirect
