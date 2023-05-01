@@ -8,7 +8,7 @@ import (
 var (
 	// ErrForbidden is returned by Authorizer when a user's privileges do not allow
 	// access to the underlying resource.
-	ErrForbidden = errors.New("forbidden")
+	ErrForbidden = errors.New("user is not authorized to access resource")
 )
 
 // Authorizer abstract the ability to authorize a user for a resource.
