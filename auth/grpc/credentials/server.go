@@ -29,9 +29,8 @@ func ServerTransport(
 	if err != nil {
 		return nil, err
 	}
-	ret, err := newServerTransportCreds(svc, certSecretID,
+	return newServerTransportCreds(svc, certSecretID,
 		keySecretID, refreshEvery)
-	return ret, nil
 }
 
 func newServerTransportCreds(
