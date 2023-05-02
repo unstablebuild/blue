@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/ernestrc/blue/document"
+	proto "github.com/ernestrc/blue/document/rpc/proto"
 	documenttest "github.com/ernestrc/blue/document/test"
 	"github.com/ernestrc/blue/encoding"
 	"github.com/ernestrc/blue/encoding/bson"
@@ -25,8 +26,14 @@ func runDatastoreServerOverListener(
 	t *testing.T, other document.Service,
 	listener func() (net.Listener, error),
 	marshaler encoding.Marshaler,
+	register func(grpc.ServiceRegistrar, proto.DocumentStoreServer),
 ) (net.Addr, func()) {
-	srv := NewServer(other, marshaler)
+	gsrv := grpc.NewServer()
+
+	srv := new(Server)
+	register(gsrv, srv)
+	srv.Init(other, marshaler, gsrv)
+
 	lis, err := listener()
 	require.NoError(t, err)
 
@@ -43,7 +50,8 @@ func runDatastoreServerOverListener(
 func runDatastoreServer(
 	t *testing.T, other document.Service, marshaler encoding.Marshaler,
 ) (net.Addr, func()) {
-	return runDatastoreServerOverListener(t, other, tcpListener, marshaler)
+	return runDatastoreServerOverListener(t, other, tcpListener, marshaler,
+		proto.RegisterDocumentStoreServer)
 }
 
 func testRPCDatastoreOverListener(
@@ -55,7 +63,7 @@ func testRPCDatastoreOverListener(
 	documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
 		cache := document.NewInMemoryServiceWithMarshaler(marshaler)
 		addr, teardown := runDatastoreServerOverListener(t, cache,
-			listener, marshaler)
+			listener, marshaler, proto.RegisterDocumentStoreServer)
 		teardowns = append(teardowns, teardown)
 
 		store, err := NewClient(addr, marshaler, grpc.WithInsecure())
