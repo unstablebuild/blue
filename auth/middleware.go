@@ -26,6 +26,12 @@ type MiddlewareConfig[T any] struct {
 // The Authorizer set in the config determines to what resources each user role
 // has access to.
 func WithMiddleware[T any](next http.Handler, config MiddlewareConfig[T]) http.Handler {
+	if config.VerifyKeys == nil {
+		panic("missing VerifyKeys in auth.MiddlewareConfig")
+	}
+	if config.Authorizer == nil {
+		panic("missing Authorizer in auth.MiddlewareConfig")
+	}
 	return &middleware[T]{
 		verifyKeys: config.VerifyKeys,
 		authorizer: config.Authorizer,

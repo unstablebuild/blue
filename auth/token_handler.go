@@ -3,6 +3,7 @@ package auth
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -23,17 +24,24 @@ import (
 //
 // It uses the given granter to
 func TokenHTTPHandler[T any](
-	keys Keys, store *PasswordStore, granter Granter[T],
+	keys Keys, passwordStore *PasswordStore,
+	secretStore SecretStore, granter Granter[T],
 ) http.Handler {
-	return tokenHandler[T]{store: store, signKey: keys, granter: granter}
+	return tokenHandler[T]{
+		secretStore:   secretStore,
+		passwordStore: passwordStore,
+		signKey:       keys,
+		granter:       granter,
+	}
 }
 
 const tokenCallType = "RedeemToken"
 
 type tokenHandler[T any] struct {
-	store   *PasswordStore
-	signKey Keys
-	granter Granter[T]
+	passwordStore *PasswordStore
+	secretStore   SecretStore
+	signKey       Keys
+	granter       Granter[T]
 }
 
 func (h tokenHandler[T]) ServeHTTP(
@@ -60,17 +68,38 @@ func (h tokenHandler[T]) ServeHTTP(
 	}
 
 	// NOTE: we do not support RFC 6749 section 2.3.1 (on basic auth),
-	// so client_id and client_secret are expected to be in a POST request's
+	// so all oauth2 params are expected to be in a POST request's
 	// form.
 	clientID := in.PostForm.Get("client_id")
 	clientSecret := in.PostForm.Get("client_secret")
+	challenge := in.PostForm.Get("code_challenge")
+	verifier := in.PostForm.Get("verifier")
+	if clientID == "" || (clientSecret == "" && (challenge == "" || verifier == "")) {
+		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusBadRequest,
+			response{Message: "'client_id' must always be set and either " +
+				"'client_secret' or pkce params must be set"})
+		return
+	}
 
 	// validate that client id and client secret are expected
 	// and check what provider they're from. To know correct upstream URL.
-	redeemURL, certsURL, ok := h.validateSecret(ctx, traceID, attemptAt, w,
-		in, clientID, clientSecret)
+	var redeemURL, certsURL string
+	var ok bool
+	if clientSecret != "" {
+		redeemURL, certsURL, ok = h.validateSecret(ctx, traceID, attemptAt, w,
+			in, clientID, clientSecret)
+	} else {
+		redeemURL, certsURL, clientSecret, ok = h.fetchSecret(ctx, traceID,
+			attemptAt, w, in, clientID)
+		// add client_secret to forwarded request
+		if ok {
+			in.PostForm.Add("client_secret", clientSecret)
+			body = []byte(in.PostForm.Encode())
+		}
+
+	}
 	if !ok {
-		// validateSecret writes error response
+		// validateSecret/fetchSecret writes error response
 		return
 	}
 
@@ -116,6 +145,13 @@ func (h tokenHandler[T]) ServeHTTP(
 	if err := json.Unmarshal(respBody, &redeem); err != nil {
 		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusBadGateway,
 			response{Message: fmt.Sprintf("failed to unmarshal upstream response: %v", err.Error())})
+		return
+	}
+
+	if redeem.IDToken == "" {
+		logger.Warningf("missing ID token in response: possible error response: %s", string(respBody))
+		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
+			response{Message: "missing ID token in response"})
 		return
 	}
 
@@ -175,13 +211,7 @@ func (h tokenHandler[T]) validateSecret(
 	attemptAt time.Time, w http.ResponseWriter, in *http.Request,
 	clientID, clientSecret string,
 ) (redeemURL, certsURL string, ok bool) {
-	if clientID == "" || clientSecret == "" {
-		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusBadRequest,
-			response{Message: "missing client ID or client secret in request form"})
-		return
-	}
-
-	metadata, err := h.store.VerifyPassword(ctx, clientID, []byte(clientSecret))
+	metadata, err := h.passwordStore.VerifyPassword(ctx, clientID, []byte(clientSecret))
 	if err != nil {
 		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusBadRequest,
 			response{Message: fmt.Sprintf("verify secret: %v", err.Error())})
@@ -199,6 +229,46 @@ func (h tokenHandler[T]) validateSecret(
 			response{Message: "secret does not have a redeem URL"})
 		return
 	}
+
+	return
+}
+
+func (h tokenHandler[T]) fetchSecret(
+	ctx context.Context, traceID trace.ID,
+	attemptAt time.Time, w http.ResponseWriter, in *http.Request,
+	clientID string,
+) (redeemURL, certsURL, clientSecret string, ok bool) {
+	// clientIDs are store in base64 encoded, so we don't violate any store key
+	// character set constrains.
+	clientID = base64.StdEncoding.EncodeToString([]byte(clientID))
+
+	metadata, err := h.secretStore.GetSecretMetadata(ctx, clientID)
+	if err != nil {
+		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusBadRequest,
+			response{Message: fmt.Sprintf("get secret metadata: %v", err)})
+		return
+	}
+
+	if certsURL, ok = metadata[metadataKeyCertsURL]; !ok {
+		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
+			response{Message: "secret does not have a keys URL"})
+		return
+	}
+
+	redeemURL, ok = metadata[metadataKeyRedeemURL]
+	if !ok {
+		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
+			response{Message: "secret does not have a redeem URL"})
+		return
+	}
+
+	clientSecretData, err := h.secretStore.AccessSecret(ctx, clientID)
+	if err != nil {
+		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
+			response{Message: fmt.Sprintf("access secret data: %v", err)})
+		return
+	}
+	clientSecret = string(clientSecretData)
 
 	return
 }
