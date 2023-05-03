@@ -13,6 +13,7 @@ import (
 	"github.com/ernestrc/blue/logging/trace"
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/authhandler"
 )
 
 const (
@@ -38,6 +39,7 @@ func NewClient(
 	resChan := make(chan tokenResult)
 	readyChan := make(chan readyResult)
 	csrfToken := uuid.New().String()
+	usePKCE := conf.ClientSecret == ""
 
 	var srv http.Server
 	defer srv.Close()
@@ -53,9 +55,21 @@ func NewClient(
 	conf.RedirectURL = fmt.Sprintf("http://localhost:%d/o/oauth2/redirect",
 		readyResult.port)
 
+	var pkceOpts []oauth2.AuthCodeOption
+	var pkce authhandler.PKCEParams
+	var err error
+	if usePKCE {
+		pkce, err = generatePKCEParams(defaultLength)
+		if err != nil {
+			return nil, nil, fmt.Errorf("generate pkce params: %v", err)
+		}
+		pkceOpts = append(pkceOpts, oauth2.SetAuthURLParam("code_challenge", pkce.Challenge))
+		pkceOpts = append(pkceOpts, oauth2.SetAuthURLParam("code_challenge_method", pkce.ChallengeMethod))
+	}
 	// Redirect user to consent page to ask for permission
 	// for the scopes specified above.
-	url := conf.AuthCodeURL(csrfToken, oauth2.AccessTypeOffline)
+	authCodeURLOpts := append([]oauth2.AuthCodeOption{oauth2.AccessTypeOffline}, pkceOpts...)
+	url := conf.AuthCodeURL(csrfToken, authCodeURLOpts...)
 	visitURLCallback(url)
 
 	// Use the authorization code that is pushed to the redirect
@@ -63,7 +77,10 @@ func NewClient(
 	// initial access token.
 	result := <-resChan
 
-	tok, err := conf.Exchange(ctx, result.data)
+	if usePKCE {
+		pkceOpts = append(pkceOpts, oauth2.SetAuthURLParam("verifier", pkce.Verifier))
+	}
+	tok, err := conf.Exchange(ctx, result.data, pkceOpts...)
 	if err != nil {
 		return nil, nil, err
 	}

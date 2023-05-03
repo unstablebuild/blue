@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -56,7 +57,7 @@ func TestTokenHandler(t *testing.T) {
 		certsProvider      http.Handler
 		expectedStatusCode int
 	}{
-		{"missing client_id, client_secret is a bad request",
+		{"missing client_id is a bad request",
 			url.Values{}, goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
 		{"unkown client_id is a bad request",
 			url.Values{"client_id": []string{invalidClientID}},
@@ -79,6 +80,14 @@ func TestTokenHandler(t *testing.T) {
 		{"happy path",
 			url.Values{"client_id": []string{validClientID}, "client_secret": []string{string(validSecret)}},
 			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusOK},
+		{"happy path with PKCE",
+			url.Values{"client_id": []string{validClientID},
+				"code_challenge": []string{"1234"}, "verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
+			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusOK},
+		{"PKCE flow with missing secret in store is 500",
+			url.Values{"client_id": []string{invalidClientID},
+				"code_challenge": []string{"1234"}, "verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
+			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusInternalServerError},
 		{"retries redeem endpoints 5xx",
 			url.Values{"client_id": []string{validClientID}, "client_secret": []string{string(validSecret)}},
 			flakyRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusOK},
@@ -113,19 +122,25 @@ func TestTokenHandler(t *testing.T) {
 			certsServer := httptest.NewServer(test.certsProvider)
 			defer certsServer.Close()
 
-			store := NewPasswordStore(document.NewInMemoryService())
-			store.CreatePassword(context.Background(), validClientID, validSecret, map[string]string{
+			pwdStore := NewPasswordStore(document.NewInMemoryService())
+			pwdStore.CreatePassword(context.Background(), validClientID, validSecret, map[string]string{
 				metadataKeyRedeemURL: tokenServer.URL,
 				metadataKeyCertsURL:  certsServer.URL,
 			})
-			store.CreatePassword(context.Background(), clientIDMissingURLS, secretMissingURLS, nil)
+			pwdStore.CreatePassword(context.Background(), clientIDMissingURLS, secretMissingURLS, nil)
+
+			encodedClientID := base64.StdEncoding.EncodeToString([]byte(validClientID))
+			secretStore := MapSecretStore(map[string][]byte{encodedClientID: validSecret},
+				metadataKeyRedeemURL, tokenServer.URL,
+				metadataKeyCertsURL, certsServer.URL,
+			)
 
 			req := httptest.NewRequest("POST", "http://localhost:3001/o/oauth2/token",
 				strings.NewReader(test.requestBody.Encode()))
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 			w := httptest.NewRecorder()
-			sut := TokenHTTPHandler(testSignKeys, store, grantAll)
+			sut := TokenHTTPHandler(testSignKeys, pwdStore, secretStore, grantAll)
 			sut.ServeHTTP(w, req)
 
 			resp := w.Result()
