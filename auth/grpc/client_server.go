@@ -41,6 +41,19 @@ func GRPCServerWithOauth2[T any](
 	}
 }
 
+// GRPCServerWithInsecureOauth2 returns a set of grpc.ServerOption that configure the server
+// to allow oauth2 requests only, without TLS credentials. This should only be used
+// when an alternate method of securing the transport is used (i.e. TCP/TLS load balancer, etc.),
+// or for debugging or local testing.
+func GRPCServerWithInsecureOauth2[T any](
+	verifyKeys auth.Keys,
+	authorizer auth.Authorizer[T],
+) []grpc.ServerOption {
+	return []grpc.ServerOption{
+		grpc.UnaryInterceptor(oauth2UnaryInterceptor(verifyKeys, authorizer)),
+	}
+}
+
 func oauth2UnaryInterceptor[T any](
 	verifyKeys auth.Keys, authorizer auth.Authorizer[T],
 ) grpc.UnaryServerInterceptor {
