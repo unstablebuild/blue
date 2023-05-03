@@ -45,12 +45,12 @@ func (s *secretRotate) Man() cli.Manual {
 }
 
 func (s *secretRotate) Run(ctx context.Context, args []string) error {
-	args, _, ok, err := cli.ParseUsage(s, s.fs, 1, args)
+	args, rest, ok, err := cli.ParseUsage(s, s.fs, 1, args)
 	if err != nil || !ok {
 		return err
 	}
 
-	if len(args) <= 1 && !s.generate {
+	if len(rest) < 1 && !s.generate {
 		return cli.ErrInvalidArgs
 	}
 
@@ -58,7 +58,7 @@ func (s *secretRotate) Run(ctx context.Context, args []string) error {
 
 	var payload []byte
 	if !s.generate {
-		filename := args[1]
+		filename := rest[0]
 		payload, err = os.ReadFile(filename)
 		if err != nil {
 			return fmt.Errorf("read file: %v", err)
