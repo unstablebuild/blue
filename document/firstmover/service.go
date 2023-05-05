@@ -13,6 +13,7 @@ import (
 
 	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/document/rpc"
+	"github.com/ernestrc/blue/document/rpc/proto"
 	"github.com/ernestrc/blue/logging"
 	"github.com/ernestrc/blue/retry"
 	multierr "github.com/ernestrc/go-multierror"
@@ -275,13 +276,17 @@ func (s *service) setActiveAndUnlock(svc document.Service) {
 func (s *service) lead(ctx context.Context, listener net.Listener) (reconnect bool, err error) {
 	server := rpc.NewServer(document.SyncWithLocker(s.svc, &s.mu), s.cfg.Marshaler)
 	defer listener.Close()
-	defer server.Close()
+
+	srv := grpc.NewServer()
+	defer srv.Stop()
+
+	proto.RegisterDocumentStoreServer(srv, server)
 
 	done := make(chan error)
 	quitCh := s.quitCh
 	go func() {
 		select {
-		case done <- server.Serve(listener):
+		case done <- srv.Serve(listener):
 		case <-quitCh:
 		}
 	}()
