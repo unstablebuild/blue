@@ -3,35 +3,27 @@ package rpc
 import (
 	"context"
 	"errors"
-	"net"
 
 	"github.com/ernestrc/blue/document"
 	proto "github.com/ernestrc/blue/document/rpc/proto"
 	"github.com/ernestrc/blue/encoding"
-	"google.golang.org/grpc"
 )
 
 // Server wraps another document.Service and exposes it through a grpc interface.
 type Server struct {
 	marshaler encoding.Marshaler
 	other     document.Service
-	srv       *grpc.Server
 	proto.UnimplementedDocumentStoreServer
 }
 
 // NewServer allocates storage for a new Server and initializes it.
-func NewServer(other document.Service, m encoding.Marshaler, opt ...grpc.ServerOption) *Server {
+func NewServer(other document.Service, m encoding.Marshaler) *Server {
 	ret := new(Server)
-
-	srv := grpc.NewServer(opt...)
-	proto.RegisterDocumentStoreServer(srv, ret)
-
-	ret.Init(other, m, srv)
+	ret.Init(other, m)
 	return ret
 }
 
-func (s *Server) Init(other document.Service, m encoding.Marshaler, srv *grpc.Server) {
-	s.srv = srv
+func (s *Server) Init(other document.Service, m encoding.Marshaler) {
 	s.other = other
 	s.marshaler = m
 }
@@ -186,18 +178,4 @@ func (s *Server) List(
 	}
 
 	return s.streamList(list, it)
-}
-
-// Serve accepts incoming connections on the listener lis.
-// Serve returns when lis.Accept fails with fatal errors. lis will be closed when
-// this method returns.
-// Serve will return a non-nil error unless Stop or GracefulStop is called.
-func (s *Server) Serve(lis net.Listener) error {
-	return s.srv.Serve(lis)
-}
-
-// Close shuts down underlying grpc.Server.
-func (s *Server) Close() error {
-	s.srv.Stop()
-	return nil
 }

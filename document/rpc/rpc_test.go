@@ -32,17 +32,17 @@ func runDatastoreServerOverListener(
 
 	srv := new(Server)
 	register(gsrv, srv)
-	srv.Init(other, marshaler, gsrv)
+	srv.Init(other, marshaler)
 
 	lis, err := listener()
 	require.NoError(t, err)
 
 	teardown := func() {
-		srv.Close()
+		gsrv.Stop()
 		lis.Close()
 	}
 
-	go srv.Serve(lis)
+	go gsrv.Serve(lis)
 
 	return lis.Addr(), teardown
 }
