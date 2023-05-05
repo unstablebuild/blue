@@ -214,7 +214,7 @@ loop:
 			s.followFailures = 0 // reset
 			// set active svc and unlock API
 			s.setActiveAndUnlock(client)
-			s.log(log.InfoLevel, "Successfully connected to leader. Unlocking API...")
+			s.log(log.DebugLevel, "Successfully connected to leader. Unlocking API...")
 			break loop
 		case connectivity.Connecting, connectivity.Idle:
 			conn.WaitForStateChange(ctx, state)
@@ -292,7 +292,7 @@ func (s *service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 	}()
 
 	// set active svc and unlock API
-	s.log(log.InfoLevel, "Successfully assumed position of leader. Unlocking API...")
+	s.log(log.DebugLevel, "Successfully assumed position of leader. Unlocking API...")
 	s.setActiveAndUnlock(s.svc)
 
 	select {
