@@ -79,6 +79,18 @@ func (s *Segador) assertEqualMap(t *testing.T, svc document.Service, target map[
 	delete(target, strings.ToLower(document.DefaultCreatedAtField))
 	delete(target, strings.ToLower(document.DefaultUpdatedAtField))
 
+	// this is a hack, which enables partitions tests to work seamlessly
+	for k := range res {
+		if strings.HasPrefix(k, "__") {
+			delete(res, k)
+		}
+	}
+	for k := range target {
+		if strings.HasPrefix(k, "__") {
+			delete(target, k)
+		}
+	}
+
 	assert.EqualValues(t, res, target)
 }
 

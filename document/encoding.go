@@ -342,7 +342,7 @@ func MatchFilter(proto map[string]interface{}, f Filter) bool {
 	}
 
 	field, exist := proto[f.FieldPath[0]]
-	if !exist {
+	if !exist || field == nil {
 		return false
 	}
 
