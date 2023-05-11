@@ -21,7 +21,7 @@ import (
 
 type user struct{}
 
-func TestClientServer(t *testing.T) {
+func TestClientServerUnary(t *testing.T) {
 	testSignKey := auth.SymmetricKey([]byte("1234"))
 	testSignKeys := auth.StaticSymmetricKeys(testSignKey)
 	denyAll := auth.FuncAuthorizer(func(context.Context, auth.UserClaims[user], string) error {
@@ -99,6 +99,10 @@ func TestClientServer(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestClientServerStream(t *testing.T) {
+	// stream re-uses all of unary's functionality so the roi of adding tests is rather low
 }
 
 func loadKey(t *testing.T, filename string) auth.Key {
