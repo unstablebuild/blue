@@ -37,6 +37,7 @@ func GRPCServerWithOauth2[T any](
 ) []grpc.ServerOption {
 	return []grpc.ServerOption{
 		grpc.UnaryInterceptor(oauth2UnaryInterceptor(verifyKeys, authorizer)),
+		grpc.StreamInterceptor(oauth2StreamInterceptor(verifyKeys, authorizer)),
 		grpc.Creds(creds),
 	}
 }
@@ -51,6 +52,21 @@ func GRPCServerWithInsecureOauth2[T any](
 ) []grpc.ServerOption {
 	return []grpc.ServerOption{
 		grpc.UnaryInterceptor(oauth2UnaryInterceptor(verifyKeys, authorizer)),
+		grpc.StreamInterceptor(oauth2StreamInterceptor(verifyKeys, authorizer)),
+	}
+}
+
+func oauth2StreamInterceptor[T any](
+	verifyKeys auth.Keys, authorizer auth.Authorizer[T],
+) grpc.StreamServerInterceptor {
+	return func(srv interface{}, ss grpc.ServerStream,
+		info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		err := authenticate(ss.Context(), "auth.StreamInterceptor",
+			info.FullMethod, verifyKeys, authorizer)
+		if err != nil {
+			return err
+		}
+		return handler(srv, ss)
 	}
 }
 
@@ -61,73 +77,82 @@ func oauth2UnaryInterceptor[T any](
 		ctx context.Context, req interface{},
 		info *grpc.UnaryServerInfo, handler grpc.UnaryHandler,
 	) (interface{}, error) {
-		const (
-			callType     = "auth.UnaryInterceptor"
-			bearerPrefix = "Bearer "
-		)
-
-		traceID, ctx := trace.FromContextOrNew(ctx)
-		fields := []logging.Field{
-			{Key: logging.KeyClass, Value: "auth.grpc"},
-			{Key: "Method", Value: info.FullMethod},
-		}
-		attemptAt := logging.LogAttempt(traceID, callType, fields...)
-
-		md, ok := metadata.FromIncomingContext(ctx)
-		if !ok {
-			err := status.Errorf(codes.InvalidArgument, "missing metadata")
-			logging.LogResult(err, attemptAt, traceID, callType, fields...)
-			return nil, err
-		}
-
-		// The keys within metadata.MD are normalized to lowercase.
-		// See: https://godoc.org/google.golang.org/grpc/metadata#New
-		bearerAuthTokenMulti := md["authorization"]
-		if len(bearerAuthTokenMulti) == 0 || bearerAuthTokenMulti[0] == "" {
-			err := status.Errorf(codes.InvalidArgument, "missing authorization in metadata")
-			logging.LogResult(err, attemptAt, traceID, callType, fields...)
-			return nil, err
-		}
-
-		bearerAuthToken := bearerAuthTokenMulti[0]
-
-		if !strings.HasPrefix(bearerAuthToken, bearerPrefix) {
-			msg := fmt.Sprintf("validate token request: bearer not found: %q",
-				bearerAuthToken)
-			err := status.Errorf(codes.PermissionDenied, msg)
-			logging.LogResult(err, attemptAt, traceID, callType, fields...)
-			return nil, err
-		}
-
-		keys, err := verifyKeys.Verify(ctx)
+		err := authenticate(ctx, "auth.UnaryInterceptor",
+			info.FullMethod, verifyKeys, authorizer)
 		if err != nil {
-			err = fmt.Errorf("get verify keys: %v", err)
-			err := status.Errorf(codes.PermissionDenied, err.Error())
-			logging.LogResult(err, attemptAt, traceID, callType, fields...)
 			return nil, err
 		}
-
-		authToken := bearerAuthToken[len(bearerPrefix):]
-		var claims auth.UserClaims[T]
-		for _, k := range keys {
-			claims, err = auth.VerifyToken[T](k, authToken)
-			if err == nil {
-				break
-			}
-		}
-		if err != nil {
-			err := status.Errorf(codes.PermissionDenied, err.Error())
-			logging.LogResult(err, attemptAt, traceID, callType, fields...)
-			return nil, err
-		}
-
-		if err := authorizer.Authorize(ctx, claims, info.FullMethod); err != nil {
-			err := status.Errorf(codes.PermissionDenied, err.Error())
-			logging.LogResult(err, attemptAt, traceID, callType, fields...)
-			return nil, err
-		}
-
-		logging.LogResult(nil, attemptAt, traceID, callType, fields...)
 		return handler(ctx, req)
 	}
+}
+
+func authenticate[T any](
+	ctx context.Context, callType, method string,
+	verifyKeys auth.Keys, authorizer auth.Authorizer[T],
+) error {
+	const bearerPrefix = "Bearer "
+
+	traceID, ctx := trace.FromContextOrNew(ctx)
+	fields := []logging.Field{
+		{Key: logging.KeyClass, Value: "auth.grpc"},
+		{Key: "Method", Value: method},
+	}
+	attemptAt := logging.LogAttempt(traceID, callType, fields...)
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		err := status.Errorf(codes.InvalidArgument, "missing metadata")
+		logging.LogResult(err, attemptAt, traceID, callType, fields...)
+		return err
+	}
+
+	// The keys within metadata.MD are normalized to lowercase.
+	// See: https://godoc.org/google.golang.org/grpc/metadata#New
+	bearerAuthTokenMulti := md["authorization"]
+	if len(bearerAuthTokenMulti) == 0 || bearerAuthTokenMulti[0] == "" {
+		err := status.Errorf(codes.InvalidArgument, "missing authorization in metadata")
+		logging.LogResult(err, attemptAt, traceID, callType, fields...)
+		return err
+	}
+
+	bearerAuthToken := bearerAuthTokenMulti[0]
+
+	if !strings.HasPrefix(bearerAuthToken, bearerPrefix) {
+		msg := fmt.Sprintf("validate token request: bearer not found: %q",
+			bearerAuthToken)
+		err := status.Errorf(codes.PermissionDenied, msg)
+		logging.LogResult(err, attemptAt, traceID, callType, fields...)
+		return err
+	}
+
+	keys, err := verifyKeys.Verify(ctx)
+	if err != nil {
+		err = fmt.Errorf("get verify keys: %v", err)
+		err := status.Errorf(codes.PermissionDenied, err.Error())
+		logging.LogResult(err, attemptAt, traceID, callType, fields...)
+		return err
+	}
+
+	authToken := bearerAuthToken[len(bearerPrefix):]
+	var claims auth.UserClaims[T]
+	for _, k := range keys {
+		claims, err = auth.VerifyToken[T](k, authToken)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		err := status.Errorf(codes.PermissionDenied, err.Error())
+		logging.LogResult(err, attemptAt, traceID, callType, fields...)
+		return err
+	}
+
+	if err := authorizer.Authorize(ctx, claims, method); err != nil {
+		err := status.Errorf(codes.PermissionDenied, err.Error())
+		logging.LogResult(err, attemptAt, traceID, callType, fields...)
+		return err
+	}
+
+	logging.LogResult(nil, attemptAt, traceID, callType, fields...)
+	return nil
 }
