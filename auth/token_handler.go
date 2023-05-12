@@ -26,11 +26,13 @@ import (
 func TokenHTTPHandler[T any](
 	keys Keys, passwordStore *PasswordStore,
 	secretStore SecretStore, granter Granter[T],
+	expiry time.Duration,
 ) http.Handler {
 	return tokenHandler[T]{
 		secretStore:   secretStore,
 		passwordStore: passwordStore,
 		signKey:       keys,
+		expiry:        expiry,
 		granter:       granter,
 	}
 }
@@ -42,6 +44,7 @@ type tokenHandler[T any] struct {
 	secretStore   SecretStore
 	signKey       Keys
 	granter       Granter[T]
+	expiry        time.Duration
 }
 
 func (h tokenHandler[T]) ServeHTTP(
@@ -190,15 +193,12 @@ func (h tokenHandler[T]) ServeHTTP(
 		return
 	}
 
-	redeem.AccessToken, err = SignToken(key, claims.Subject, claims.Email, extra)
+	redeem.AccessToken, err = SignToken(key, claims.Subject, claims.Email, extra, h.expiry)
 	if err != nil {
 		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
 			response{Message: fmt.Sprintf("sign token: %v", err.Error())})
 		return
 	}
-
-	// TODO should support otherwise oauth2 client will have to re-login every time
-	// redeem.RefreshToken = ""
 
 	// do not return provider id token to client
 	redeem.IDToken = ""

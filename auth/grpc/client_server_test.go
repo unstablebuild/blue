@@ -71,7 +71,7 @@ func TestClientServerUnary(t *testing.T) {
 			signKey, err := test.keys.Sign(context.Background())
 			require.NoError(t, err)
 
-			idToken, err := auth.SignToken(signKey, "1234", "it@unstable.build", user{})
+			idToken, err := auth.SignToken(signKey, "1234", "it@unstable.build", user{}, 1*time.Hour)
 			require.NoError(t, err)
 			oauthToken := oauth2.Token{AccessToken: idToken}
 
