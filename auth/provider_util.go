@@ -18,9 +18,10 @@ import (
 )
 
 var (
-	metadataKeyLoginURL    = "login_url"
-	metadataKeyRedeemURL   = "redeem_url"
-	metadataKeyCertsURL    = "certs_url"
+	metadataKeyLoginURL  = "login_url"
+	metadataKeyRedeemURL = "redeem_url"
+	metadataKeyTokenURL  = "token_url"
+	metadataKeyCertsURL  = "certs_url"
 
 	httpOutboundRetryStrategy = retry.CombinedStrategy(
 		retry.LimitStrategy(10), retry.ExponentialStrategy(100*time.Millisecond, 1*time.Second),

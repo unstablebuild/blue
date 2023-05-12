@@ -19,6 +19,9 @@ func getServiceName(tpe reflect.Type) string {
 	return strings.Replace(tpe.String(), "*document.", "", 1)
 }
 
+// TODO pass service name rather than creating one
+// TODO do not log common errors like ErrNotFound
+
 // WithLogging wraps a Service to provide instrumentation in the form of logs.
 func WithLogging(svc document.Service) document.Service {
 	return loggingService{

@@ -73,26 +73,43 @@ func (h tokenHandler[T]) ServeHTTP(
 	// NOTE: we do not support RFC 6749 section 2.3.1 (on basic auth),
 	// so all oauth2 params are expected to be in a POST request's
 	// form.
+	grantType := in.PostForm.Get("grant_type")
 	clientID := in.PostForm.Get("client_id")
 	clientSecret := in.PostForm.Get("client_secret")
-	challenge := in.PostForm.Get("code_challenge")
-	verifier := in.PostForm.Get("verifier")
-	if clientID == "" || (clientSecret == "" && (challenge == "" || verifier == "")) {
+	refreshToken := in.PostForm.Get("refresh_token")
+
+	// validate by gran type
+	switch grantType {
+	case "authorization_code":
+		challenge := in.PostForm.Get("code_challenge")
+		verifier := in.PostForm.Get("verifier")
+		if clientID == "" || (clientSecret == "" && (challenge == "" || verifier == "")) {
+			writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusBadRequest,
+				response{Message: "'client_id' must always be set and either " +
+					"'client_secret' or pkce params must be set for this grant_type"})
+			return
+		}
+	case "refresh_token":
+		if refreshToken == "" {
+			writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusBadRequest,
+				response{Message: "'refresh_token' must always be set for this gran_type"})
+			return
+		}
+	default:
 		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusBadRequest,
-			response{Message: "'client_id' must always be set and either " +
-				"'client_secret' or pkce params must be set"})
+			response{Message: fmt.Sprintf("unsupported grant_type: %v", grantType)})
 		return
 	}
 
 	// validate that client id and client secret are expected
 	// and check what provider they're from. To know correct upstream URL.
-	var redeemURL, certsURL string
+	var redeemURL, tokenURL, certsURL string
 	var ok bool
 	if clientSecret != "" {
-		redeemURL, certsURL, ok = h.validateSecret(ctx, traceID, attemptAt, w,
+		redeemURL, tokenURL, certsURL, ok = h.validateSecret(ctx, traceID, attemptAt, w,
 			in, clientID, clientSecret)
 	} else {
-		redeemURL, certsURL, clientSecret, ok = h.fetchSecret(ctx, traceID,
+		redeemURL, tokenURL, certsURL, clientSecret, ok = h.fetchSecret(ctx, traceID,
 			attemptAt, w, in, clientID)
 		// add client_secret to forwarded request
 		if ok {
@@ -104,6 +121,16 @@ func (h tokenHandler[T]) ServeHTTP(
 	if !ok {
 		// validateSecret/fetchSecret writes error response
 		return
+	}
+
+	// use token URL to refresh tokens
+	if refreshToken != "" {
+		if tokenURL == "" {
+			writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
+				response{Message: "secret does not have a token URL, but token refresh attempted"})
+			return
+		}
+		redeemURL = tokenURL
 	}
 
 	// clone incoming request
@@ -203,6 +230,12 @@ func (h tokenHandler[T]) ServeHTTP(
 	// do not return provider id token to client
 	redeem.IDToken = ""
 
+	// if no token URL is available for this provider
+	// then do not return a refresh token.
+	if tokenURL == "" {
+		redeem.RefreshToken = ""
+	}
+
 	writeRedeemResponse(ctx, traceID, attemptAt, w, in, redeem)
 }
 
@@ -210,7 +243,7 @@ func (h tokenHandler[T]) validateSecret(
 	ctx context.Context, traceID trace.ID,
 	attemptAt time.Time, w http.ResponseWriter, in *http.Request,
 	clientID, clientSecret string,
-) (redeemURL, certsURL string, ok bool) {
+) (redeemURL, tokenURL, certsURL string, ok bool) {
 	metadata, err := h.passwordStore.VerifyPassword(ctx, clientID, []byte(clientSecret))
 	if err != nil {
 		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusBadRequest,
@@ -229,6 +262,7 @@ func (h tokenHandler[T]) validateSecret(
 			response{Message: "secret does not have a redeem URL"})
 		return
 	}
+	tokenURL, _ = metadata[metadataKeyTokenURL]
 
 	return
 }
@@ -237,7 +271,7 @@ func (h tokenHandler[T]) fetchSecret(
 	ctx context.Context, traceID trace.ID,
 	attemptAt time.Time, w http.ResponseWriter, in *http.Request,
 	clientID string,
-) (redeemURL, certsURL, clientSecret string, ok bool) {
+) (redeemURL, tokenURL, certsURL, clientSecret string, ok bool) {
 	// clientIDs are store in base64 encoded, so we don't violate any store key
 	// character set constrains.
 	clientID = base64.StdEncoding.EncodeToString([]byte(clientID))
@@ -261,6 +295,9 @@ func (h tokenHandler[T]) fetchSecret(
 			response{Message: "secret does not have a redeem URL"})
 		return
 	}
+
+	// optional
+	tokenURL, _ = metadata[metadataKeyTokenURL]
 
 	clientSecretData, err := h.secretStore.AccessSecret(ctx, clientID)
 	if err != nil {
