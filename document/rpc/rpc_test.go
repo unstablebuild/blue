@@ -27,8 +27,9 @@ func runDatastoreServerOverListener(
 	listener func() (net.Listener, error),
 	marshaler encoding.Marshaler,
 	register func(grpc.ServiceRegistrar, proto.DocumentStoreServer),
+	opts ...grpc.ServerOption,
 ) (net.Addr, func()) {
-	gsrv := grpc.NewServer()
+	gsrv := grpc.NewServer(opts...)
 
 	srv := new(Server)
 	register(gsrv, srv)
