@@ -9,6 +9,7 @@ import (
 	proto "github.com/ernestrc/blue/document/rpc/proto"
 	documenttest "github.com/ernestrc/blue/document/test"
 	"github.com/ernestrc/blue/encoding/bson"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -21,11 +22,11 @@ func TestRPCDatastoreCustomServiceDesc(t *testing.T) {
 
 		opts := []grpc.ServerOption{
 			grpc.UnaryInterceptor(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-				require.True(t, strings.Contains(info.FullMethod, collectionName))
+				assert.Equal(t, 1, strings.Count(info.FullMethod, collectionName))
 				return handler(ctx, req)
 			}),
 			grpc.StreamInterceptor(func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-				require.True(t, strings.Contains(info.FullMethod, collectionName))
+				assert.Equal(t, 1, strings.Count(info.FullMethod, collectionName))
 				return handler(srv, ss)
 			}),
 		}

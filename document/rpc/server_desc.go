@@ -19,10 +19,12 @@ func RegisterCollectionDocumentService(
 ) {
 	desc := proto.DocumentStore_ServiceDesc
 	desc.ServiceName = fmt.Sprintf("proto.DocumentStore.%s", collection)
-	for i, method := range desc.Methods {
-		method := method
-		desc.Methods[i].Handler = updateMethodInfoUnaryHandler(desc.ServiceName, method.Handler)
+	var newMethods []grpc.MethodDesc
+	for _, method := range desc.Methods {
+		method.Handler = updateMethodInfoUnaryHandler(desc.ServiceName, method.Handler)
+		newMethods = append(newMethods, method)
 	}
+	desc.Methods = newMethods
 	// stream method name is not mangling because it operates at a lower level
 	// and the full method is defined when the path is matched, which is how
 	// unary should work.
