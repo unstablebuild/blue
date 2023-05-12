@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +21,7 @@ func TestAuthMiddleware(t *testing.T) {
 	pub1 := loadKey(t, "./testdata/jwk-pub1.json.pub")
 	pub2 := loadKey(t, "./testdata/jwk-pub2.json.pub")
 	pub3 := loadKey(t, "./testdata/jwk-pub3.json.pub")
-	validToken, err := SignToken(testSignKey, "1234", "1234", User{Role: "Admin"})
+	validToken, err := SignToken(testSignKey, "1234", "1234", User{Role: "Admin"}, 1*time.Hour)
 	require.NoError(t, err)
 	multiKeys := StaticAsymmetricKeys(priv, pub1, pub2, pub3)
 

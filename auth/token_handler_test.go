@@ -140,7 +140,7 @@ func TestTokenHandler(t *testing.T) {
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 			w := httptest.NewRecorder()
-			sut := TokenHTTPHandler(testSignKeys, pwdStore, secretStore, grantAll)
+			sut := TokenHTTPHandler(testSignKeys, pwdStore, secretStore, grantAll, 1*time.Hour)
 			sut.ServeHTTP(w, req)
 
 			resp := w.Result()

@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -55,7 +56,7 @@ func TestSignVerify(t *testing.T) {
 			signKey, err := test.keys.Sign(context.Background())
 			require.NoError(t, err)
 
-			token, err := SignToken(signKey, "nada1234", "nada@unstable.build", User{Role: "admin"})
+			token, err := SignToken(signKey, "nada1234", "nada@unstable.build", User{Role: "admin"}, 1*time.Hour)
 			require.NoError(t, err)
 
 			verifyKeys, err := test.keys.Verify(context.Background())

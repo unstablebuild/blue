@@ -10,8 +10,7 @@ import (
 )
 
 const (
-	defaultIssuer         = "hopper-auth"
-	defaultExpireDuration = 24 * time.Hour
+	defaultIssuer = "hopper-auth"
 )
 
 var (
@@ -27,13 +26,13 @@ type UserClaims[T any] struct {
 }
 
 // SignToken creates a new JWT token with the given user, email and role claims.
-func SignToken[T any](key Key, userID, email string, extraClaims T) (string, error) {
+func SignToken[T any](key Key, userID, email string, extraClaims T, expiry time.Duration) (string, error) {
 	claims := UserClaims[T]{
 		Email:  email,
 		UserID: userID,
 		Extra:  extraClaims,
 		Claims: jwt.Claims{
-			Expiry:    jwt.NewNumericDate(time.Now().Add(defaultExpireDuration)),
+			Expiry:    jwt.NewNumericDate(time.Now().Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			Issuer:    defaultIssuer,
