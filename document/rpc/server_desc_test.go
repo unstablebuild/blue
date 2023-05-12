@@ -1,6 +1,8 @@
 package rpc
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	"github.com/ernestrc/blue/document"
@@ -16,10 +18,22 @@ func TestRPCDatastoreCustomServiceDesc(t *testing.T) {
 		collectionName := "myCollection"
 		marshaler := bson.Marshaler()
 		cache := document.NewInMemoryServiceWithMarshaler(marshaler)
+
+		opts := []grpc.ServerOption{
+			grpc.UnaryInterceptor(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+				require.True(t, strings.Contains(info.FullMethod, collectionName))
+				return handler(ctx, req)
+			}),
+			grpc.StreamInterceptor(func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+				require.True(t, strings.Contains(info.FullMethod, collectionName))
+				return handler(srv, ss)
+			}),
+		}
+
 		addr, teardown := runDatastoreServerOverListener(t, cache,
 			tcpListener, marshaler, func(reg grpc.ServiceRegistrar, srv proto.DocumentStoreServer) {
 				RegisterCollectionDocumentService(reg, srv, collectionName)
-			})
+			}, opts...)
 
 		cc, err := grpc.Dial(addr.String(), grpc.WithInsecure())
 		require.NoError(t, err)

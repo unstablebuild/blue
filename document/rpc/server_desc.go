@@ -3,6 +3,7 @@ package rpc
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	proto "github.com/ernestrc/blue/document/rpc/proto"
 	"github.com/ernestrc/blue/encoding"
@@ -18,7 +19,49 @@ func RegisterCollectionDocumentService(
 ) {
 	desc := proto.DocumentStore_ServiceDesc
 	desc.ServiceName = fmt.Sprintf("proto.DocumentStore.%s", collection)
+	for i, method := range desc.Methods {
+		method := method
+		desc.Methods[i].Handler = updateMethodInfoUnaryHandler(desc.ServiceName, method.Handler)
+	}
+	// stream method name is not mangling because it operates at a lower level
+	// and the full method is defined when the path is matched, which is how
+	// unary should work.
 	registrar.RegisterService(&desc, srv)
+}
+
+func updateMethodInfoUnaryHandler(
+	newServiceName string,
+	// for some reason unary handlers are a private type!
+	prev func(
+		srv interface{}, ctx context.Context,
+		dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor,
+	) (interface{}, error),
+) func(
+	srv interface{}, ctx context.Context, dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor) (
+	interface{}, error,
+) {
+	return func(
+		srv interface{}, ctx context.Context,
+		dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor,
+	) (interface{}, error) {
+		if interceptor != nil {
+			interceptor = updateMethodInfoUnaryInterceptor(newServiceName, interceptor)
+		}
+		return prev(srv, ctx, dec, interceptor)
+	}
+}
+
+func updateMethodInfoUnaryInterceptor(
+	newServiceName string, prev grpc.UnaryServerInterceptor,
+) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{},
+		info *grpc.UnaryServerInfo, handler grpc.UnaryHandler,
+	) (interface{}, error) {
+		info.FullMethod = strings.ReplaceAll(info.FullMethod,
+			"proto.DocumentStore", newServiceName)
+		return prev(ctx, req, info, handler)
+	}
 }
 
 // InitWithCollection initializes this Client with the given grpc connection, encoding marhshaler,
