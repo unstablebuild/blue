@@ -13,6 +13,8 @@ import (
 	proto "github.com/ernestrc/blue/document/rpc/proto"
 	"github.com/ernestrc/blue/encoding"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type Client struct {
@@ -67,7 +69,7 @@ func (c *Client) Create(
 	res, err := c.pb.Create(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
-		return err
+		return convertError(err)
 	}
 	if res.GetAlreadyExists() {
 		return document.ErrAlreadyExists
@@ -87,7 +89,7 @@ func (c *Client) Set(
 	_, err = c.pb.Set(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
-		return err
+		return convertError(err)
 	}
 	return nil
 }
@@ -105,7 +107,7 @@ func (c *Client) Update(
 	res, err := c.pb.Update(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
-		return err
+		return convertError(err)
 	}
 	if res.GetNotFound() {
 		return document.ErrNotFound
@@ -123,7 +125,7 @@ func (c *Client) Get(
 	res, err := c.pb.Get(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
-		return err
+		return convertError(err)
 	}
 	if res.GetNotFound() {
 		return document.ErrNotFound
@@ -144,7 +146,7 @@ func (c *Client) Delete(
 	_, err := c.pb.Delete(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
-		return err
+		return convertError(err)
 	}
 	return nil
 }
@@ -205,7 +207,7 @@ func (c *Client) List(
 	res, err := c.pb.List(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
-		return nil, err
+		return nil, convertError(err)
 	}
 	return &rpcIterator{marshaler: c.marshaler, cc: res}, nil
 }
@@ -228,4 +230,23 @@ func (c *Client) encodeCreateData(data interface{}) ([]byte, error) {
 	}
 
 	return document.Encode(c.marshaler, data, true), nil
+}
+
+func convertError(err error) error {
+	status, ok := status.FromError(err)
+	if !ok {
+		return err
+	}
+	switch status.Code() {
+	case codes.FailedPrecondition:
+		return document.ErrPreconditionFailed
+	case codes.NotFound:
+		return document.ErrNotFound
+	case codes.AlreadyExists:
+		return document.ErrAlreadyExists
+	case codes.Unauthenticated, codes.PermissionDenied:
+		return document.ErrPermissionDenied
+	default:
+		return err
+	}
 }
