@@ -7,6 +7,8 @@ import (
 	"github.com/ernestrc/blue/document"
 	proto "github.com/ernestrc/blue/document/rpc/proto"
 	"github.com/ernestrc/blue/encoding"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Server wraps another document.Service and exposes it through a grpc interface.
@@ -49,6 +51,9 @@ func (s *Server) Create(
 				AlreadyExists: true,
 			}
 		}
+		if err == document.ErrPermissionDenied {
+			err = status.Error(codes.PermissionDenied, "")
+		}
 		return
 	}
 
@@ -70,6 +75,9 @@ func (s *Server) Set(
 	}
 
 	err = s.other.Set(ctx, id, &pr)
+	if err == document.ErrPermissionDenied {
+		err = status.Error(codes.PermissionDenied, "")
+	}
 	res = new(proto.DocumentResponse)
 	return
 }
@@ -94,11 +102,13 @@ func (s *Server) Update(
 	}
 	err = s.other.Update(ctx, req.GetId(), updates, preconds...)
 	if err != nil {
-		if err == document.ErrNotFound {
+		switch err {
+		case document.ErrNotFound:
 			return &proto.UpdateDocumentResponse{NotFound: true}, nil
-		}
-		if err == document.ErrPreconditionFailed {
+		case document.ErrPreconditionFailed:
 			return &proto.UpdateDocumentResponse{PreconditionFailed: true}, nil
+		case document.ErrPermissionDenied:
+			return nil, status.Error(codes.PermissionDenied, "")
 		}
 		return nil, err
 	}
@@ -118,6 +128,9 @@ func (s *Server) Get(
 			res = &proto.GetDocumentResponse{NotFound: true}
 			err = nil
 		}
+		if err == document.ErrPermissionDenied {
+			err = status.Error(codes.PermissionDenied, "")
+		}
 		return
 	}
 
@@ -134,6 +147,9 @@ func (s *Server) Delete(
 	id := req.GetId()
 
 	err = s.other.Delete(ctx, id)
+	if err == document.ErrPermissionDenied {
+		err = status.Error(codes.PermissionDenied, "")
+	}
 	res = new(proto.DocumentResponse)
 	return
 }
@@ -174,6 +190,9 @@ func (s *Server) List(
 
 	it, err := s.other.List(ctx, filters)
 	if err != nil {
+		if err == document.ErrPermissionDenied {
+			err = status.Error(codes.PermissionDenied, "")
+		}
 		return err
 	}
 

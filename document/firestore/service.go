@@ -227,6 +227,8 @@ func convertError(err error) error {
 		err = document.ErrPreconditionFailed
 	case codes.AlreadyExists:
 		err = document.ErrAlreadyExists
+	case codes.PermissionDenied:
+		err = document.ErrPermissionDenied
 	default:
 		logrus.Warningf("err %s: code %v", err, status.Code(err))
 	}
