@@ -2,12 +2,12 @@ package logging
 
 import (
 	"context"
-	"reflect"
-	"strings"
+	"time"
 
 	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/logging"
 	"github.com/ernestrc/blue/logging/trace"
+	"github.com/sirupsen/logrus"
 )
 
 type loggingService struct {
@@ -15,18 +15,11 @@ type loggingService struct {
 	serviceName string
 }
 
-func getServiceName(tpe reflect.Type) string {
-	return strings.Replace(tpe.String(), "*document.", "", 1)
-}
-
-// TODO pass service name rather than creating one
-// TODO do not log common errors like ErrNotFound
-
 // WithLogging wraps a Service to provide instrumentation in the form of logs.
-func WithLogging(svc document.Service) document.Service {
+func WithLogging(svc document.Service, name string) document.Service {
 	return loggingService{
 		svc:         svc,
-		serviceName: getServiceName(reflect.TypeOf(svc)),
+		serviceName: name,
 	}
 }
 
@@ -37,9 +30,21 @@ func (s loggingService) Create(
 	attemptAt := logging.LogAttempt(traceID, s.serviceName+".Create")
 
 	err := s.svc.Create(ctx, ID, data)
-	logging.LogResult(err, attemptAt, traceID, s.serviceName+".Create")
+	s.logResult(traceID, attemptAt, err, ".Create")
 
 	return err
+}
+
+func (s loggingService) logResult(traceID trace.ID, attemptAt time.Time, err error, method string) {
+	switch err {
+	case document.ErrNotFound, document.ErrAlreadyExists,
+		document.ErrPreconditionFailed, document.ErrPermissionDenied:
+		logging.LogResultLevel(logrus.DebugLevel, nil,
+			attemptAt, traceID, s.serviceName+method,
+			logging.Field{Key: logging.KeyError, Value: err.Error()})
+	default:
+		logging.LogResult(err, attemptAt, traceID, s.serviceName+method)
+	}
 }
 
 func (s loggingService) Set(
@@ -49,8 +54,7 @@ func (s loggingService) Set(
 	attemptAt := logging.LogAttempt(traceID, s.serviceName+".Set")
 
 	err := s.svc.Set(ctx, ID, data)
-	logging.LogResult(err, attemptAt, traceID, s.serviceName+".Set")
-
+	s.logResult(traceID, attemptAt, err, ".Set")
 	return err
 }
 
@@ -62,8 +66,7 @@ func (s loggingService) Update(
 	attemptAt := logging.LogAttempt(traceID, s.serviceName+".Update")
 
 	err := s.svc.Update(ctx, ID, updates, preconds...)
-	logging.LogResult(err, attemptAt, traceID, s.serviceName+".Update")
-
+	s.logResult(traceID, attemptAt, err, ".Update")
 	return err
 }
 
@@ -74,8 +77,7 @@ func (s loggingService) Get(
 	attemptAt := logging.LogAttempt(traceID, s.serviceName+".Get")
 
 	err := s.svc.Get(ctx, ID, to)
-	logging.LogResult(err, attemptAt, traceID, s.serviceName+".Get")
-
+	s.logResult(traceID, attemptAt, err, ".Get")
 	return err
 }
 
@@ -84,8 +86,7 @@ func (s loggingService) Delete(ctx context.Context, ID string) error {
 	attemptAt := logging.LogAttempt(traceID, s.serviceName+".Delete")
 
 	err := s.svc.Delete(ctx, ID)
-	logging.LogResult(err, attemptAt, traceID, s.serviceName+".Delete")
-
+	s.logResult(traceID, attemptAt, err, ".Delete")
 	return err
 }
 
@@ -96,8 +97,7 @@ func (s loggingService) List(ctx context.Context, filters []document.Filter) (
 	attemptAt := logging.LogAttempt(traceID, s.serviceName+".List")
 
 	it, err := s.svc.List(ctx, filters)
-	logging.LogResult(err, attemptAt, traceID, s.serviceName+".List")
-
+	s.logResult(traceID, attemptAt, err, ".List")
 	return it, err
 }
 

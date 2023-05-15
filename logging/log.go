@@ -49,29 +49,27 @@ func LogAttempt(traceID trace.ID, callType string, extra ...Field) time.Time {
 	return time.Now()
 }
 
-// LogResultInfo logs a info-level log with KeyStep set to Success, if error
-// is nil or logs an error-level log with KeyStep set to Failure if error
-// is not nil. It uses attemptAt to calculate the duration between attempt
-// and resolution.
+// LogResultInfo logs a info-level log. See LogResultLevel for more details.
 func LogResultInfo(
 	err error, attemptAt time.Time,
 	traceID trace.ID, callType string, extra ...Field,
 ) {
-	logResultLevel(log.InfoLevel, err, attemptAt, traceID, callType, extra...)
+	LogResultLevel(log.InfoLevel, err, attemptAt, traceID, callType, extra...)
 }
 
-// LogResult logs a debug-level log with KeyStep set to Success, if error
-// is nil or logs an error-level log with KeyStep set to Failure if error
-// is not nil. It uses attemptAt to calculate the duration between attempt
-// and resolution.
+// LogResult logs a debug-level log. See LogResultLevel for more details.
 func LogResult(
 	err error, attemptAt time.Time,
 	traceID trace.ID, callType string, extra ...Field,
 ) {
-	logResultLevel(log.DebugLevel, err, attemptAt, traceID, callType, extra...)
+	LogResultLevel(log.DebugLevel, err, attemptAt, traceID, callType, extra...)
 }
 
-func logResultLevel(
+// LogResultLevel logs a log with KeyStep set to Success, if error
+// is nil or logs an error-level log with KeyStep set to Failure if error
+// is not nil. It uses attemptAt to calculate the duration between attempt
+// and resolution.
+func LogResultLevel(
 	level log.Level, err error, attemptAt time.Time,
 	traceID trace.ID, callType string, extra ...Field,
 ) {
