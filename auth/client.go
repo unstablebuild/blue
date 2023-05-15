@@ -30,7 +30,7 @@ const (
 // TokenHTTPHandler.
 func NewClient(
 	ctx context.Context, conf oauth2.Config,
-	visitURLCallback func(string), successBrowserCopy string,
+	visitURLCallback func(string) error, successBrowserCopy string,
 ) (*http.Client, oauth2.TokenSource, error) {
 	const oauth2FlowTimeout = 60 * time.Second
 	ctx, cancel := context.WithTimeout(ctx, oauth2FlowTimeout)
@@ -70,7 +70,9 @@ func NewClient(
 	// for the scopes specified above.
 	authCodeURLOpts := append([]oauth2.AuthCodeOption{oauth2.AccessTypeOffline}, pkceOpts...)
 	url := conf.AuthCodeURL(csrfToken, authCodeURLOpts...)
-	visitURLCallback(url)
+	if err := visitURLCallback(url); err != nil {
+		return nil, nil, err
+	}
 
 	// Use the authorization code that is pushed to the redirect
 	// URL. Exchange will do the handshake to retrieve the
