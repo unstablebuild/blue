@@ -47,13 +47,16 @@ func NewClient(
 	go serveRedirects(ctx, &srv, csrfToken, resChan,
 		readyChan, successBrowserCopy)
 
-	readyResult := <-readyChan
-	if readyResult.err != nil {
-		return nil, nil, fmt.Errorf("serve: %v", readyResult.err)
+	select {
+	case readyResult := <-readyChan:
+		if readyResult.err != nil {
+			return nil, nil, fmt.Errorf("serve: %v", readyResult.err)
+		}
+		conf.RedirectURL = fmt.Sprintf("http://localhost:%d/o/oauth2/redirect",
+			readyResult.port)
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
 	}
-
-	conf.RedirectURL = fmt.Sprintf("http://localhost:%d/o/oauth2/redirect",
-		readyResult.port)
 
 	var pkceOpts []oauth2.AuthCodeOption
 	var pkce authhandler.PKCEParams
@@ -77,7 +80,12 @@ func NewClient(
 	// Use the authorization code that is pushed to the redirect
 	// URL. Exchange will do the handshake to retrieve the
 	// initial access token.
-	result := <-resChan
+	var result tokenResult
+	select {
+	case result = <-resChan:
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
 
 	if usePKCE {
 		pkceOpts = append(pkceOpts, oauth2.SetAuthURLParam("verifier", pkce.Verifier))
