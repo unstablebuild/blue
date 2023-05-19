@@ -49,6 +49,11 @@ func (r ReportDocument) UpdatedTime() time.Time {
 	return r.Report.UpdatedAt
 }
 
+func (r ReportDocument) WithUpdatedTime(now time.Time) ReportDocument {
+	r.Report.UpdatedAt = now
+	return r
+}
+
 func (r ReportDocument) ID() string {
 	id, _ := r.Report.Metadata[ReportMetadataIDField]
 	return id
@@ -126,6 +131,7 @@ func (d *documentTracker) CreateReport(
 	if report.CreatedAt.IsZero() {
 		report.CreatedAt = time.Now()
 	}
+	report.UpdatedAt = time.Now()
 
 	lastIssueNumber, ok := d.lastIssueNumber[report.Package]
 	if !ok {
@@ -212,9 +218,11 @@ func (d *documentTracker) DeleteReport(ctx context.Context, id string) error {
 }
 
 func (d *documentTracker) CloseReport(ctx context.Context, id string) error {
+	now := time.Now()
 	updates := []document.Update{
 		{FieldPath: []string{"Report", "Closed"}, Value: true},
-		{FieldPath: []string{"Report", "ClosedAt"}, Value: time.Now()},
+		{FieldPath: []string{"Report", "ClosedAt"}, Value: now},
+		{FieldPath: []string{"Report", "UpdatedAt"}, Value: now},
 	}
 	err := d.db.Update(ctx, id, updates)
 	if err != nil {
@@ -237,14 +245,16 @@ func (d *documentTracker) UpdateReport(
 	if report.Metadata == nil {
 		report.Metadata = make(map[string]string)
 	}
+	now := time.Now()
+	report.UpdatedAt = now
 	// user is being naughty, prevent zero created_at field
 	if report.CreatedAt.IsZero() {
-		report.CreatedAt = time.Now()
+		report.CreatedAt = now
 	}
 	if !report.Closed {
 		report.ClosedAt = time.Time{}
 	} else if report.ClosedAt.IsZero() {
-		report.ClosedAt = time.Now()
+		report.ClosedAt = now
 	}
 
 	lastIssueNumber, ok := parseID(id)
