@@ -26,7 +26,7 @@ const (
 	ReportMetadataIDField          = "_id"
 	reportMetadataIssueNumberField = "_in"
 
-	autoIncrementMaxRetries uint = 10
+	autoIncrementMaxRetries uint = 1000
 )
 
 var (
