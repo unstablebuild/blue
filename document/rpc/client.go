@@ -7,6 +7,7 @@ import (
 	"net"
 	"reflect"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/ernestrc/blue/document"
@@ -69,7 +70,7 @@ func (c *Client) Create(
 	res, err := c.pb.Create(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
-		return convertError(err)
+		return convertRpcError(err)
 	}
 	if res.GetAlreadyExists() {
 		return document.ErrAlreadyExists
@@ -89,7 +90,7 @@ func (c *Client) Set(
 	_, err = c.pb.Set(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
-		return convertError(err)
+		return convertRpcError(err)
 	}
 	return nil
 }
@@ -107,7 +108,7 @@ func (c *Client) Update(
 	res, err := c.pb.Update(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
-		return convertError(err)
+		return convertRpcError(err)
 	}
 	if res.GetNotFound() {
 		return document.ErrNotFound
@@ -125,7 +126,7 @@ func (c *Client) Get(
 	res, err := c.pb.Get(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
-		return convertError(err)
+		return convertRpcError(err)
 	}
 	if res.GetNotFound() {
 		return document.ErrNotFound
@@ -146,7 +147,7 @@ func (c *Client) Delete(
 	_, err := c.pb.Delete(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
-		return convertError(err)
+		return convertRpcError(err)
 	}
 	return nil
 }
@@ -183,12 +184,23 @@ func (l *rpcIterator) NextTo(doc interface{}) error {
 	l.nextErr = nil
 	l.next = nil
 	if err != nil {
-		return err
-	}
-	if errStr := next.GetError(); errStr != "" {
-		return errors.New(errStr)
+		return convertRpcError(err)
 	}
 
+	if errStr := next.GetError(); errStr != "" {
+		switch {
+		case strings.Contains(errStr, document.ErrNotFound.Error()):
+			return document.ErrNotFound
+		case strings.Contains(errStr, document.ErrAlreadyExists.Error()):
+			return document.ErrAlreadyExists
+		case strings.Contains(errStr, document.ErrPreconditionFailed.Error()):
+			return document.ErrPreconditionFailed
+		case strings.Contains(errStr, document.ErrPermissionDenied.Error()):
+			return document.ErrPermissionDenied
+		default:
+			return errors.New(errStr)
+		}
+	}
 	return document.SafeDecode(l.marshaler, doc, next.GetData())
 }
 
@@ -207,7 +219,7 @@ func (c *Client) List(
 	res, err := c.pb.List(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
-		return nil, convertError(err)
+		return nil, convertRpcError(err)
 	}
 	return &rpcIterator{marshaler: c.marshaler, cc: res}, nil
 }
@@ -232,7 +244,7 @@ func (c *Client) encodeCreateData(data interface{}) ([]byte, error) {
 	return document.Encode(c.marshaler, data, true), nil
 }
 
-func convertError(err error) error {
+func convertRpcError(err error) error {
 	status, ok := status.FromError(err)
 	if !ok {
 		return err
