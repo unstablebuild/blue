@@ -54,7 +54,16 @@ func LogResultInfo(
 	err error, attemptAt time.Time,
 	traceID trace.ID, callType string, extra ...Field,
 ) {
-	LogResultLevel(log.InfoLevel, err, attemptAt, traceID, callType, extra...)
+	LogResultLevel(log.InfoLevel, log.ErrorLevel, err, attemptAt, traceID, callType, extra...)
+}
+
+// LogResultTrace logs a trace-level log in case of success, and debug-level log in case of error.
+// See LogResultLevel for more details.
+func LogResultTrace(
+	err error, attemptAt time.Time,
+	traceID trace.ID, callType string, extra ...Field,
+) {
+	LogResultLevel(log.TraceLevel, log.DebugLevel, err, attemptAt, traceID, callType, extra...)
 }
 
 // LogResult logs a debug-level log. See LogResultLevel for more details.
@@ -62,7 +71,7 @@ func LogResult(
 	err error, attemptAt time.Time,
 	traceID trace.ID, callType string, extra ...Field,
 ) {
-	LogResultLevel(log.DebugLevel, err, attemptAt, traceID, callType, extra...)
+	LogResultLevel(log.DebugLevel, log.ErrorLevel, err, attemptAt, traceID, callType, extra...)
 }
 
 // LogResultLevel logs a log with KeyStep set to Success, if error
@@ -70,7 +79,7 @@ func LogResult(
 // is not nil. It uses attemptAt to calculate the duration between attempt
 // and resolution.
 func LogResultLevel(
-	level log.Level, err error, attemptAt time.Time,
+	level, errorLevel log.Level, err error, attemptAt time.Time,
 	traceID trace.ID, callType string, extra ...Field,
 ) {
 	fields := log.Fields{
@@ -87,7 +96,7 @@ func LogResultLevel(
 	} else {
 		fields[KeyStep] = ValueStepFailure
 		fields[KeyError] = err.Error()
-		log.WithFields(fields).Error()
+		log.WithFields(fields).Log(errorLevel)
 	}
 }
 

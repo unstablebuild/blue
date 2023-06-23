@@ -7,7 +7,6 @@ import (
 	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/logging"
 	"github.com/ernestrc/blue/logging/trace"
-	"github.com/sirupsen/logrus"
 )
 
 type loggingService struct {
@@ -43,7 +42,7 @@ func (s loggingService) logResult(
 	switch err {
 	case document.ErrNotFound, document.ErrAlreadyExists,
 		document.ErrPreconditionFailed, document.ErrPermissionDenied:
-		logging.LogResultLevel(logrus.DebugLevel, nil,
+		logging.LogResultTrace(err,
 			attemptAt, traceID, s.serviceName+method,
 			logging.Field{Key: logging.KeyError, Value: err.Error()})
 	default:
