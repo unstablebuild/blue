@@ -23,7 +23,11 @@ import (
 	"gopkg.in/go-jose/go-jose.v2/jwt"
 )
 
-const keyID = "123893721987389217"
+const (
+	keyID             = "123893721987389217"
+	providerExpiresIn = 24 * time.Hour
+	tokenExpiresIn    = 1 * time.Hour
+)
 
 func TestTokenHandler(t *testing.T) {
 	grantAll := FuncGranter(func(context.Context, string, string) (User, error) {
@@ -184,7 +188,7 @@ func TestTokenHandler(t *testing.T) {
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 			w := httptest.NewRecorder()
-			sut := TokenHTTPHandler(testSignKeys, pwdStore, secretStore, grantAll, 1*time.Hour)
+			sut := TokenHTTPHandler(testSignKeys, pwdStore, secretStore, grantAll, tokenExpiresIn)
 			sut.ServeHTTP(w, req)
 
 			resp := w.Result()
@@ -202,7 +206,7 @@ func TestTokenHandler(t *testing.T) {
 			_, err = VerifyToken[User](testSignKey, actualOut.AccessToken)
 			require.NoError(t, err)
 
-			assert.NotZero(t, actualOut.ExpiresIn)
+			assert.Equal(t, int(tokenExpiresIn.Seconds()), actualOut.ExpiresIn)
 			assert.NotZero(t, actualOut.Scope)
 			assert.NotZero(t, actualOut.TokenType)
 			assert.Zero(t, actualOut.IDToken)
@@ -242,7 +246,7 @@ func writeTestRedeemResponse(
 	}
 	var out redeemResponse
 	out.IDToken = raw
-	out.ExpiresIn = int(time.Until(time.Now().Add(expiresIn)).Seconds())
+	out.ExpiresIn = int(expiresIn.Seconds())
 	out.Scope = "blabla"
 	out.TokenType = "something"
 
@@ -258,14 +262,14 @@ func writeTestRedeemResponse(
 
 func goodRedeemHandler(clientID string, rsaPrivateKey *rsa.PrivateKey) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeTestRedeemResponse(w, clientID, 24*time.Hour, rsaPrivateKey)
+		writeTestRedeemResponse(w, clientID, providerExpiresIn, rsaPrivateKey)
 	})
 }
 
 func badRedeemHandler(clientID string) http.Handler {
 	otherKey, _ := rsa.GenerateKey(rand.Reader, 4096)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeTestRedeemResponse(w, clientID, 24*time.Hour, otherKey)
+		writeTestRedeemResponse(w, clientID, providerExpiresIn, otherKey)
 	})
 }
 
@@ -283,7 +287,7 @@ func flakyRedeemHandler(clientID string, rsaPrivateKey *rsa.PrivateKey) http.Han
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		writeTestRedeemResponse(w, clientID, 24*time.Hour, rsaPrivateKey)
+		writeTestRedeemResponse(w, clientID, providerExpiresIn, rsaPrivateKey)
 	})
 }
 

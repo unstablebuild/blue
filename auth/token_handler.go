@@ -220,6 +220,10 @@ func (h tokenHandler[T]) ServeHTTP(
 		return
 	}
 
+	// override ExpiresIn in response to match what we use to sign the token, which
+	// is probably different than what the oauth2 provider has configured.
+	redeem.ExpiresIn = int(h.expiry.Seconds())
+
 	redeem.AccessToken, err = SignToken(key, claims.Subject, claims.Email, extra, h.expiry)
 	if err != nil {
 		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
