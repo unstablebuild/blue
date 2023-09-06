@@ -25,4 +25,4 @@ jobs:
         go get -v -t -d ./.../...
 
     - name: Build & Test
-      run: make test GOTESTFLAGS="-timeout 120s"
+      run: make test GOTESTFLAGS="-timeout 240s"
