@@ -5,13 +5,25 @@ import (
 	"io"
 )
 
-// DefaultCreatedAtField is the document field that is automatically added
-// by Service implementors. See Service.Create for more info.
-const DefaultCreatedAtField = "CreatedAt"
+const (
+	// DefaultCreatedAtField is the document field that is automatically added
+	// by Service implementors. See Service.Create for more info.
+	DefaultCreatedAtField = "CreatedAt"
 
-// DefaultUpdatedAtField is the document field that is automatically updated
-// by Service implementors. See Service.Update for more info.
-const DefaultUpdatedAtField = "UpdatedAt"
+	// DefaultUpdatedAtField is the document field that is automatically updated
+	// by Service implementors. See Service.Update for more info.
+	DefaultUpdatedAtField = "UpdatedAt"
+
+	// LowerCreatedAtField is the document field that is automatically added
+	// by Service implementors when using a marshaler that defaults to lower case,
+	// either directly or indirectly through another Service.
+	LowerCreatedAtField = "createdat"
+
+	// LowerUpdatedAtField is the document field that is automatically updated
+	// by Service implementors when using a marshaler that defaults to lower case,
+	// either directly or indirectly through another Service.
+	LowerUpdatedAtField = "updatedat"
+)
 
 // Service is the interface that encapsulates a document store service.
 //
