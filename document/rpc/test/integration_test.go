@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/ernestrc/blue/encoding/bson"
 	"github.com/ernestrc/blue/encoding/toml"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -28,9 +30,9 @@ func TestFirestoreIntegration(t *testing.T) {
 		encoding  string
 		marshaler encoding.Marshaler
 	}{
-		{"bson", bson.Marshaler()},
 		{"toml", toml.Marshaler()},
-		// FIXME dates are stored as string, which then are not interpreted correctly
+		{"bson", bson.Marshaler()},
+		// NOTE: dates are stored as string, which then are not interpreted correctly
 		// as precondition or when json is used as a transport marshaler, in which case
 		// the storage unmarshaler doesn't know how to decode.
 		// {"json", json.Marshaler()},
@@ -40,8 +42,9 @@ func TestFirestoreIntegration(t *testing.T) {
 	}
 	for _, tcase := range tsuite {
 		marshaler := tcase.marshaler
+		testProjectID := uuid.New().String()
+
 		t.Run(tcase.encoding, func(t *testing.T) {
-			testProjectID := uuid.New().String()
 			test.TestDocumentService(t, func(t *testing.T) document.Service {
 				var svc document.Service
 
@@ -55,6 +58,154 @@ func TestFirestoreIntegration(t *testing.T) {
 				svc, err = rpc.NewClient(addr, marshaler, grpc.WithInsecure())
 				require.NoError(t, err)
 				return svc
+			})
+		})
+	}
+}
+
+func TestFirestoreBinaryCompatibility(t *testing.T) {
+	teardownEmulator := runFirestoreOrSkip(t)
+	t.Cleanup(func() {
+		teardownEmulator()
+	})
+
+	tsuite := []struct {
+		encoding  string
+		marshaler encoding.Marshaler
+	}{
+		{"toml", toml.Marshaler()},
+		// NOTE: bson changes the case of struct keys when going through the rpc calls
+		// so it's not binary compatible with firestore.
+		// {"bson", bson.Marshaler()},
+
+		// NOTE: dates are stored as string, which then are not interpreted correctly
+		// by firestore's unmarshaler.
+		// {"json", json.Marshaler()},
+
+		// NOTE: yaml passes all tests except the ones with encoding of
+		// numerical values. It should never be used as a storage format anyway.
+		// {"yaml", yaml.Marshaler()},
+	}
+	for _, tcase := range tsuite {
+		marshaler := tcase.marshaler
+		ctx := context.Background()
+
+		t.Run(tcase.encoding, func(t *testing.T) {
+			t.Run("client create, firestore get", func(t *testing.T) {
+				firestore, client := makeFirestoreClientPair(t, marshaler)
+				require.NoError(t, client.Create(ctx, "1", testStruct{Id: "1", Content: "a"}))
+
+				var out testStruct
+				require.NoError(t, firestore.Get(ctx, "1", &out))
+				assert.Equal(t, "1", out.Id)
+				assert.Equal(t, "a", out.Content)
+				assert.NotZero(t, out.UpdatedAt)
+			})
+
+			t.Run("firestore create, client get", func(t *testing.T) {
+				firestore, client := makeFirestoreClientPair(t, marshaler)
+				require.NoError(t, firestore.Create(ctx, "1", testStruct{Id: "1", Content: "a"}))
+
+				var out testStruct
+				require.NoError(t, client.Get(ctx, "1", &out))
+				assert.Equal(t, "1", out.Id)
+				assert.Equal(t, "a", out.Content)
+				assert.NotZero(t, out.UpdatedAt)
+			})
+
+			t.Run("client create, firestore update, client get", func(t *testing.T) {
+				firestore, client := makeFirestoreClientPair(t, marshaler)
+				require.NoError(t, client.Create(ctx, "1", testStruct{Id: "1", Content: "a"}))
+
+				updates := make([]document.Update, 1)
+				updates[0].FieldPath = []string{"Content"}
+				updates[0].Value = "b"
+				require.NoError(t, firestore.Update(ctx, "1", updates))
+
+				var out testStruct
+				require.NoError(t, client.Get(ctx, "1", &out))
+				assert.Equal(t, "1", out.Id)
+				assert.Equal(t, "b", out.Content)
+				assert.NotZero(t, out.UpdatedAt)
+			})
+
+			t.Run("client create, firestore update, firestore get", func(t *testing.T) {
+				firestore, client := makeFirestoreClientPair(t, marshaler)
+				require.NoError(t, client.Create(ctx, "1", testStruct{Id: "1", Content: "a"}))
+
+				updates := make([]document.Update, 1)
+				updates[0].FieldPath = []string{"Content"}
+				updates[0].Value = "b"
+				require.NoError(t, firestore.Update(ctx, "1", updates))
+
+				var out testStruct
+				require.NoError(t, firestore.Get(ctx, "1", &out))
+				assert.Equal(t, "1", out.Id)
+				assert.Equal(t, "b", out.Content)
+				assert.NotZero(t, out.UpdatedAt)
+			})
+			t.Run("firestore create, firestore update, client get", func(t *testing.T) {
+				firestore, client := makeFirestoreClientPair(t, marshaler)
+				require.NoError(t, firestore.Create(ctx, "1", testStruct{Id: "1", Content: "a"}))
+
+				updates := make([]document.Update, 1)
+				updates[0].FieldPath = []string{"Content"}
+				updates[0].Value = "b"
+				require.NoError(t, firestore.Update(ctx, "1", updates))
+
+				var out testStruct
+				require.NoError(t, client.Get(ctx, "1", &out))
+				assert.Equal(t, "1", out.Id)
+				assert.Equal(t, "b", out.Content)
+				assert.NotZero(t, out.UpdatedAt)
+			})
+
+			t.Run("firestore create, firestore update, client get", func(t *testing.T) {
+				firestore, client := makeFirestoreClientPair(t, marshaler)
+				require.NoError(t, firestore.Create(ctx, "1", testStruct{Id: "1", Content: "a"}))
+
+				updates := make([]document.Update, 1)
+				updates[0].FieldPath = []string{"Content"}
+				updates[0].Value = "b"
+				require.NoError(t, firestore.Update(ctx, "1", updates))
+
+				var out testStruct
+				require.NoError(t, client.Get(ctx, "1", &out))
+				assert.Equal(t, "1", out.Id)
+				assert.Equal(t, "b", out.Content)
+				assert.NotZero(t, out.UpdatedAt)
+			})
+
+			t.Run("client create, firestore list", func(t *testing.T) {
+				firestore, client := makeFirestoreClientPair(t, marshaler)
+				require.NoError(t, client.Create(ctx, "1", testStruct{Id: "1", Content: "a"}))
+
+				filters := make([]document.Filter, 1)
+				filters[0].FieldPath = []string{"Content"}
+				filters[0].Value = "a"
+				filters[0].Op = document.OpEqual
+				it, err := firestore.List(ctx, filters)
+				require.NoError(t, err)
+
+				assertListResults(t, it, []testStruct{
+					{Id: "1", Content: "a"},
+				})
+			})
+
+			t.Run("firestore create, client list", func(t *testing.T) {
+				firestore, client := makeFirestoreClientPair(t, marshaler)
+				require.NoError(t, firestore.Create(ctx, "1", testStruct{Id: "1", Content: "a"}))
+
+				filters := make([]document.Filter, 1)
+				filters[0].FieldPath = []string{"Content"}
+				filters[0].Value = "a"
+				filters[0].Op = document.OpEqual
+				it, err := client.List(ctx, filters)
+				require.NoError(t, err)
+
+				assertListResults(t, it, []testStruct{
+					{Id: "1", Content: "a"},
+				})
 			})
 		})
 	}
@@ -108,4 +259,47 @@ func runFirestoreOrSkip(t *testing.T) func() {
 			t.Logf("error closing firestore emulator: %s", err)
 		}
 	}
+}
+
+func makeFirestoreClientPair(t *testing.T, marshaler encoding.Marshaler) (
+	fir, cli document.Service,
+) {
+	testProjectID := uuid.New().String()
+	collection := uuid.New().String()
+	firestore, err := firestore.New(testProjectID, collection, "")
+	require.NoError(t, err)
+
+	addr, teardown := runDatastoreServerOverListener(t, firestore, tcpListener, marshaler)
+	t.Cleanup(teardown)
+
+	client, err := rpc.NewClient(addr, marshaler, grpc.WithInsecure())
+	require.NoError(t, err)
+
+	return firestore, client
+}
+
+func assertListResults(
+	t *testing.T, it document.Iterator, expectedElements []testStruct,
+) {
+	var i int
+	if len(expectedElements) > 0 {
+		// HasNext should be idempotent
+		assert.True(t, it.HasNext())
+	}
+
+	var actualElements []testStruct
+	for it.HasNext() {
+		var s testStruct
+		err := it.NextTo(&s)
+		require.NoError(t, err)
+		i++
+		assert.NotZero(t, s.UpdatedAt)
+		s.UpdatedAt = time.Time{}
+		actualElements = append(actualElements, s)
+	}
+	assert.False(t, it.HasNext())
+
+	assert.Equal(t, len(expectedElements), i)
+	assert.NoError(t, it.Close())
+	assert.ElementsMatch(t, expectedElements, actualElements)
 }
