@@ -85,6 +85,8 @@ func (f *fireStore) Update(
 	}
 	coll := f.client.Collection(f.collID)
 
+	updatedAtField := document.DefaultUpdatedAtField
+
 	fUpdates := make([]firestore.Update, 0, len(updates))
 	for _, u := range updates {
 		if len(u.FieldPath) == 0 {
@@ -92,7 +94,12 @@ func (f *fireStore) Update(
 		}
 
 		// use firestore.ServerTimestamp to update updated_at
-		if u.FieldPath[0] == document.DefaultUpdatedAtField {
+		if u.FieldPath[0] == document.DefaultUpdatedAtField ||
+			u.FieldPath[0] == document.LowerUpdatedAtField {
+			// use whichever updated at key is used. This best-effort improves
+			// integration between rpc and this document.Service,
+			// at the same time it's compatible with using firestore directly.
+			updatedAtField = u.FieldPath[0]
 			continue
 		}
 
@@ -104,7 +111,7 @@ func (f *fireStore) Update(
 
 	fUpdates = append(fUpdates,
 		firestore.Update{
-			FieldPath: firestore.FieldPath{document.DefaultUpdatedAtField},
+			FieldPath: firestore.FieldPath{updatedAtField},
 			Value:     firestore.ServerTimestamp,
 		})
 
@@ -116,15 +123,11 @@ func (f *fireStore) Update(
 		return
 	}
 
-	if len(preconds) != 1 ||
-		preconds[0].FieldPath[0] != document.DefaultUpdatedAtField {
-		return errors.New("firestore only supports an UpdatedAt precondition")
+	updatedAt, ok := preconds[0].Value.(time.Time)
+	if len(preconds) != 1 || !ok {
+		return errors.New("firestore only supports an updated time precondition")
 	}
 
-	updatedAt, ok := preconds[0].Value.(time.Time)
-	if !ok {
-		panic(errors.New("invalid UpdatedAt precondition Value"))
-	}
 	// timestamps cannot have more than microsecond precision or firestore
 	// throws an InvalidArgument
 	precond := firestore.LastUpdateTime(updatedAt.Truncate(time.Microsecond))
@@ -244,9 +247,6 @@ func waitForEmulator(addr string) (err error) {
 		if err == nil {
 			conn.Close()
 			return
-		}
-		if !strings.Contains(err.Error(), "connection refused") {
-			break
 		}
 		time.Sleep(backoff)
 	}

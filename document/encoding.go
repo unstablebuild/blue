@@ -11,14 +11,18 @@ import (
 )
 
 // UpdateUpdatedAtField updates the default UpdatedAt field in the given document.
-func UpdateUpdatedAtField(doc interface{}) interface{} {
+func UpdateUpdatedAtField(marshaler encoding.Marshaler, doc interface{}) interface{} {
 	now := time.Now()
 	m, ok := doc.(map[string]interface{})
+	updatedAtField := DefaultUpdatedAtField
+	if marshaler.DefaultLowerCase() {
+		updatedAtField = LowerUpdatedAtField
+	}
 	if ok {
-		doc = setField(m, DefaultUpdatedAtField, now)
+		doc = setField(m, updatedAtField, now)
 	} else {
 		dst := clone(doc)
-		reflectSetTimeField(dst, DefaultUpdatedAtField, now)
+		reflectSetTimeField(dst, updatedAtField, now)
 		doc = dst.Elem().Interface()
 	}
 	return doc
@@ -26,10 +30,10 @@ func UpdateUpdatedAtField(doc interface{}) interface{} {
 
 // UpdateCreatedAtField updates the default CreatedAt field in the given document
 // and the default UpdatedAt field.
-func UpdateCreatedAtField(doc interface{}) interface{} {
+func UpdateCreatedAtField(marshaler encoding.Marshaler, doc interface{}) interface{} {
 	m, ok := doc.(map[string]interface{})
 	if ok {
-		doc = setMapUpdatedAtFields(m)
+		doc = setMapUpdatedAtFields(marshaler, m)
 	} else {
 		doc = setStructUpdatedAtFields(doc)
 	}
@@ -40,9 +44,9 @@ func UpdateCreatedAtField(doc interface{}) interface{} {
 // and returns the data in bytes.
 func Encode(m encoding.Marshaler, doc interface{}, addCreatedAt bool) []byte {
 	if addCreatedAt {
-		doc = UpdateCreatedAtField(doc)
+		doc = UpdateCreatedAtField(m, doc)
 	} else {
-		doc = UpdateUpdatedAtField(doc)
+		doc = UpdateUpdatedAtField(m, doc)
 	}
 
 	b, err := m.Marshal(doc)
@@ -137,6 +141,12 @@ func (l *ListIterator) Extend(filters []Filter, v []byte) {
 func UpdateProto(m encoding.Marshaler, updates []Update,
 	proto map[string]interface{}, preconds ...Precondition) error {
 	lowerCase := m.DefaultLowerCase()
+
+	updatedAtField := DefaultUpdatedAtField
+	if lowerCase {
+		updatedAtField = LowerUpdatedAtField
+	}
+
 	for _, cond := range preconds {
 		if len(cond.FieldPath) == 0 {
 			panic("empty field path")
@@ -159,7 +169,7 @@ func UpdateProto(m encoding.Marshaler, updates []Update,
 		if len(update.FieldPath) == 0 {
 			panic("empty field path")
 		}
-		if update.FieldPath[0] == DefaultUpdatedAtField {
+		if update.FieldPath[0] == updatedAtField {
 			continue
 		}
 
@@ -174,10 +184,6 @@ func UpdateProto(m encoding.Marshaler, updates []Update,
 		updateField(proto, Update{FieldPath: fieldPath, Value: update.Value})
 	}
 
-	updatedAtField := DefaultUpdatedAtField
-	if lowerCase {
-		updatedAtField = strings.ToLower(updatedAtField)
-	}
 	updateField(proto, Update{
 		FieldPath: []string{updatedAtField},
 		Value:     time.Now(),
@@ -239,10 +245,17 @@ func setField(m map[string]interface{}, key string, value interface{}) map[strin
 	return ret
 }
 
-func setMapUpdatedAtFields(m map[string]interface{}) map[string]interface{} {
+func setMapUpdatedAtFields(
+	marshaler encoding.Marshaler, m map[string]interface{},
+) map[string]interface{} {
 	now := time.Now()
-	m = setField(m, DefaultUpdatedAtField, now)
-	m = setField(m, DefaultCreatedAtField, now)
+	if marshaler.DefaultLowerCase() {
+		m = setField(m, LowerUpdatedAtField, now)
+		m = setField(m, LowerCreatedAtField, now)
+	} else {
+		m = setField(m, DefaultUpdatedAtField, now)
+		m = setField(m, DefaultCreatedAtField, now)
+	}
 	return m
 }
 

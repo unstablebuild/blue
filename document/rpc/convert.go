@@ -1,6 +1,8 @@
 package rpc
 
 import (
+	"strings"
+
 	"github.com/ernestrc/blue/document"
 	proto "github.com/ernestrc/blue/document/rpc/proto"
 	"github.com/ernestrc/blue/encoding"
@@ -100,9 +102,19 @@ func makeModelFilter(m encoding.Marshaler,
 		return document.Filter{}, err
 	}
 
+	lowerCase := m.DefaultLowerCase()
+
+	fieldPath := pf.FieldPath
+	if lowerCase {
+		fieldPath = make([]string, len(pf.FieldPath))
+		for i, comp := range pf.FieldPath {
+			fieldPath[i] = strings.ToLower(comp)
+		}
+	}
+
 	return document.Filter{
 		Field: document.Field{
-			FieldPath: pf.FieldPath,
+			FieldPath: fieldPath,
 			Value:     slab[protoFieldKey],
 		},
 		Op: document.Op(pf.Operation),

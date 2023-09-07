@@ -537,7 +537,8 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 		require.NoError(t, err)
 
 		assert.NotEqual(t, t1, e1.UpdatedAt)
-		assert.True(t, e1.UpdatedAt.After(time.Now().Add(-time.Minute)))
+		assert.True(t, e1.UpdatedAt.After(time.Now().Add(-time.Minute)),
+			"%v vs %v", e1.UpdatedAt, time.Now())
 	})
 
 	t.Run("Update always updates UpdatedAt field", func(t *testing.T) {
@@ -573,7 +574,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 				FieldPath: []string{document.DefaultUpdatedAtField}, Value: t1,
 			},
 		)
-		require.Equal(t, document.ErrPreconditionFailed, err)
+		require.Equal(t, document.ErrPreconditionFailed, err, "%v", err)
 
 		var e1 myOtherEntity
 		err = s.Get(ctx, myID, &e1)
