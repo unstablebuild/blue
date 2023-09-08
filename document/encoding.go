@@ -2,6 +2,7 @@ package document
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"time"
@@ -79,6 +80,8 @@ func IsEncodeable(doc interface{}) bool {
 func Decode(m encoding.Marshaler, rcv interface{}, raw []byte) {
 	err := m.Unmarshal(raw, rcv)
 	if err != nil {
+		// this is a progammer error anyway so add more information
+		err := fmt.Errorf("%v: %s", err, string(raw))
 		panic(err)
 	}
 }

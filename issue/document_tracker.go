@@ -15,11 +15,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type documentType int32
+type documentType uint8
 
 const (
-	// panic report document. This can be used for versioning.
-	documentTypeReport = iota
+	// this can be used for versioning.
+	documentTypeReport documentType = iota
 
 	// ReportMetadataIDField represents the name of the debug.Report.Metadata field used
 	// to store the document ID.
