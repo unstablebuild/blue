@@ -10,11 +10,11 @@ import (
 )
 
 const (
-	defaultIssuer = "hopper-auth"
+	defaultIssuer = "blue-auth"
 )
 
 var (
-	defaultAudience = []string{"hopper-user"}
+	defaultAudience = []string{"blue-user"}
 )
 
 // UserClaims represent the user claims.

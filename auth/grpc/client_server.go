@@ -61,11 +61,13 @@ func oauth2StreamInterceptor[T any](
 ) grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream,
 		info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		err := authenticate(ss.Context(), "auth.StreamInterceptor",
+		claims, err := authenticate(ss.Context(), "auth.StreamInterceptor",
 			info.FullMethod, verifyKeys, authorizer)
 		if err != nil {
 			return err
 		}
+		ctx := auth.ContextWithClaims(ss.Context(), claims)
+		ss = contextServerStream{ctx: ctx, ss: ss}
 		return handler(srv, ss)
 	}
 }
@@ -77,11 +79,12 @@ func oauth2UnaryInterceptor[T any](
 		ctx context.Context, req interface{},
 		info *grpc.UnaryServerInfo, handler grpc.UnaryHandler,
 	) (interface{}, error) {
-		err := authenticate(ctx, "auth.UnaryInterceptor",
+		claims, err := authenticate(ctx, "auth.UnaryInterceptor",
 			info.FullMethod, verifyKeys, authorizer)
 		if err != nil {
 			return nil, err
 		}
+		ctx = auth.ContextWithClaims(ctx, claims)
 		return handler(ctx, req)
 	}
 }
@@ -89,7 +92,7 @@ func oauth2UnaryInterceptor[T any](
 func authenticate[T any](
 	ctx context.Context, callType, method string,
 	verifyKeys auth.Keys, authorizer auth.Authorizer[T],
-) error {
+) (auth.UserClaims[T], error) {
 	const bearerPrefix = "Bearer "
 
 	traceID, ctx := trace.FromContextOrNew(ctx)
@@ -103,7 +106,7 @@ func authenticate[T any](
 	if !ok {
 		err := status.Errorf(codes.InvalidArgument, "missing metadata")
 		logging.LogResult(err, attemptAt, traceID, callType, fields...)
-		return err
+		return auth.UserClaims[T]{}, err
 	}
 
 	// The keys within metadata.MD are normalized to lowercase.
@@ -112,7 +115,7 @@ func authenticate[T any](
 	if len(bearerAuthTokenMulti) == 0 || bearerAuthTokenMulti[0] == "" {
 		err := status.Errorf(codes.InvalidArgument, "missing authorization in metadata")
 		logging.LogResult(err, attemptAt, traceID, callType, fields...)
-		return err
+		return auth.UserClaims[T]{}, err
 	}
 
 	bearerAuthToken := bearerAuthTokenMulti[0]
@@ -122,7 +125,7 @@ func authenticate[T any](
 			bearerAuthToken)
 		err := status.Errorf(codes.PermissionDenied, msg)
 		logging.LogResult(err, attemptAt, traceID, callType, fields...)
-		return err
+		return auth.UserClaims[T]{}, err
 	}
 
 	keys, err := verifyKeys.Verify(ctx)
@@ -130,7 +133,7 @@ func authenticate[T any](
 		err = fmt.Errorf("get verify keys: %v", err)
 		err := status.Errorf(codes.PermissionDenied, err.Error())
 		logging.LogResult(err, attemptAt, traceID, callType, fields...)
-		return err
+		return auth.UserClaims[T]{}, err
 	}
 
 	authToken := bearerAuthToken[len(bearerPrefix):]
@@ -144,15 +147,15 @@ func authenticate[T any](
 	if err != nil {
 		err := status.Errorf(codes.PermissionDenied, err.Error())
 		logging.LogResult(err, attemptAt, traceID, callType, fields...)
-		return err
+		return auth.UserClaims[T]{}, err
 	}
 
 	if err := authorizer.Authorize(ctx, claims, method); err != nil {
 		err := status.Errorf(codes.PermissionDenied, err.Error())
 		logging.LogResult(err, attemptAt, traceID, callType, fields...)
-		return err
+		return auth.UserClaims[T]{}, err
 	}
 
 	logging.LogResult(nil, attemptAt, traceID, callType, fields...)
-	return nil
+	return claims, nil
 }

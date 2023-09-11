@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/examples/data"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
+	"gopkg.in/go-jose/go-jose.v2/jwt"
 )
 
 type user struct{}
@@ -56,7 +57,8 @@ func TestClientServerUnary(t *testing.T) {
 			serverOpts := GRPCServerWithOauth2(test.keys, test.authorizer, credentials.NewServerTLSFromCert(&cert))
 
 			s := grpc.NewServer(serverOpts...)
-			pb.RegisterEchoServer(s, &ecServer{})
+			srv := new(ecServer)
+			pb.RegisterEchoServer(s, srv)
 
 			defer s.Stop()
 
@@ -94,6 +96,26 @@ func TestClientServerUnary(t *testing.T) {
 			if !test.expectForbidden {
 				require.NoError(t, err)
 				assert.Equal(t, "1234", resp.Message)
+				require.NotNil(t, srv.ctx)
+
+				claims, ok := auth.ClaimsFromContext[user](*srv.ctx)
+				require.True(t, ok)
+
+				expectedClaims := auth.UserClaims[user]{
+					Email:  "it@unstable.build",
+					UserID: "1234",
+					Extra:  user{},
+					Claims: jwt.Claims{
+						Issuer:   "blue-auth",
+						Subject:  "1234",
+						Audience: []string{"blue-user"},
+					},
+				}
+				claims.Expiry = nil
+				claims.IssuedAt = nil
+				claims.NotBefore = nil
+				claims.ID = ""
+				assert.Equal(t, expectedClaims, claims)
 			} else {
 				require.Error(t, err)
 			}
@@ -120,9 +142,11 @@ func loadKey(t *testing.T, filename string) auth.Key {
 }
 
 type ecServer struct {
+	ctx *context.Context
 	pb.UnimplementedEchoServer
 }
 
 func (s *ecServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+	s.ctx = &ctx
 	return &pb.EchoResponse{Message: req.Message}, nil
 }

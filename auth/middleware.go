@@ -95,6 +95,7 @@ func (m *middleware[T]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r = r.WithContext(ContextWithClaims(ctx, claims))
 	m.next.ServeHTTP(w, r)
 }
 

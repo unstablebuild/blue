@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/go-jose/go-jose.v2/jwt"
 )
 
 func TestAuthMiddleware(t *testing.T) {
@@ -43,8 +44,10 @@ func TestAuthMiddleware(t *testing.T) {
 		test := test
 		t.Run(test.description, func(t *testing.T) {
 			var called bool
+			ctx := context.Background()
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				called = true
+				ctx = r.Context()
 				w.WriteHeader(http.StatusOK)
 			})
 			sut := WithMiddleware(handler, MiddlewareConfig[User]{VerifyKeys: testSignKeys, Authorizer: test.authorizer})
@@ -62,6 +65,26 @@ func TestAuthMiddleware(t *testing.T) {
 			assert.Equal(t, test.expectCallsNext, called)
 			if test.expectCallsNext {
 				assert.Equal(t, http.StatusOK, resp.StatusCode)
+				claims, ok := ClaimsFromContext[User](ctx)
+				require.True(t, ok)
+
+				expectedClaims := UserClaims[User]{
+					Email:  "1234",
+					UserID: "1234",
+					Extra: User{
+						Role: "Admin",
+					},
+					Claims: jwt.Claims{
+						Issuer:   defaultIssuer,
+						Subject:  "1234",
+						Audience: defaultAudience,
+					},
+				}
+				claims.Expiry = nil
+				claims.IssuedAt = nil
+				claims.NotBefore = nil
+				claims.ID = ""
+				assert.Equal(t, expectedClaims, claims)
 			} else {
 				assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 			}
