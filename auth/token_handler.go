@@ -3,7 +3,9 @@ package auth
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,7 +40,7 @@ func TokenHTTPHandler[T any](
 	}
 }
 
-const tokenCallType = "RedeemToken"
+const tokenCallType = "Oauth2RedeemToken"
 
 type tokenHandler[T any] struct {
 	passwordStore *PasswordStore
@@ -94,8 +96,9 @@ func (h tokenHandler[T]) ServeHTTP(
 		return
 	}
 
+	userID := makeUserID(clientID, claims.Subject, claims.Email)
 	// override access_token with own token, that we can decode and introspect on middleware
-	extra, err := h.granter.Grant(ctx, claims.Subject, claims.Email)
+	extra, err := h.granter.Grant(ctx, userID, claims.Email)
 	if err != nil {
 		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
 			response{Message: fmt.Sprintf("grant token: %v", err.Error())})
@@ -417,4 +420,12 @@ func writeRedeemTokenResponse[T any](
 
 	_, err = w.Write(data)
 	logging.LogResultInfo(err, attemptAt, traceID, callType, fields...)
+}
+
+func makeUserID(clientID, subject, email string) string {
+	hash := sha256.New()
+	hash.Write([]byte(clientID))
+	hash.Write([]byte(subject))
+	hash.Write([]byte(email))
+	return hex.EncodeToString(hash.Sum(nil))
 }
