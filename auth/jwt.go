@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/go-jose/go-jose.v2"
 	"gopkg.in/go-jose/go-jose.v2/jwt"
 )
@@ -60,6 +61,8 @@ func VerifyToken[T any](key Key, token string) (UserClaims[T], error) {
 	if err != nil {
 		return UserClaims[T]{}, fmt.Errorf("parse signed: %v", err)
 	}
+
+	log.Debugf("verifying token with headers: %v", tok.Headers)
 
 	var cl UserClaims[T]
 	if err := tok.Claims(key.key, &cl); err != nil {
