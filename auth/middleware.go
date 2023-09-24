@@ -65,14 +65,14 @@ func (m *middleware[T]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	keys, err := m.verifyKeys.Verify(ctx)
 	if err != nil {
-		err := fmt.Errorf("get sign key: %v", err)
+		err := fmt.Errorf("get verify key: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		logging.LogResultInfo(err, attemptAt, traceID, authMiddlewareCallType)
 		return
 	}
 
 	if len(keys) == 0 {
-		err := errors.New("no sign keys")
+		err := errors.New("no verify keys")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		logging.LogResultInfo(err, attemptAt, traceID, authMiddlewareCallType)
 		return
