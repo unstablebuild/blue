@@ -54,8 +54,7 @@ func SignToken[T any](key Key, userID, email string, extraClaims T, expiry time.
 	return raw, nil
 }
 
-// VerifyToken verifies that the given token was signed by key
-// and validates that it was generated using SignToken.
+// VerifyToken verifies that the given token was signed by key.
 func VerifyToken[T any](key Key, token string) (UserClaims[T], error) {
 	tok, err := jwt.ParseSigned(token)
 	if err != nil {
@@ -65,14 +64,6 @@ func VerifyToken[T any](key Key, token string) (UserClaims[T], error) {
 	var cl UserClaims[T]
 	if err := tok.Claims(key.key, &cl); err != nil {
 		return UserClaims[T]{}, fmt.Errorf("verify signature: %v", err)
-	}
-
-	expected := jwt.Expected{
-		Issuer:   defaultIssuer,
-		Audience: defaultAudience,
-	}
-	if err := cl.Validate(expected); err != nil {
-		return UserClaims[T]{}, fmt.Errorf("validate: %v", err)
 	}
 
 	if time.Now().After(cl.Expiry.Time()) {
