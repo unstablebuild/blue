@@ -96,9 +96,8 @@ func (h tokenHandler[T]) ServeHTTP(
 		return
 	}
 
-	userID := makeUserID(clientID, claims.Subject, claims.Email)
 	// override access_token with own token, that we can decode and introspect on middleware
-	extra, err := h.granter.Grant(ctx, userID, claims.Email)
+	extra, err := h.granter.Grant(ctx, claims)
 	if err != nil {
 		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
 			response{Message: fmt.Sprintf("grant token: %v", err.Error())})

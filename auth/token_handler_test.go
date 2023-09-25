@@ -30,7 +30,7 @@ const (
 )
 
 func TestTokenHandler(t *testing.T) {
-	grantAll := FuncGranter(func(context.Context, string, string) (User, error) {
+	grantAll := FuncGranter(func(context.Context, *ProviderClaims) (User, error) {
 		return User{Role: "admin"}, nil
 	})
 	testSignKey := SymmetricKey([]byte("1234"))
