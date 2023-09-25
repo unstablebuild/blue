@@ -9,6 +9,7 @@ import (
 
 	"github.com/ernestrc/blue/logging"
 	"github.com/ernestrc/blue/logging/trace"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -97,6 +98,7 @@ func (m *middleware[T]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	r = r.WithContext(ContextWithClaims(ctx, claims))
 	m.next.ServeHTTP(w, r)
+	logging.LogResult(nil, attemptAt, traceID, authMiddlewareCallType)
 }
 
 func (m *middleware[T]) forbidden(
@@ -104,5 +106,5 @@ func (m *middleware[T]) forbidden(
 	traceID trace.ID, fields ...logging.Field,
 ) {
 	http.Error(w, err.Error(), http.StatusForbidden)
-	logging.LogResultInfo(err, attemptAt, traceID, authMiddlewareCallType, fields...)
+	logging.LogResultLevel(log.DebugLevel, log.WarnLevel, err, attemptAt, traceID, authMiddlewareCallType, fields...)
 }

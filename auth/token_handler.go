@@ -354,8 +354,6 @@ func validateProviderResponse(
 		return nil, false
 	}
 
-	logger.Debugf("got clientID %s claims %#v", clientID, claims)
-
 	if claims.Subject == "" {
 		writeResponse(ctx, callType, traceID, attemptAt, w, in, http.StatusBadGateway,
 			response{Message: "invalid 'sub' from upstream provider claims"})
