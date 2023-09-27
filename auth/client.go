@@ -21,16 +21,33 @@ const (
 	loggingClass     = "auth"
 )
 
-// NewClient starts a oauth2 flow with the given oaut2 config
+// NewClient starts an oauth2 like NewClientWithPorts but
+// will setup a callback listener on a random port.
+// See NewClientWithPorts for more details.
+func NewClient(
+	ctx context.Context, conf oauth2.Config,
+	visitURLCallback func(string) error, successBrowserCopy string,
+) (*http.Client, oauth2.TokenSource, error) {
+	return NewClientWithPorts(ctx, conf, visitURLCallback, successBrowserCopy, nil)
+}
+
+// NewClientWithPorts starts a oauth2 flow with the given oaut2 config
 // and returns an *http.Client that will refresh the token as necessary,
 // or an error if there's an error completing the oauth2 flow.
 //
 // This client can be used against WithMiddleware if configured
 // to use a Token endpoint managed by the handler returned by
 // TokenHTTPHandler.
-func NewClient(
+//
+// Oftentimes oauth2 providers want the callback url to be in
+// a whitelist so listening on a random port won't work. The
+// parameter tryPorts is designed to enable users to whitelist
+// a (hopefully long) list of known ports and pass them
+// to this constructor.
+func NewClientWithPorts(
 	ctx context.Context, conf oauth2.Config,
 	visitURLCallback func(string) error, successBrowserCopy string,
+	tryPorts []int,
 ) (*http.Client, oauth2.TokenSource, error) {
 	const oauth2FlowTimeout = 60 * time.Second
 	ctx, cancel := context.WithTimeout(ctx, oauth2FlowTimeout)
@@ -45,7 +62,7 @@ func NewClient(
 	defer srv.Close()
 
 	go serveRedirects(ctx, &srv, csrfToken, resChan,
-		readyChan, successBrowserCopy)
+		readyChan, successBrowserCopy, tryPorts)
 
 	select {
 	case readyResult := <-readyChan:
@@ -119,11 +136,23 @@ type readyResult struct {
 func serveRedirects(
 	ctx context.Context, srv *http.Server, csrfToken string,
 	done chan tokenResult, ready chan readyResult, doneCopy string,
+	knownPorts []int,
 ) {
 	handler := redirectHandler{doneCopy: doneCopy, csrfToken: csrfToken, ch: done}
 	srv.Handler = handler
 
-	ln, err := net.Listen("tcp", srv.Addr)
+	var err error
+	var ln net.Listener
+	if len(knownPorts) == 0 {
+		ln, err = net.Listen("tcp", srv.Addr)
+	} else {
+		for _, port := range knownPorts {
+			ln, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
+			if err == nil {
+				break
+			}
+		}
+	}
 	if err != nil {
 		select {
 		case ready <- readyResult{err: err}:
