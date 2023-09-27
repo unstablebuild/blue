@@ -2,8 +2,16 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 )
+
+// EncodeSecretID encodes the given ID to be compatible with
+// SecretStore implementations.
+func EncodeSecretID(id string) string {
+	return base64.StdEncoding.WithPadding(base64.NoPadding).
+		EncodeToString([]byte(id))
+}
 
 // SecretStore abstracts the ability to retrieve secret metadata and access secret data.
 type SecretStore interface {

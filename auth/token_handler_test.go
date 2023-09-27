@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
-	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -176,7 +175,7 @@ func TestTokenHandler(t *testing.T) {
 				metadataKeyCertsURL:  certsServer.URL,
 			})
 
-			encodedClientID := base64.StdEncoding.EncodeToString([]byte(validClientID))
+			encodedClientID := EncodeSecretID(validClientID)
 			secretStore := MapSecretStore(map[string][]byte{encodedClientID: validSecret},
 				metadataKeyRedeemURL, tokenServer.URL,
 				metadataKeyTokenURL, tokenServer.URL,
