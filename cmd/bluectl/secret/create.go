@@ -3,9 +3,12 @@ package secret
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/ernestrc/blue/auth"
 	"github.com/ernestrc/blue/auth/secretmanager"
 	"github.com/ernestrc/blue/cli"
 )
@@ -43,7 +46,7 @@ func newSecretCreateCLI(s *secretmanager.Service) cli.CLI {
 func (s *secretCreate) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "create",
-		Summary:  "Create a secret.",
+		Summary:  "Create a secret. The secret ID is encoded and printed to stdout.",
 		Synopsis: "[options] <id>",
 		Options:  *s.fs,
 	}
@@ -67,6 +70,7 @@ func (s *secretCreate) Run(ctx context.Context, args []string) error {
 		return err
 	}
 	id := args[0]
+	id = auth.EncodeSecretID(id)
 
 	mdata, err := s.parseMetadataFlag()
 	if err != nil {
@@ -77,5 +81,10 @@ func (s *secretCreate) Run(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	return s.store.CreateSecret(ctx, id, mdata)
+	err = s.store.CreateSecret(ctx, id, mdata)
+	if err == nil {
+		fmt.Fprint(os.Stdout, id)
+		fmt.Fprint(os.Stdout, "\n")
+	}
+	return err
 }

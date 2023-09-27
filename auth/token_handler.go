@@ -144,8 +144,10 @@ func fetchSecret(
 	clientID string, secretStore SecretStore,
 ) (redeemURL, tokenURL, certsURL, clientSecret string, ok bool) {
 	// clientIDs are store in base64 encoded, so we don't violate any store key
-	// character set constrains.
-	clientID = base64.StdEncoding.EncodeToString([]byte(clientID))
+	// character set constrains. Use no padding as secretmanager doesn't
+	// permit '=' characters.
+	clientID = base64.StdEncoding.WithPadding(base64.NoPadding).
+		EncodeToString([]byte(clientID))
 
 	metadata, err := secretStore.GetSecretMetadata(ctx, clientID)
 	if err != nil {
