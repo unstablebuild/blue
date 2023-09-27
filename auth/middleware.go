@@ -18,8 +18,10 @@ const (
 
 // MiddlewareConfig configures the middleware returned by WithMiddleware.
 type MiddlewareConfig[T any] struct {
-	VerifyKeys Keys
-	Authorizer Authorizer[T]
+	VerifyKeys   Keys
+	Authorizer   Authorizer[T]
+	SuccessLevel log.Level
+	FailureLevel log.Level
 }
 
 // WithMiddleware wraps next with a middleware that expects an oauth2 Authorization
@@ -33,18 +35,28 @@ func WithMiddleware[T any](next http.Handler, config MiddlewareConfig[T]) http.H
 	if config.Authorizer == nil {
 		panic("missing Authorizer in auth.MiddlewareConfig")
 	}
+	if config.SuccessLevel == 0 {
+		config.SuccessLevel = log.InfoLevel
+	}
+	if config.FailureLevel == 0 {
+		config.FailureLevel = log.WarnLevel
+	}
 	return &middleware[T]{
-		verifyKeys: config.VerifyKeys,
-		authorizer: config.Authorizer,
-		next:       next,
+		verifyKeys:   config.VerifyKeys,
+		authorizer:   config.Authorizer,
+		next:         next,
+		successLevel: config.SuccessLevel,
+		failureLevel: config.FailureLevel,
 	}
 }
 
 type middleware[T any] struct {
-	verifyKeys Keys
-	authorizer Authorizer[T]
-	client     http.Client
-	next       http.Handler
+	verifyKeys   Keys
+	authorizer   Authorizer[T]
+	client       http.Client
+	next         http.Handler
+	successLevel log.Level
+	failureLevel log.Level
 }
 
 func (m *middleware[T]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -68,14 +80,16 @@ func (m *middleware[T]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		err := fmt.Errorf("get verify key: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		logging.LogResultInfo(err, attemptAt, traceID, authMiddlewareCallType)
+		logging.LogResultLevel(m.successLevel, m.failureLevel,
+			err, attemptAt, traceID, authMiddlewareCallType)
 		return
 	}
 
 	if len(keys) == 0 {
 		err := errors.New("no verify keys")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		logging.LogResultInfo(err, attemptAt, traceID, authMiddlewareCallType)
+		logging.LogResultLevel(m.successLevel, m.failureLevel,
+			err, attemptAt, traceID, authMiddlewareCallType)
 		return
 	}
 
@@ -98,7 +112,8 @@ func (m *middleware[T]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	r = r.WithContext(ContextWithClaims(ctx, claims))
 	m.next.ServeHTTP(w, r)
-	logging.LogResult(nil, attemptAt, traceID, authMiddlewareCallType)
+	logging.LogResultLevel(m.successLevel, m.failureLevel,
+		nil, attemptAt, traceID, authMiddlewareCallType)
 }
 
 func (m *middleware[T]) forbidden(
@@ -106,5 +121,6 @@ func (m *middleware[T]) forbidden(
 	traceID trace.ID, fields ...logging.Field,
 ) {
 	http.Error(w, err.Error(), http.StatusForbidden)
-	logging.LogResultLevel(log.DebugLevel, log.WarnLevel, err, attemptAt, traceID, authMiddlewareCallType, fields...)
+	logging.LogResultLevel(m.successLevel, m.failureLevel,
+		err, attemptAt, traceID, authMiddlewareCallType, fields...)
 }
