@@ -231,7 +231,7 @@ func validateTokenRequest(
 	switch grantType {
 	case "authorization_code":
 		challenge := in.PostForm.Get("code_challenge")
-		verifier := in.PostForm.Get("verifier")
+		verifier := in.PostForm.Get("code_verifier")
 		if clientID == "" || (clientSecret == "" && (challenge == "" || verifier == "")) {
 			err := errors.New("'client_id' must always be set and either " +
 				"'client_secret' or pkce params must be set for this grant_type")

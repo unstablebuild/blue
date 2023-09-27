@@ -105,7 +105,7 @@ func NewClientWithPorts(
 	}
 
 	if usePKCE {
-		pkceOpts = append(pkceOpts, oauth2.SetAuthURLParam("verifier", pkce.Verifier))
+		pkceOpts = append(pkceOpts, oauth2.SetAuthURLParam("code_verifier", pkce.Verifier))
 	}
 	tok, err := conf.Exchange(ctx, result.data, pkceOpts...)
 	if err != nil {
