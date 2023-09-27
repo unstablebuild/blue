@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ernestrc/blue/document"
 	"github.com/ernestrc/blue/logging"
 	"github.com/ernestrc/blue/logging/trace"
 	"github.com/ernestrc/blue/retry"
@@ -99,7 +100,11 @@ func (h tokenHandler[T]) ServeHTTP(
 	// override access_token with own token, that we can decode and introspect on middleware
 	extra, err := h.granter.Grant(ctx, claims)
 	if err != nil {
-		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
+		status := http.StatusInternalServerError
+		if errors.Is(err, document.ErrNotFound) {
+			status = http.StatusExpectationFailed
+		}
+		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, status,
 			response{Message: fmt.Sprintf("grant token: %v", err.Error())})
 		return
 	}
