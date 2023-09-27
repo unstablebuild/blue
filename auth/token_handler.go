@@ -325,13 +325,6 @@ func fetchProviderToken(
 		return
 	}
 
-	if ret.IDToken == "" {
-		logger.Warningf("missing ID token in response: possible error response: %s", string(respBody))
-		writeResponse(ctx, callType, traceID, attemptAt, w, in, http.StatusInternalServerError,
-			response{Message: "missing ID token in response"})
-		return
-	}
-
 	ok = true
 	return
 }
