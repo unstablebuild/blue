@@ -29,9 +29,10 @@ func (i *metadataFlag) Set(value string) error {
 }
 
 type secretCreate struct {
-	store     *secretmanager.Service
-	fs        *cli.FlagSet
-	mdataFlag metadataFlag
+	store      *secretmanager.Service
+	fs         *cli.FlagSet
+	mdataFlag  metadataFlag
+	noEncodeID bool
 }
 
 func newSecretCreateCLI(s *secretmanager.Service) cli.CLI {
@@ -40,13 +41,14 @@ func newSecretCreateCLI(s *secretmanager.Service) cli.CLI {
 	}
 	c.fs = cli.NewFlagSet("create")
 	c.fs.Var(&c.mdataFlag, "d", "Add metadata to the secret. Expects format to be <key>=<value>")
+	c.fs.BoolVar(&c.noEncodeID, "n", false, "Dont't encode passed ID and treat it as the final secret ID.")
 	return c
 }
 
 func (s *secretCreate) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "create",
-		Summary:  "Create a secret. The secret ID is encoded and printed to stdout.",
+		Summary:  "Create a secret. The final secret ID is printed to stdout.",
 		Synopsis: "[options] <id>",
 		Options:  *s.fs,
 	}
@@ -70,7 +72,10 @@ func (s *secretCreate) Run(ctx context.Context, args []string) error {
 		return err
 	}
 	id := args[0]
-	id = auth.EncodeSecretID(id)
+
+	if !s.noEncodeID {
+		id = auth.EncodeSecretID(id)
+	}
 
 	mdata, err := s.parseMetadataFlag()
 	if err != nil {
