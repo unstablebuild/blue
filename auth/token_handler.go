@@ -27,6 +27,10 @@ import (
 // could not be parsed as a url.URL.
 //
 // It uses the given granter to grant extra claims to the user.
+//
+// If client secret is not present in the request (i.e. PCKE)
+// then a client secret is fetched from secretStore with the client id
+// as the base64 encoded (url encoded, no padding) as the secret id.
 func TokenHTTPHandler[T any](
 	keys Keys, passwordStore *PasswordStore,
 	secretStore SecretStore, granter Granter[T],
