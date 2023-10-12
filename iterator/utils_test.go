@@ -13,9 +13,9 @@ func TestIsEmpty(t *testing.T) {
 		inSlice       []testStruct
 		expectedOutOk bool
 	}{
-		{"empty returns false and empty iterator", nil, false},
-		{"one item returns true and and same item iterator", []testStruct{{"1", 1}}, true},
-		{"multiple items returns true and and same iterator", []testStruct{{"1", 1}, {"2", 2}}, true},
+		{"empty returns true and empty iterator", nil, true},
+		{"one item returns false and and same item iterator", []testStruct{{"1", 1}}, false},
+		{"multiple items returns false and and same iterator", []testStruct{{"1", 1}, {"2", 2}}, false},
 	}
 
 	for _, tcase := range tsuite {

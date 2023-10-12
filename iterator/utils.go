@@ -64,12 +64,12 @@ func (i *sliceIter[T]) Err() error {
 	return nil
 }
 
-// IsEmpty consumes the first element in i and returns whether it is empty
-// or not and returns a new iterator that should be used instead of i.
+// IsEmpty consumes the first element in i and returns true if it is empty
+// or false if not and returns a new iterator that should be used instead of i.
 func IsEmpty[T any](i Iterator[T]) (Iterator[T], bool) {
 	el, ok := i.Next()
 	if !ok {
-		return FromSlice[T](nil), false
+		return FromSlice[T](nil), true
 	}
 
 	return FromFunc(func() (T, bool, error) {
@@ -82,5 +82,5 @@ func IsEmpty[T any](i Iterator[T]) (Iterator[T], bool) {
 			return iEl, false, i.Err()
 		}
 		return iEl, iOk, nil
-	}), true
+	}), false
 }
