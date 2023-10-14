@@ -18,9 +18,14 @@ import (
 )
 
 var (
-	metadataKeyLoginURL  = "login_url"
+	// endpoint URL to redeem a new token.
 	metadataKeyRedeemURL = "redeem_url"
+	// endpoint URL to refresh tokens with a refresh_token type of flow.
+	// This is optional but, if this is not set in the secret metadata,
+	// then refresh tokens will be omitted from responses so client will have
+	// to do an authorization_code every time, requiring user input.
 	metadataKeyTokenURL  = "token_url"
+	// endpoint URL to pull jwks public keys to validate token signature
 	metadataKeyCertsURL  = "certs_url"
 
 	httpOutboundRetryStrategy = retry.CombinedStrategy(
