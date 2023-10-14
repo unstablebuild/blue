@@ -398,6 +398,9 @@ func writeRedeemTokenResponse[T any](
 	// then do not return a refresh token.
 	if tokenURL == "" {
 		ret.RefreshToken = ""
+		log.Warnf("removing 'refresh_token' from response: "+
+			"client secret does not have a '%s' set in metadata",
+			metadataKeyTokenURL)
 	}
 
 	fields := []logging.Field{
