@@ -73,7 +73,7 @@ func CombinedStrategy(i Strategy, n ...Strategy) Strategy {
 // or ctx deadline is exceeded.
 func Retry(
 	ctx context.Context, strategy Strategy,
-	fn func(ctx context.Context) (bool, error),
+	fn func(ctx context.Context) (shouldRetry bool, err error),
 ) error {
 	var retryCount uint
 	var result error
