@@ -269,8 +269,10 @@ func (d *documentManager) Get(
 		return Bundle{}, err
 	}
 
-	if out == ioutil.Discard {
-		return doc.Bundle, nil
+	if del, ok := out.(progressDelegate); ok {
+		if del.writeDelegate == ioutil.Discard {
+			return doc.Bundle, nil
+		}
 	}
 
 	err = d.writeChunks(ctx, doc, out)
