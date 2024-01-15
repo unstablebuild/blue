@@ -72,7 +72,9 @@ func (d seekerProgressDelegate) Stat() (os.FileInfo, error) {
 	return d.statDelegate.Stat()
 }
 
-// NopProgressReader wraps r to satisfy ProgressReader.
+// NopProgressReader wraps r to satisfy ProgressReader, discarding
+// any calls to Progress.
+//
 // If r satisfies io.ReadWriteSeeker then the returned ProgressReader
 // will satisfy io.ReadWriteSeeker as well.
 func NopProgressReader(r io.Reader) ProgressReader {
@@ -82,7 +84,9 @@ func NopProgressReader(r io.Reader) ProgressReader {
 	return progressDelegate{readDelegate: r}
 }
 
-// NopProgressWriter wraps w to satisfy ProgressWriter.
+// NopProgressWriter wraps w to satisfy ProgressWriter, discarding
+// any calls to Progress.
+//
 // If w satisfies io.ReadWriteSeeker then the returned ProgressWriter
 // will satisfy io.ReadWriteSeeker as well.
 func NopProgressWriter(w io.Writer) ProgressWriter {
