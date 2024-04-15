@@ -249,8 +249,8 @@ func validateTokenRequest(
 			return nil, "", "", "", err
 		}
 	case "refresh_token":
-		if refreshToken == "" {
-			err := errors.New("'refresh_token' must always be set for this gran_type")
+		if refreshToken == "" || clientID == "" {
+			err := errors.New("'refresh_token' and 'client_id' must always be set for this gran_type")
 			return nil, "", "", "", err
 		}
 	default:
