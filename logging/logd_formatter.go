@@ -24,13 +24,13 @@ const (
 	formatterWarningCollisionTemplate = "following keys are being overwritten by logging formatter %+v"
 )
 
-// LogrusFormatter implements logrus.Formatter interface with a log format
+// LogrusLogdFormatter implements logrus.Formatter interface with a log format
 // that can be parsed by a logd server.
-type LogrusFormatter struct {
+type LogrusLogdFormatter struct {
 	Debug bool
 }
 
-func (f *LogrusFormatter) setFields(log *logd.Log, entry *logrus.Entry) {
+func (f LogrusLogdFormatter) setFields(log *logd.Log, entry *logrus.Entry) {
 	for k, v := range entry.Data {
 		switch v := v.(type) {
 		case int:
@@ -81,7 +81,7 @@ func getGID() string {
 	return string(b)
 }
 
-func (f *LogrusFormatter) setHeader(log *logd.Log, entry *logrus.Entry) {
+func (f LogrusLogdFormatter) setHeader(log *logd.Log, entry *logrus.Entry) {
 	log.Set(KeyDate, entry.Time.Format(dateFormat))
 	log.Set(KeyTime, entry.Time.Format(timeFormat))
 	log.Set(KeyMessage, entry.Message)
@@ -105,7 +105,7 @@ func detectCollisions(log *logd.Log, entry *logrus.Entry) {
 	}
 }
 
-func (f *LogrusFormatter) setDebugFields(log *logd.Log, entry *logrus.Entry) {
+func (f LogrusLogdFormatter) setDebugFields(log *logd.Log, entry *logrus.Entry) {
 	log.Set(KeyThread, getGID())
 	if entry.HasCaller() {
 		funcVal := fmt.Sprintf("%s.%d", entry.Caller.Function, entry.Caller.Line)
@@ -115,7 +115,7 @@ func (f *LogrusFormatter) setDebugFields(log *logd.Log, entry *logrus.Entry) {
 }
 
 // Format renders a single log entry in a logd compatible format
-func (f *LogrusFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+func (f LogrusLogdFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	var log logd.Log
 	f.setFields(&log, entry)
 	f.setHeader(&log, entry)

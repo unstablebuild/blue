@@ -102,7 +102,7 @@ func LogResultLevel(
 
 // SetDefaults sets default level, formatter and output.
 func SetDefaults(debug bool) {
-	formatter := &LogrusFormatter{}
+	formatter := &LogrusLogdFormatter{}
 	if debug {
 		log.SetLevel(log.TraceLevel)
 		formatter.Debug = true

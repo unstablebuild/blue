@@ -70,11 +70,11 @@ func assertEqualProperty(
 
 func setupTestCase(
 	debugMode bool, input logrus.Fields, file, fn string, line int,
-) (f LogrusFormatter, entry *logrus.Entry) {
+) (f LogrusLogdFormatter, entry *logrus.Entry) {
 	var err error
 	logger := logrus.New()
 
-	f = LogrusFormatter{Debug: debugMode}
+	f = LogrusLogdFormatter{Debug: debugMode}
 
 	logger.SetFormatter(&f)
 	entry = logrus.NewEntry(logger).WithFields(input)
