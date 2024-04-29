@@ -18,8 +18,8 @@ const (
 	log4 = "2017-09-07 14:54:39.474	DEBUG	[-]	-	myCallType: hello: yeah\n"
 )
 
-var (
-	expected1 = logrus.Fields{
+func testCase1() logrus.Fields {
+	return logrus.Fields{
 		KeyTimestamp: "2017-09-07 14:54:39.474",
 		KeyThread:    "pool-5-thread-6",
 		KeyClass:     "control.RaptorHandler",
@@ -27,25 +27,31 @@ var (
 		"step":       "Attempt",
 		"operation":  "CreatePublisher",
 	}
+}
 
-	expected2 = logrus.Fields{
+func testCase2() logrus.Fields {
+	return logrus.Fields{
 		KeyTimestamp: "2017-09-07 14:54:39.474",
 		KeyThread:    "2223",
 		"flow":       nil,
 	}
+}
 
-	expected3 = logrus.Fields{
+func testCase3() logrus.Fields {
+	return logrus.Fields{
 		KeyTimestamp: "2017-09-07 14:54:39.474",
 		KeyThread:    "2223",
 		"flow":       nil,
 	}
+}
 
-	expected4 = logrus.Fields{
+func testCase4() logrus.Fields {
+	return logrus.Fields{
 		KeyTimestamp: "2017-09-07 14:54:39.474",
 		"callType":   "myCallType",
 		"hello":      "yeah",
 	}
-)
+}
 
 func makeBenchProps() logrus.Fields {
 	return logrus.Fields{
@@ -58,49 +64,7 @@ func makeBenchProps() logrus.Fields {
 	}
 }
 
-func assertEqualProperty(
-	t *testing.T, testCase int, key string,
-	expectedOutput *logd.Log, testOutput *logd.Log,
-) {
-	expected, _ := expectedOutput.Get(key)
-	actual, _ := testOutput.Get(key)
-	assert.Equal(t, expected, actual,
-		"property %s in log not equal in test case %d", key, testCase)
-}
-
-func setupTestCase(
-	debugMode bool, input logrus.Fields, file, fn string, line int,
-) (f LogrusLogdFormatter, entry *logrus.Entry) {
-	var err error
-	logger := logrus.New()
-
-	f = LogrusLogdFormatter{Debug: debugMode}
-
-	logger.SetFormatter(&f)
-	entry = logrus.NewEntry(logger).WithFields(input)
-
-	entry.Time, err = time.Parse("2006-01-02 15:04:05.999",
-		input[KeyTimestamp].(string))
-	if err != nil {
-		panic(err)
-	}
-	delete(input, KeyTimestamp)
-
-	if file == "" && line == 0 {
-		/* leave caller as nil so we test that */
-	} else {
-		entry.Caller = &runtime.Frame{}
-		entry.Caller.Function = fn
-		entry.Caller.File = file
-		entry.Caller.Line = line
-		entry.Logger.ReportCaller = true
-	}
-
-	entry.Level = logrus.DebugLevel
-	return
-}
-
-func TestFormatter(t *testing.T) {
+func TestLogdFormatter(t *testing.T) {
 	tsuite := []struct {
 		debug  bool
 		input  logrus.Fields
@@ -109,14 +73,14 @@ func TestFormatter(t *testing.T) {
 		line   int
 		output string
 	}{
-		{false, expected1, "shouldNotOverwrite.go", "", 123, log1},
-		{false, expected2, "myFile.go", "", 223, log2},
-		{true, expected3, "myFile.go", "myFunc", 223, log3},
-		{true, expected4, "", "", 0, log4},
+		{false, testCase1(), "shouldNotOverwrite.go", "", 123, log1},
+		{false, testCase2(), "myFile.go", "", 223, log2},
+		{true, testCase3(), "myFile.go", "myFunc", 223, log3},
+		{true, testCase4(), "", "", 0, log4},
 	}
 
 	for i, tcase := range tsuite {
-		f, entry := setupTestCase(tcase.debug,
+		f, entry := setupLogdTestCase(tcase.debug,
 			tcase.input, tcase.file, tcase.fn, tcase.line)
 
 		log, err := f.Format(entry)
@@ -149,7 +113,7 @@ func TestFormatter(t *testing.T) {
 }
 
 func BenchmarkFormatterDebugOn(b *testing.B) {
-	f, entry := setupTestCase(true, makeBenchProps(),
+	f, entry := setupLogdTestCase(true, makeBenchProps(),
 		"myjfkewfjelfjlFile.go", "myGoFunc", 123345)
 
 	b.ResetTimer()
@@ -159,11 +123,53 @@ func BenchmarkFormatterDebugOn(b *testing.B) {
 }
 
 func BenchmarkFormatterDebugOff(b *testing.B) {
-	f, entry := setupTestCase(false, makeBenchProps(),
+	f, entry := setupLogdTestCase(false, makeBenchProps(),
 		"myjfkewfjelfjlFile.go", "myGoFunc", 123345)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f.Format(entry)
 	}
+}
+
+func assertEqualProperty(
+	t *testing.T, testCase int, key string,
+	expectedOutput *logd.Log, testOutput *logd.Log,
+) {
+	expected, _ := expectedOutput.Get(key)
+	actual, _ := testOutput.Get(key)
+	assert.Equal(t, expected, actual,
+		"property %s in log not equal in test case %d", key, testCase)
+}
+
+func setupLogdTestCase(
+	debugMode bool, input logrus.Fields, file, fn string, line int,
+) (f LogrusLogdFormatter, entry *logrus.Entry) {
+	var err error
+	logger := logrus.New()
+
+	f = LogrusLogdFormatter{Debug: debugMode}
+
+	logger.SetFormatter(&f)
+	entry = logrus.NewEntry(logger).WithFields(input)
+
+	entry.Time, err = time.Parse("2006-01-02 15:04:05.999",
+		input[KeyTimestamp].(string))
+	if err != nil {
+		panic(err)
+	}
+	delete(input, KeyTimestamp)
+
+	if file == "" && line == 0 {
+		/* leave caller as nil so we test that */
+	} else {
+		entry.Caller = &runtime.Frame{}
+		entry.Caller.Function = fn
+		entry.Caller.File = file
+		entry.Caller.Line = line
+		entry.Logger.ReportCaller = true
+	}
+
+	entry.Level = logrus.DebugLevel
+	return
 }
