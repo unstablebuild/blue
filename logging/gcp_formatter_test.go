@@ -12,10 +12,10 @@ import (
 )
 
 const (
-	expectedLog1 = `{"timestamp": "2017-09-07T14:54:39.474Z","severity":"DEBUG","thread":"pool-5-thread-6","class":"control.RaptorHandler","flow": "Publish", "step": "Attempt", "operation": "CreatePublisher", "logging.googleapis.com/sourceLocation":{"file":"shouldNotOverwrite.go","line":123}}`
-	expectedLog2 = `{"timestamp": "2017-09-07T14:54:39.474Z","severity":"DEBUG","thread":"2223","flow": null, "logging.googleapis.com/sourceLocation":{"file":"myFile.go","line":223}}`
-	expectedLog3 = `{"timestamp": "2017-09-07T14:54:39.474Z","severity":"DEBUG","thread":"2223","logging.googleapis.com/sourceLocation":{"file":"myFile.go","function": "myFunc","line":223}, "flow": null}`
-	expectedLog4 = `{"timestamp": "2017-09-07T14:54:39.474Z","severity":"DEBUG","callType":"myCallType","hello": "yeah"}`
+	expectedLog1 = `{"time": "2017-09-07T14:54:39.474Z","severity":"DEBUG","thread":"pool-5-thread-6","class":"control.RaptorHandler","flow": "Publish", "step": "Attempt", "operation": "CreatePublisher", "logging.googleapis.com/sourceLocation":{"file":"shouldNotOverwrite.go","line":123}}`
+	expectedLog2 = `{"time": "2017-09-07T14:54:39.474Z","severity":"DEBUG","thread":"2223","flow": null, "logging.googleapis.com/sourceLocation":{"file":"myFile.go","line":223}}`
+	expectedLog3 = `{"time": "2017-09-07T14:54:39.474Z","severity":"DEBUG","thread":"2223","logging.googleapis.com/sourceLocation":{"file":"myFile.go","function": "myFunc","line":223}, "flow": null}`
+	expectedLog4 = `{"time": "2017-09-07T14:54:39.474Z","severity":"DEBUG","callType":"myCallType","hello": "yeah"}`
 )
 
 func TestGCPFormatter(t *testing.T) {
@@ -79,14 +79,15 @@ func setupGCPTestCase(
 	f = LogrusGCPFormatter{}
 
 	logger.SetFormatter(&f)
-	entry = logrus.NewEntry(logger).WithFields(input)
 
+	entry = logrus.NewEntry(logger)
 	entry.Time, err = time.Parse("2006-01-02 15:04:05.999",
 		input[KeyTimestamp].(string))
 	if err != nil {
 		panic(err)
 	}
 	delete(input, KeyTimestamp)
+	entry = entry.WithFields(input)
 
 	if file == "" && line == 0 {
 		/* leave caller as nil so we test that */
