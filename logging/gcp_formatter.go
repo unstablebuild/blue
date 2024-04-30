@@ -23,6 +23,7 @@ func (f LogrusGCPFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		return nil, fmt.Errorf("json marshal: %w", err)
 	}
 
+	out = append(out, '\n')
 	return out, nil
 }
 
