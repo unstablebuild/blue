@@ -11,7 +11,7 @@ import (
 const (
 	keySeverity       = "severity"
 	keyMessage        = "message"
-	keyTimestamp      = "timestamp"
+	keyTimestamp      = "time"
 	keySourceLocation = "logging.googleapis.com/sourceLocation"
 )
 
