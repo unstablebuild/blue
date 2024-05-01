@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ernestrc/blue/document"
-	proto "github.com/ernestrc/blue/document/rpc/proto"
-	"github.com/ernestrc/blue/encoding"
+	"github.com/unstablebuild/blue/document"
+	proto "github.com/unstablebuild/blue/document/rpc/proto"
+	"github.com/unstablebuild/blue/encoding"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

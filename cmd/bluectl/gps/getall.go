@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ernestrc/blue/cli"
-	"github.com/ernestrc/blue/gps"
+	"github.com/unstablebuild/blue/cli"
+	"github.com/unstablebuild/blue/gps"
 )
 
 var defaultGetAllTimeout = 10 * time.Second

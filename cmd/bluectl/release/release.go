@@ -3,8 +3,8 @@ package release
 import (
 	"context"
 
-	"github.com/ernestrc/blue/cli"
-	"github.com/ernestrc/blue/release"
+	"github.com/unstablebuild/blue/cli"
+	"github.com/unstablebuild/blue/release"
 )
 
 var (

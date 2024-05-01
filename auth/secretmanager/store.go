@@ -3,7 +3,7 @@ package secretmanager
 import (
 	"context"
 
-	"github.com/ernestrc/blue/auth"
+	"github.com/unstablebuild/blue/auth"
 )
 
 // SecretStore wraps returns an auth.SecretStore backed by secretmanager.Service.

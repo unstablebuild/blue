@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ernestrc/blue/logging"
-	"github.com/ernestrc/blue/logging/trace"
+	"github.com/unstablebuild/blue/logging"
+	"github.com/unstablebuild/blue/logging/trace"
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/authhandler"

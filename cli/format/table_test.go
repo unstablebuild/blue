@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/ernestrc/blue/iterator"
+	"github.com/unstablebuild/blue/iterator"
 	"github.com/stretchr/testify/assert"
 )
 

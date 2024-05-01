@@ -6,8 +6,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/ernestrc/blue/logging"
-	"github.com/ernestrc/blue/logging/trace"
+	"github.com/unstablebuild/blue/logging"
+	"github.com/unstablebuild/blue/logging/trace"
 )
 
 const (

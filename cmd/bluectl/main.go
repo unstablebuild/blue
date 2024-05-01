@@ -6,7 +6,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/ernestrc/blue/cli"
+	"github.com/unstablebuild/blue/cli"
 )
 
 var (

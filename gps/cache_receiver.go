@@ -3,9 +3,9 @@ package gps
 import (
 	"context"
 
-	"github.com/ernestrc/blue/document"
-	"github.com/ernestrc/blue/logging"
-	"github.com/ernestrc/blue/logging/trace"
+	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/logging"
+	"github.com/unstablebuild/blue/logging/trace"
 )
 
 // Cache satisfies Receiver by storing the last known position of a DeviceID.

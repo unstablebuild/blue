@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ernestrc/blue/logging/trace"
+	"github.com/unstablebuild/blue/logging/trace"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 )

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ernestrc/blue/document"
+	"github.com/unstablebuild/blue/document"
 )
 
 const deviceID = "segador-1"

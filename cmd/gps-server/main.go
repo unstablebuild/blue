@@ -9,8 +9,8 @@ import (
 	"github.com/pion/dtls/v2"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/ernestrc/blue/gps"
-	"github.com/ernestrc/blue/logging"
+	"github.com/unstablebuild/blue/gps"
+	"github.com/unstablebuild/blue/logging"
 )
 
 var (

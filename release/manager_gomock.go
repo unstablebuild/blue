@@ -8,7 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	"github.com/ernestrc/blue/iterator"
+	"github.com/unstablebuild/blue/iterator"
 	gomock "github.com/golang/mock/gomock"
 )
 

@@ -4,7 +4,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/ernestrc/blue/logging/trace"
+	"github.com/unstablebuild/blue/logging/trace"
 	logd "github.com/ernestrc/logd-go/logging"
 	log "github.com/sirupsen/logrus"
 )

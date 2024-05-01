@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ernestrc/blue/retry"
+	"github.com/unstablebuild/blue/retry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

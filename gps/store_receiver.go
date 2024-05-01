@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ernestrc/blue/document"
-	"github.com/ernestrc/blue/logging"
-	"github.com/ernestrc/blue/logging/trace"
+	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/logging"
+	"github.com/unstablebuild/blue/logging/trace"
 )
 
 type config struct {

@@ -3,7 +3,7 @@ package secretmanager
 import (
 	"context"
 
-	"github.com/ernestrc/blue/auth"
+	"github.com/unstablebuild/blue/auth"
 )
 
 // SymmetricKeys returns a secretmanager.Service-backed implementation of auth.Keys.

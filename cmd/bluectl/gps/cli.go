@@ -3,7 +3,7 @@ package gps
 import (
 	"context"
 
-	"github.com/ernestrc/blue/cli"
+	"github.com/unstablebuild/blue/cli"
 )
 
 var (

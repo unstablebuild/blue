@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ernestrc/blue/auth"
-	"github.com/ernestrc/blue/logging"
-	"github.com/ernestrc/blue/logging/trace"
+	"github.com/unstablebuild/blue/auth"
+	"github.com/unstablebuild/blue/logging"
+	"github.com/unstablebuild/blue/logging/trace"
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

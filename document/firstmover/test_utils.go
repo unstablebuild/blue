@@ -1,6 +1,6 @@
 package firstmover
 
-import "github.com/ernestrc/blue/document"
+import "github.com/unstablebuild/blue/document"
 
 // TestIsLeader returns true if this instance of
 // firstmover document.Service is the leader.

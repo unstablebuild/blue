@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ernestrc/blue/logging"
-	"github.com/ernestrc/blue/logging/trace"
-	"github.com/ernestrc/blue/retry"
+	"github.com/unstablebuild/blue/logging"
+	"github.com/unstablebuild/blue/logging/trace"
+	"github.com/unstablebuild/blue/retry"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/go-jose/go-jose.v2"
 	"gopkg.in/go-jose/go-jose.v2/jwt"

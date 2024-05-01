@@ -3,8 +3,8 @@ package issue
 import (
 	"context"
 
-	"github.com/ernestrc/blue/cli"
-	"github.com/ernestrc/blue/issue"
+	"github.com/unstablebuild/blue/cli"
+	"github.com/unstablebuild/blue/issue"
 )
 
 var (

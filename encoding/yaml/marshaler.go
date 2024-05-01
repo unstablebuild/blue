@@ -1,7 +1,7 @@
 package yaml
 
 import (
-	"github.com/ernestrc/blue/encoding"
+	"github.com/unstablebuild/blue/encoding"
 	"gopkg.in/yaml.v3"
 )
 

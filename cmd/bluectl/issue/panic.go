@@ -6,9 +6,9 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/ernestrc/blue/cli"
-	"github.com/ernestrc/blue/debug"
-	"github.com/ernestrc/blue/issue"
+	"github.com/unstablebuild/blue/cli"
+	"github.com/unstablebuild/blue/debug"
+	"github.com/unstablebuild/blue/issue"
 	log "github.com/sirupsen/logrus"
 )
 

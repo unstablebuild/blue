@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ernestrc/blue/encoding"
+	"github.com/unstablebuild/blue/encoding"
 	"github.com/stretchr/testify/assert"
 )
 

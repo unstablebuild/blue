@@ -3,7 +3,7 @@ package document
 import (
 	"context"
 
-	"github.com/ernestrc/blue/retry"
+	"github.com/unstablebuild/blue/retry"
 )
 
 // ConsistentUpdate calls Update on the given service and tries to update

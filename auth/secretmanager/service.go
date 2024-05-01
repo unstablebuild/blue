@@ -10,7 +10,7 @@ import (
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
-	"github.com/ernestrc/blue/iterator"
+	"github.com/unstablebuild/blue/iterator"
 	"github.com/ernestrc/go-multierror"
 	giterator "google.golang.org/api/iterator"
 	"google.golang.org/protobuf/types/known/timestamppb"

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/ernestrc/blue/release"
+	"github.com/unstablebuild/blue/release"
 	"github.com/ernestrc/sensible/editor"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"

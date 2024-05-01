@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ernestrc/blue/auth/secretmanager"
-	"github.com/ernestrc/blue/cli"
-	"github.com/ernestrc/blue/cli/format"
+	"github.com/unstablebuild/blue/auth/secretmanager"
+	"github.com/unstablebuild/blue/cli"
+	"github.com/unstablebuild/blue/cli/format"
 )
 
 const (

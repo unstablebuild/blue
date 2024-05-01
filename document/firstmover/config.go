@@ -3,8 +3,8 @@ package firstmover
 import (
 	"time"
 
-	"github.com/ernestrc/blue/encoding"
-	"github.com/ernestrc/blue/encoding/bson"
+	"github.com/unstablebuild/blue/encoding"
+	"github.com/unstablebuild/blue/encoding/bson"
 )
 
 // Config holds configuration for a firstmover document.Service

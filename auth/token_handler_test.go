@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ernestrc/blue/document"
+	"github.com/unstablebuild/blue/document"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"

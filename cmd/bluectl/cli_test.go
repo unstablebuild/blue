@@ -6,7 +6,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/ernestrc/blue/cli"
+	"github.com/unstablebuild/blue/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
