@@ -3,7 +3,7 @@ package logging
 import (
 	"context"
 
-	"github.com/ernestrc/blue/logging/trace"
+	"github.com/unstablebuild/blue/logging/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )

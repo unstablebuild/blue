@@ -3,7 +3,7 @@ package format
 import (
 	"io"
 
-	"github.com/ernestrc/blue/iterator"
+	"github.com/unstablebuild/blue/iterator"
 )
 
 // IteratorFormatter defines the basic Iterator formatting method Format.

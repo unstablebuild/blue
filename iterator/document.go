@@ -1,6 +1,6 @@
 package iterator
 
-import "github.com/ernestrc/blue/document"
+import "github.com/unstablebuild/blue/document"
 
 // FromDocumentIterator maps a document.Iterator to
 func FromDocumentIterator[T any](it document.Iterator) Iterator[T] {

@@ -7,7 +7,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/ernestrc/blue/iterator"
+	"github.com/unstablebuild/blue/iterator"
 )
 
 // Package represents.. well, a package.

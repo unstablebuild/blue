@@ -6,9 +6,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/ernestrc/blue/cli"
-	"github.com/ernestrc/blue/crypto"
-	"github.com/ernestrc/blue/release"
+	"github.com/unstablebuild/blue/cli"
+	"github.com/unstablebuild/blue/crypto"
+	"github.com/unstablebuild/blue/release"
 )
 
 const (

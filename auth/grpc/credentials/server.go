@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ernestrc/blue/auth/secretmanager"
-	"github.com/ernestrc/blue/logging"
+	"github.com/unstablebuild/blue/auth/secretmanager"
+	"github.com/unstablebuild/blue/logging"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/credentials"
 )

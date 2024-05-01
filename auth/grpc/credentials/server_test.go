@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ernestrc/blue/auth/secretmanager"
-	bluenet "github.com/ernestrc/blue/net"
+	"github.com/unstablebuild/blue/auth/secretmanager"
+	bluenet "github.com/unstablebuild/blue/net"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

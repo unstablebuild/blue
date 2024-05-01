@@ -8,8 +8,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/ernestrc/blue/crypto"
-	"github.com/ernestrc/blue/iterator"
+	"github.com/unstablebuild/blue/crypto"
+	"github.com/unstablebuild/blue/iterator"
 )
 
 // ErrEncryptedKey is returned when provided key is encrypted and needs decrypting first.

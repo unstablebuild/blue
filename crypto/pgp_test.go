@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	cryptest "github.com/ernestrc/blue/crypto/test"
+	cryptest "github.com/unstablebuild/blue/crypto/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ernestrc/blue/document"
-	"github.com/ernestrc/blue/encoding"
-	"github.com/ernestrc/blue/encoding/bson"
+	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/encoding"
+	"github.com/unstablebuild/blue/encoding/bson"
 	bolt "go.etcd.io/bbolt"
 )
 

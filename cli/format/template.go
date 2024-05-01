@@ -5,7 +5,7 @@ import (
 	"io"
 	"text/template"
 
-	"github.com/ernestrc/blue/iterator"
+	"github.com/unstablebuild/blue/iterator"
 )
 
 // Template returns an IteratorFormatter that formats elements

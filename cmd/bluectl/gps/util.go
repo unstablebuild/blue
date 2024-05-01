@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/ernestrc/blue/gps"
+	"github.com/unstablebuild/blue/gps"
 	"github.com/olekukonko/tablewriter"
 )
 

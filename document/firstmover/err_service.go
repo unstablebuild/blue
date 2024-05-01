@@ -3,7 +3,7 @@ package firstmover
 import (
 	"context"
 
-	"github.com/ernestrc/blue/document"
+	"github.com/unstablebuild/blue/document"
 )
 
 type errService struct {

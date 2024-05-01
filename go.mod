@@ -1,4 +1,4 @@
-module github.com/ernestrc/blue
+module github.com/unstablebuild/blue
 
 go 1.19
 

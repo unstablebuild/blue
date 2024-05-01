@@ -3,8 +3,8 @@ package logging
 import (
 	"testing"
 
-	"github.com/ernestrc/blue/document"
-	test "github.com/ernestrc/blue/document/test"
+	"github.com/unstablebuild/blue/document"
+	test "github.com/unstablebuild/blue/document/test"
 )
 
 func TestLoggingWithLogging(t *testing.T) {

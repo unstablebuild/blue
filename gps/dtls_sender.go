@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ernestrc/blue/gps/rpc"
-	"github.com/ernestrc/blue/logging"
+	"github.com/unstablebuild/blue/gps/rpc"
+	"github.com/unstablebuild/blue/logging"
 	"github.com/pion/dtls/v2"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"

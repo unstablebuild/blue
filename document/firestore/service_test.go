@@ -3,8 +3,8 @@ package firestore
 import (
 	"testing"
 
-	"github.com/ernestrc/blue/document"
-	documenttest "github.com/ernestrc/blue/document/test"
+	"github.com/unstablebuild/blue/document"
+	documenttest "github.com/unstablebuild/blue/document/test"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )

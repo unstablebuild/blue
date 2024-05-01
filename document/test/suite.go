@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ernestrc/blue/document"
-	"github.com/ernestrc/blue/retry"
+	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/retry"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ernestrc/blue/cli"
-	"github.com/ernestrc/blue/issue"
+	"github.com/unstablebuild/blue/cli"
+	"github.com/unstablebuild/blue/issue"
 )
 
 const updateTimeout = 20 * time.Second

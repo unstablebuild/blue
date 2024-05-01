@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ernestrc/blue/document"
-	"github.com/ernestrc/blue/iterator"
+	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/iterator"
 	"golang.org/x/crypto/bcrypt"
 )
 

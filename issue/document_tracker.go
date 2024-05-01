@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ernestrc/blue/document"
-	"github.com/ernestrc/blue/iterator"
-	"github.com/ernestrc/blue/retry"
+	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/iterator"
+	"github.com/unstablebuild/blue/retry"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 )

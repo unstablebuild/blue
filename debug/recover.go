@@ -5,7 +5,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/ernestrc/blue/issue"
+	"github.com/unstablebuild/blue/issue"
 	log "github.com/sirupsen/logrus"
 )
 

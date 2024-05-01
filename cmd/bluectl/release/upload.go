@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ernestrc/blue/cli"
-	"github.com/ernestrc/blue/cmd/bluectl/options"
-	"github.com/ernestrc/blue/crypto"
-	"github.com/ernestrc/blue/release"
+	"github.com/unstablebuild/blue/cli"
+	"github.com/unstablebuild/blue/cmd/bluectl/options"
+	"github.com/unstablebuild/blue/crypto"
+	"github.com/unstablebuild/blue/release"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh/terminal"
 )

@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"cloud.google.com/go/firestore"
-	"github.com/ernestrc/blue/document"
-	"github.com/ernestrc/blue/logging"
-	"github.com/ernestrc/blue/logging/trace"
+	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/logging"
+	"github.com/unstablebuild/blue/logging/trace"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"

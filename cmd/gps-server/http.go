@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ernestrc/blue/document"
-	"github.com/ernestrc/blue/gps"
+	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/gps"
 	"github.com/julienschmidt/httprouter"
 	log "github.com/sirupsen/logrus"
 )

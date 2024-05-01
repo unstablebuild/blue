@@ -4,7 +4,7 @@ import (
 	"bytes"
 
 	"github.com/BurntSushi/toml"
-	"github.com/ernestrc/blue/encoding"
+	"github.com/unstablebuild/blue/encoding"
 )
 
 // Marshaler returns a TOML Marshaler.

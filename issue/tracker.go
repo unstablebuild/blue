@@ -2,7 +2,7 @@ package issue
 
 import (
 	"context"
-	"github.com/ernestrc/blue/iterator"
+	"github.com/unstablebuild/blue/iterator"
 )
 
 // Tracker abstracts the ability to manage bug and feature reports.

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/adrianmo/go-nmea"
-	"github.com/ernestrc/blue/logging"
+	"github.com/unstablebuild/blue/logging"
 	"github.com/jacobsa/go-serial/serial"
 	log "github.com/sirupsen/logrus"
 )

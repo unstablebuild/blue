@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	proto "github.com/ernestrc/blue/document/rpc/proto"
-	"github.com/ernestrc/blue/encoding"
+	proto "github.com/unstablebuild/blue/document/rpc/proto"
+	"github.com/unstablebuild/blue/encoding"
 	"google.golang.org/grpc"
 )
 

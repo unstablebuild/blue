@@ -8,9 +8,9 @@ import (
 	"os"
 	"path"
 
-	"github.com/ernestrc/blue/cli"
-	"github.com/ernestrc/blue/cmd/bluectl/options"
-	"github.com/ernestrc/blue/config"
+	"github.com/unstablebuild/blue/cli"
+	"github.com/unstablebuild/blue/cmd/bluectl/options"
+	"github.com/unstablebuild/blue/config"
 	"gopkg.in/yaml.v3"
 )
 

@@ -3,11 +3,11 @@ package test
 import (
 	"testing"
 
-	"github.com/ernestrc/blue/document"
-	"github.com/ernestrc/blue/encoding"
-	"github.com/ernestrc/blue/encoding/bson"
-	"github.com/ernestrc/blue/encoding/json"
-	"github.com/ernestrc/blue/encoding/toml"
+	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/encoding"
+	"github.com/unstablebuild/blue/encoding/bson"
+	"github.com/unstablebuild/blue/encoding/json"
+	"github.com/unstablebuild/blue/encoding/toml"
 )
 
 func TestInMemoryService(t *testing.T) {

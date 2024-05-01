@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ernestrc/blue/cli"
-	"github.com/ernestrc/blue/cli/format"
-	"github.com/ernestrc/blue/issue"
-	"github.com/ernestrc/blue/iterator"
+	"github.com/unstablebuild/blue/cli"
+	"github.com/unstablebuild/blue/cli/format"
+	"github.com/unstablebuild/blue/issue"
+	"github.com/unstablebuild/blue/iterator"
 	log "github.com/sirupsen/logrus"
 )
 

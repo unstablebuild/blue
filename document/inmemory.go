@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/ernestrc/blue/encoding"
-	"github.com/ernestrc/blue/encoding/bson"
+	"github.com/unstablebuild/blue/encoding"
+	"github.com/unstablebuild/blue/encoding/bson"
 )
 
 type inMemoryService struct {

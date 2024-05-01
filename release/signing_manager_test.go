@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ernestrc/blue/crypto"
-	cryptest "github.com/ernestrc/blue/crypto/test"
+	"github.com/unstablebuild/blue/crypto"
+	cryptest "github.com/unstablebuild/blue/crypto/test"
 	gomock "github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

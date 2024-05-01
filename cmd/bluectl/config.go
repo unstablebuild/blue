@@ -1,6 +1,6 @@
 package main
 
-import "github.com/ernestrc/blue/config"
+import "github.com/unstablebuild/blue/config"
 
 const defaultReferenceConfig = `
 auth:

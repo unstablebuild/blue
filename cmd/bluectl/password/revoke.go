@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/ernestrc/blue/auth"
-	"github.com/ernestrc/blue/cli"
+	"github.com/unstablebuild/blue/auth"
+	"github.com/unstablebuild/blue/cli"
 )
 
 const (

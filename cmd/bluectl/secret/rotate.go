@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/ernestrc/blue/auth/secretmanager"
-	"github.com/ernestrc/blue/cli"
+	"github.com/unstablebuild/blue/auth/secretmanager"
+	"github.com/unstablebuild/blue/cli"
 )
 
 const (

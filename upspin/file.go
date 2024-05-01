@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/ernestrc/blue/retry"
+	"github.com/unstablebuild/blue/retry"
 	"upspin.io/errors"
 	"upspin.io/upspin"
 )

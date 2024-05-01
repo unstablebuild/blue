@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ernestrc/blue/document"
-	"github.com/ernestrc/blue/document/bolt"
-	"github.com/ernestrc/blue/document/firestore"
+	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/document/bolt"
+	"github.com/unstablebuild/blue/document/firestore"
 )
 
 var (

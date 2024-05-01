@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ernestrc/blue/logging"
-	"github.com/ernestrc/blue/logging/trace"
+	"github.com/unstablebuild/blue/logging"
+	"github.com/unstablebuild/blue/logging/trace"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -1,7 +1,7 @@
 package bson
 
 import (
-	"github.com/ernestrc/blue/encoding"
+	"github.com/unstablebuild/blue/encoding"
 	"gopkg.in/mgo.v2/bson"
 )
 

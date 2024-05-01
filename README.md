@@ -4,7 +4,7 @@
 Make sure you add GOPRIVATE to your shell environment:
 
 ```
-export GOPRIVATE="github.com/ernestrc"
+export GOPRIVATE="github.com/unstablebuild"
 ```
 
 If you do not have permission to create a GC credentials file for yourself, ask someone to do that for you.
@@ -22,7 +22,7 @@ Next, create a `config/application.yaml` wich points the application to your cre
 ```yaml
 gc:
     project-id: "dev"
-    creds-file: "/home/ernestrc/src/go/src/github.com/ernestrc/blue/config/gc-creds-2.json"
+    creds-file: "/home/unstablebuild/src/go/src/github.com/unstablebuild/blue/config/gc-creds-2.json"
 ```
 
 ### Pre-commit hook

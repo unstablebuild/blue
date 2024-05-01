@@ -3,7 +3,7 @@ package json
 import (
 	"encoding/json"
 
-	"github.com/ernestrc/blue/encoding"
+	"github.com/unstablebuild/blue/encoding"
 )
 
 // Marshaler returns a JSON Marshaler.

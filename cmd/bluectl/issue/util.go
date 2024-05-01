@@ -8,7 +8,7 @@ import (
 	"os"
 	"os/user"
 
-	"github.com/ernestrc/blue/issue"
+	"github.com/unstablebuild/blue/issue"
 	multierr "github.com/ernestrc/go-multierror"
 	"github.com/ernestrc/sensible/editor"
 	log "github.com/sirupsen/logrus"
