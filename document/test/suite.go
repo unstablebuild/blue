@@ -851,3 +851,13 @@ func TestDocumentService(t *testing.T, serviceFactory FnServiceFactory) {
 		assert.NoError(t, err)
 	})
 }
+
+// TestDocumentService runs an exhaustive suite of tests against a document.Service,
+// but omits any List tests.
+func TestDocumentServiceNoList(t *testing.T, serviceFactory FnServiceFactory) {
+	testDatastoreCreate(t, serviceFactory)
+	testDatastoreSet(t, serviceFactory)
+	testDatastoreGet(t, serviceFactory)
+	testDatastoreDelete(t, serviceFactory)
+	testDatastoreUpdate(t, serviceFactory)
+}
