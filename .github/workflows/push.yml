@@ -28,11 +28,16 @@ jobs:
       run: make test GOTESTFLAGS="-timeout 240s"
 
 
-    - name: Post to Slack channel
-      id: slack
-      uses: slackapi/slack-github-action@v1.26.0
-      with:
-        channel-id: 'git'
-        slack-message: "unstablebuild/blue build: ${{ job.status }}\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}"
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+  notify:
+    if: always()
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack notification with workflow result.
+        uses: ScribeMD/slack-templates@0.6.38
+        with:
+          bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
+          channel-id: C0727A4EXGB 
+          template: result
+          results: "${{ join(needs.*.result, ' ') }}"
