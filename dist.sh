@@ -31,6 +31,7 @@ blue_release_dist() {
 		-d git-tag=$GIT_TAG \
 		-d git-head=$GIT_HEAD \
 		-d git-log="$GIT_LOG" \
+        -y \
 		-k $BLUE_PGP_KEY \
 		-r $BLUE_PGP_KEYRING blue $BLUE_RELEASE_TAG $BLUE_RELEASE_TAR
 }

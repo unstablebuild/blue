@@ -3,11 +3,11 @@ package release
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 
-	"github.com/unstablebuild/blue/release"
 	"github.com/ernestrc/sensible/editor"
 	log "github.com/sirupsen/logrus"
+	"github.com/unstablebuild/blue/release"
 	"gopkg.in/yaml.v3"
 )
 
@@ -62,11 +62,12 @@ func (m manifest) toYAML() (string, error) {
 func tempBundle(
 	pack string, ver release.Version,
 	author string, extraMdata map[string]string,
+	interactive bool,
 ) (ret release.Bundle, err error) {
 	log.Debugf("decoding package %q release %q manifest from temp file with metadata: %#v",
 		pack, ver, extraMdata)
 
-	f, err := ioutil.TempFile("", "blue-release")
+	f, err := os.CreateTemp("", "blue-release")
 	if err != nil {
 		err = fmt.Errorf("failed create temp file: %v", err)
 		return release.Bundle{}, err
@@ -92,10 +93,12 @@ func tempBundle(
 		return
 	}
 
-	err = editor.Edit(f)
-	if err != nil {
-		err = fmt.Errorf("failed to edit manifest: %v", err)
-		return
+	if interactive {
+		err = editor.Edit(f)
+		if err != nil {
+			err = fmt.Errorf("failed to edit manifest: %v", err)
+			return
+		}
 	}
 
 	err = f.Sync()
@@ -109,7 +112,7 @@ func tempBundle(
 		return
 	}
 
-	data, err := ioutil.ReadFile(f.Name())
+	data, err := os.ReadFile(f.Name())
 	if err != nil {
 		err = fmt.Errorf("failed read data from temp file: %v", err)
 		return

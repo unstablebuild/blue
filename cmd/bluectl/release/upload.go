@@ -11,11 +11,11 @@ import (
 	"syscall"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/cli"
 	"github.com/unstablebuild/blue/cmd/bluectl/options"
 	"github.com/unstablebuild/blue/crypto"
 	"github.com/unstablebuild/blue/release"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
@@ -42,6 +42,7 @@ type releaseUpload struct {
 	fs          *cli.FlagSet
 	privKeyID   string
 	keyRingFile string
+	noEdit      bool
 	mdataFlag   metadataFlag
 }
 
@@ -64,6 +65,7 @@ func newReleaseUploadCLI(m release.Manager) cli.CLI {
 	c.fs = cli.NewFlagSet("upload")
 	c.fs.StringVar(&c.privKeyID, "k", "", "Sign release with PGP private key. "+
 		"This forces clients to provide a public key upon downloading release.")
+	c.fs.BoolVar(&c.noEdit, "y", false, "Do not prompt user to edit file manifest.")
 	c.fs.StringVar(&c.keyRingFile, "r", "secring.gpg",
 		"Armored keyring file to use to find private key.")
 	c.fs.Var(&c.mdataFlag, "d", "Add default metadata to manifest. Expects format to be <key>=<value>")
@@ -199,7 +201,7 @@ func (s *releaseUpload) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	m, err := tempBundle(pack, version, getDefaultAuthor(), mdata)
+	m, err := tempBundle(pack, version, getDefaultAuthor(), mdata, !s.noEdit)
 	if err != nil {
 		return err
 	}
