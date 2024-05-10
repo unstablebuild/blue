@@ -8,11 +8,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/ernestrc/sensible/pager"
 	"github.com/unstablebuild/blue/auth/secretmanager"
 	"github.com/unstablebuild/blue/cli"
 	"github.com/unstablebuild/blue/cli/format"
 	"github.com/unstablebuild/blue/iterator"
-	"github.com/ernestrc/sensible/pager"
 )
 
 const (
@@ -20,9 +20,10 @@ const (
 )
 
 type secretAccess struct {
-	manager *secretmanager.Service
-	fs      *cli.FlagSet
-	all     bool
+	manager  *secretmanager.Service
+	fs       *cli.FlagSet
+	all      bool
+	noPrompt bool
 }
 
 func newSecretAccessCLI(s *secretmanager.Service) cli.CLI {
@@ -31,6 +32,7 @@ func newSecretAccessCLI(s *secretmanager.Service) cli.CLI {
 	}
 	c.fs = cli.NewFlagSet("access")
 	c.fs.BoolVar(&c.all, "A", false, "Include all enabled secret versions, rather than the latest.")
+	c.fs.BoolVar(&c.noPrompt, "y", false, "Do not prompt user, simply print the secret to stdout.")
 	return c
 }
 
@@ -65,6 +67,13 @@ func (s *secretAccess) Run(ctx context.Context, args []string) error {
 	}
 	if err != nil {
 		return err
+	}
+
+	if s.noPrompt {
+		for _, sec := range res {
+			fmt.Fprintf(os.Stdout, string(sec.Payload))
+		}
+		return nil
 	}
 
 	// do not show payload in table
