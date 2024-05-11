@@ -1,37 +1,53 @@
-name: Go
-on: push
+name: Test
+
+"on":
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  build:
-    name: Build
-    runs-on: ubuntu-latest
+  test:
+    name: "Test go ${{ matrix.go_version }} on ${{ matrix.platform }}"
+    runs-on: ${{ matrix.platform }}
+
+    strategy:
+      matrix:
+        platform:
+          - ubuntu-latest
+          - macos-latest
+        go_version:
+          # Test the two currently supported releases.
+          # (https://go.dev/doc/devel/release#policy).
+          - stable
+          - oldstable
+
     steps:
+      - name: Set up Go ${{ matrix.go_version }}
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go_version }}
+          check-latest: true
 
-    - name: Set up Go 1.19
-      uses: actions/setup-go@v1
-      with:
-        go-version: 1.19
-      id: go
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v1
+      - name: Get dependencies
+        run: |
+          go get -v -t -d ./.../...
 
-    - name: Granting private modules access
-      run: |
-        git config --global url."https://${{ secrets.GO_MODULES_TOKEN }}:x-oauth-basic@github.com/ernestrc".insteadOf "https://github.com/ernestrc"     
+      - name: Build
+        run: make debug
 
-    - name: Get dependencies
-      run: |
-        go get -v -t -d ./.../...
-
-    - name: Build & Test
-      run: make test GOTESTFLAGS="-timeout 240s"
-
+      - name: Single Test
+        run: make test GOTESTFLAGS="-timeout 240s"
 
   notify:
-    if: always()
+    if: always() && github.event_name != 'pull_request'
     needs:
-      - build
+      - test
     runs-on: ubuntu-latest
     steps:
       - name: Send Slack notification with workflow result.
