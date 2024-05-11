@@ -1,12 +1,11 @@
 module github.com/unstablebuild/blue
 
-go 1.19
+go 1.21
 
 require (
 	cloud.google.com/go/firestore v1.9.0
 	cloud.google.com/go/secretmanager v1.10.0
 	github.com/BurntSushi/toml v1.2.0
-	github.com/adrianmo/go-nmea v1.2.0
 	github.com/cheggaaa/pb/v3 v3.0.8
 	github.com/ernestrc/go-multierror v1.1.2
 	github.com/ernestrc/logd-go v0.0.0-20180509171507-65871c1d5504
@@ -14,10 +13,7 @@ require (
 	github.com/go-delve/delve v1.9.1
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
-	github.com/jacobsa/go-serial v0.0.0-20180131005756-15cf729a72d4
-	github.com/julienschmidt/httprouter v1.3.0
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/pion/dtls/v2 v2.0.2
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.8.1
 	github.com/willf/pad v0.0.0-20200313202418-172aa767f2a4
@@ -58,9 +54,6 @@ require (
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
-	github.com/pion/logging v0.2.2 // indirect
-	github.com/pion/transport v0.10.1 // indirect
-	github.com/pion/udp v0.1.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.2 // indirect
 	go.opencensus.io v0.24.0 // indirect
