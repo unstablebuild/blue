@@ -16,7 +16,7 @@ default: .git/hooks/pre-commit $(EXEC)
 
 debug: GOFLAGS=-race
 debug: CGO_ENABLED=CGO_ENABLED=1
-debug: .git/hooks/pre-commit $(EXEC)
+debug: $(EXEC)
 
 test:
 	go test ./.../... -race $(GOTESTFLAGS)
