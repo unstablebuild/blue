@@ -12,11 +12,11 @@ GOTESTFLAGS=-timeout 120s
 .PHONY: clean test coverage generate release debug
 
 default: CGO_ENABLED=CGO_ENABLED=0
-default: $(EXEC)
+default: .git/hooks/pre-commit $(EXEC)
 
 debug: GOFLAGS=-race
 debug: CGO_ENABLED=CGO_ENABLED=1
-debug: $(EXEC)
+debug: .git/hooks/pre-commit $(EXEC)
 
 test:
 	go test ./.../... -race $(GOTESTFLAGS)
@@ -38,6 +38,9 @@ generate:
 install:
 	@ go install ./...
 
+.git/hooks/pre-commit: .pre-commit-config.yaml
+	@ pre-commit install
+
 clean:
 	@ go clean ./.../...
 	@rm -rf $(BIN) $(TARGET)
@@ -50,7 +53,7 @@ $(BIN)/%: $(EXECSRC) $(LIBRPC) $(LIBSRC) $(BIN)
 
 make_release:
 	@ mkdir -p $(TARGET)/$(TARGET_OS)_$(TARGET_ARCH)
-	@ CGO_ENABLED=0 GOARCH=$(TARGET_ARCH) $(TARGET_ARCH_FLAGS) GOOS=$(TARGET_OS) go build $(GOFLAGS) -o `pwd`/$(TARGET)/$(TARGET_OS)_$(TARGET_ARCH) ./... 
+	@ CGO_ENABLED=0 GOARCH=$(TARGET_ARCH) $(TARGET_ARCH_FLAGS) GOOS=$(TARGET_OS) go build $(GOFLAGS) -o `pwd`/$(TARGET)/$(TARGET_OS)_$(TARGET_ARCH) ./...
 
 ARM=arm
 AMD=amd64
