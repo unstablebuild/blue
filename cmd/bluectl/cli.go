@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
+	multierr "github.com/ernestrc/go-multierror"
 	"github.com/unstablebuild/blue/auth"
 	"github.com/unstablebuild/blue/auth/secretmanager"
 	"github.com/unstablebuild/blue/cli"
-	"github.com/unstablebuild/blue/cmd/bluectl/gps"
 	issueCLI "github.com/unstablebuild/blue/cmd/bluectl/issue"
 	packageCLI "github.com/unstablebuild/blue/cmd/bluectl/package"
 	passwordCLI "github.com/unstablebuild/blue/cmd/bluectl/password"
@@ -19,7 +19,6 @@ import (
 	"github.com/unstablebuild/blue/issue"
 	"github.com/unstablebuild/blue/logging"
 	"github.com/unstablebuild/blue/release"
-	multierr "github.com/ernestrc/go-multierror"
 )
 
 type blueCtl struct {
@@ -81,7 +80,6 @@ func (c *blueCtl) Man() cli.Manual {
 			"package":  packageCLI.NewCLI(nil),
 			"password": passwordCLI.NewCLI(nil),
 			"secret":   secretCLI.NewCLI(nil),
-			"gps":      gps.NewCLI(),
 			"analysis": newAnalysisCli(),
 			"issue":    issueCLI.NewCLI(nil, Tag),
 		}
@@ -139,7 +137,6 @@ func (c *blueCtl) initializeCli() error {
 		"release":  releaseCLI.NewCLI(releaseManager),
 		"package":  packageCLI.NewCLI(releaseManager),
 		"password": passwordCLI.NewCLI(passwordStore),
-		"gps":      gps.NewCLI(),
 		"secret":   secretCLI.NewCLI(secretManager),
 		"analysis": newAnalysisCli(),
 		"issue":    issueCLI.NewCLI(issueTracker, Tag),
