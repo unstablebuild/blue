@@ -27,4 +27,12 @@ func TestIsEmpty(t *testing.T) {
 			assert.Equal(t, append([]testStruct{}, tcase.inSlice...), actualOutSlice)
 		})
 	}
+
+	t.Run("iterator returned Empty is empty", func(t *testing.T) {
+		next, empty := IsEmpty(Empty[string]())
+		require.True(t, empty)
+
+		_, empty = IsEmpty(next)
+		require.True(t, empty)
+	})
 }

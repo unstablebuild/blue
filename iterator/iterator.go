@@ -15,3 +15,8 @@ type Iterator[T any] interface {
 	// encountered by the Iterator.
 	Err() error
 }
+
+// Empty returns an empty iterator.
+func Empty[T any]() Iterator[T] {
+	return FromSlice[T](nil)
+}
