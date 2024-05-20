@@ -5,7 +5,7 @@ import "github.com/unstablebuild/blue/config"
 const defaultReferenceConfig = `
 auth:
   project-id: 1
-  credentials-file: 
+  credentials-file:
 release:
   collection: blue-release
 issue:
@@ -23,10 +23,15 @@ type collectionConfig struct {
 	Collection string `yaml:"collection"`
 }
 
+type issueConfig struct {
+	collectionConfig
+	Author string `yaml:"author"`
+}
+
 type cliConfig struct {
 	Auth     authConfig       `yaml:"auth"`
 	Release  collectionConfig `yaml:"release"`
-	Issue    collectionConfig `yaml:"issue"`
+	Issue    issueConfig      `yaml:"issue"`
 	Password collectionConfig `yaml:"password"`
 }
 
