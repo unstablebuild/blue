@@ -24,11 +24,11 @@ type reportCLI struct {
 
 // NewCLI allocatest storage for a new issue cli.CLI and
 // initializes it with the given release.Manager.
-func NewCLI(t issue.Tracker, version string) cli.CLI {
+func NewCLI(t issue.Tracker, version string, author string) cli.CLI {
 	return &reportCLI{
 		cmds: map[string]cli.CLI{
 			actionPanic:  newReportPanicCLI(version, t),
-			actionCreate: newReportCreateCLI(t),
+			actionCreate: newReportCreateCLI(t, author),
 			actionEdit:   newReportEditCLI(t),
 			actionClose:  newReportCloseCLI(t),
 			actionDelete: newReportDeleteCLI(t),

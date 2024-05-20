@@ -81,7 +81,7 @@ func (c *blueCtl) Man() cli.Manual {
 			"password": passwordCLI.NewCLI(nil),
 			"secret":   secretCLI.NewCLI(nil),
 			"analysis": newAnalysisCli(),
-			"issue":    issueCLI.NewCLI(nil, Tag),
+			"issue":    issueCLI.NewCLI(nil, Tag, ""),
 		}
 	}
 	for _, cmd := range c.cmds {
@@ -139,7 +139,7 @@ func (c *blueCtl) initializeCli() error {
 		"password": passwordCLI.NewCLI(passwordStore),
 		"secret":   secretCLI.NewCLI(secretManager),
 		"analysis": newAnalysisCli(),
-		"issue":    issueCLI.NewCLI(issueTracker, Tag),
+		"issue":    issueCLI.NewCLI(issueTracker, Tag, config.Issue.Author),
 	}
 	c.dbs = []document.Service{docDB, trackerDB}
 

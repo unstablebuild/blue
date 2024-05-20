@@ -9,13 +9,15 @@ import (
 )
 
 type issueCreate struct {
-	t  issue.Tracker
-	fs *cli.FlagSet
+	t      issue.Tracker
+	fs     *cli.FlagSet
+	author string
 }
 
-func newReportCreateCLI(t issue.Tracker) cli.CLI {
+func newReportCreateCLI(t issue.Tracker, author string) cli.CLI {
 	c := &issueCreate{
-		t: t,
+		t:      t,
+		author: author,
 	}
 	c.fs = cli.NewFlagSet("create")
 	return c
@@ -30,13 +32,20 @@ func (s *issueCreate) Man() cli.Manual {
 	}
 }
 
+func (s *issueCreate) getAuthor() string {
+	if s.author != "" {
+		return s.author
+	}
+	return getDefaultAuthor()
+}
+
 func (s *issueCreate) Run(ctx context.Context, args []string) error {
 	_, _, ok, err := cli.ParseUsage(s, s.fs, 0, args)
 	if err != nil || !ok {
 		return err
 	}
 
-	template := issue.Report{Author: getDefaultAuthor()}
+	template := issue.Report{Author: s.getAuthor()}
 	r, err := tempIssue(template, getDefaultAuthor())
 	if err != nil {
 		return err
