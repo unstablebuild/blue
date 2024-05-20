@@ -24,8 +24,8 @@ type collectionConfig struct {
 }
 
 type issueConfig struct {
-	collectionConfig
-	Author string `yaml:"author"`
+	Collection string `yaml:"collection"`
+	Author     string `yaml:"author"`
 }
 
 type cliConfig struct {
