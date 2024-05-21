@@ -14,11 +14,11 @@ import (
 	"strconv"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/logging"
 	"github.com/unstablebuild/blue/logging/trace"
 	"github.com/unstablebuild/blue/retry"
-	log "github.com/sirupsen/logrus"
 )
 
 // TokenHTTPHandler returns a http.Handler that handles oauth2 token requests by
@@ -88,13 +88,13 @@ func (h tokenHandler[T]) ServeHTTP(
 		redeemURL = tokenURL
 	}
 
-	providerResponse, ok := fetchProviderToken(
+	providerResponse, ok := fetchProviderToken[T](
 		ctx, logger, traceID, attemptAt, tokenCallType, w, in, redeemURL, body)
 	if !ok {
 		return
 	}
 
-	claims, ok := validateProviderResponse(
+	claims, ok := validateProviderResponse[T](
 		ctx, logger, traceID, attemptAt, tokenCallType,
 		w, in, certsURL, clientID, providerResponse)
 	if !ok {
@@ -202,13 +202,14 @@ func fetchSecret(
 	  "id_token": "",
 	}
 */
-type redeemResponse struct {
+type redeemResponse[T any] struct {
 	IDToken      string `json:"id_token"`
 	AccessToken  string `json:"access_token"`
 	ExpiresIn    int    `json:"expires_in"`
 	RefreshToken string `json:"refresh_token"`
 	Scope        string `json:"scope"`
 	TokenType    string `json:"token_type"`
+	Extra        T      `json:"extra"`
 }
 
 func validateTokenRequest(
@@ -285,11 +286,11 @@ func validateClientSecret(
 	return
 }
 
-func fetchProviderToken(
+func fetchProviderToken[T any](
 	ctx context.Context, logger *log.Entry, traceID trace.ID, attemptAt time.Time,
 	callType string, w http.ResponseWriter, in *http.Request,
 	redeemURL string, body []byte,
-) (ret redeemResponse, ok bool) {
+) (ret redeemResponse[T], ok bool) {
 	// clone incoming request
 	out, err := http.NewRequestWithContext(ctx, in.Method, redeemURL, bytes.NewReader(body))
 	if err != nil {
@@ -338,12 +339,12 @@ func fetchProviderToken(
 	return
 }
 
-func validateProviderResponse(
+func validateProviderResponse[T any](
 	ctx context.Context, logger *log.Entry,
 	traceID trace.ID, attemptAt time.Time, callType string,
 	w http.ResponseWriter, in *http.Request,
 	certsURL, clientID string,
-	providerResponse redeemResponse,
+	providerResponse redeemResponse[T],
 ) (*ProviderClaims, bool) {
 	claims, err := ValidateProviderIDWithCertsURL(ctx, certsURL, clientID, providerResponse.IDToken)
 	if err != nil {
@@ -369,7 +370,7 @@ func writeRedeemTokenResponse[T any](
 	ctx context.Context, traceID trace.ID, attemptAt time.Time, callType string,
 	w http.ResponseWriter, in *http.Request,
 	tokenURL string, signKey Keys, expiry time.Duration,
-	providerResponse redeemResponse, claims *ProviderClaims, extra T,
+	providerResponse redeemResponse[T], claims *ProviderClaims, extra T,
 ) {
 	ret := providerResponse
 
@@ -393,6 +394,7 @@ func writeRedeemTokenResponse[T any](
 
 	// do not return provider id token to client
 	ret.IDToken = ""
+	ret.Extra = extra
 
 	// if no token URL is available for this provider
 	// then do not return a refresh token.

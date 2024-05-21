@@ -206,7 +206,7 @@ func TestTokenHandler(t *testing.T) {
 				return
 			}
 
-			var actualOut redeemResponse
+			var actualOut redeemResponse[User]
 			err := json.Unmarshal(body, &actualOut)
 			require.NoError(t, err)
 
@@ -217,6 +217,7 @@ func TestTokenHandler(t *testing.T) {
 			assert.NotZero(t, actualOut.Scope)
 			assert.NotZero(t, actualOut.TokenType)
 			assert.Zero(t, actualOut.IDToken)
+			assert.Equal(t, "admin", actualOut.Extra.Role)
 		})
 	}
 }
@@ -251,7 +252,7 @@ func writeTestRedeemResponse(
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	var out redeemResponse
+	var out redeemResponse[User]
 	out.IDToken = raw
 	out.ExpiresIn = int(expiresIn.Seconds())
 	out.Scope = "blabla"
