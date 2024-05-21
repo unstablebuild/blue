@@ -49,10 +49,6 @@ func NewClientWithPorts(
 	visitURLCallback func(string) error, successBrowserCopy string,
 	tryPorts []int,
 ) (*http.Client, oauth2.TokenSource, error) {
-	const oauth2FlowTimeout = 60 * time.Second
-	ctx, cancel := context.WithTimeout(ctx, oauth2FlowTimeout)
-	defer cancel()
-
 	resChan := make(chan tokenResult)
 	readyChan := make(chan readyResult)
 	csrfToken := uuid.New().String()
