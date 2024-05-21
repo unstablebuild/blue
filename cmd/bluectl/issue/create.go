@@ -3,15 +3,18 @@ package issue
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/unstablebuild/blue/cli"
 	"github.com/unstablebuild/blue/issue"
+	"gopkg.in/yaml.v3"
 )
 
 type issueCreate struct {
-	t      issue.Tracker
-	fs     *cli.FlagSet
-	author string
+	t        issue.Tracker
+	fs       *cli.FlagSet
+	filePath string
+	author   string
 }
 
 func newReportCreateCLI(t issue.Tracker, author string) cli.CLI {
@@ -20,6 +23,7 @@ func newReportCreateCLI(t issue.Tracker, author string) cli.CLI {
 		author: author,
 	}
 	c.fs = cli.NewFlagSet("create")
+	c.fs.StringVar(&c.filePath, "f", "", "Create an issue from a file report.")
 	return c
 }
 
@@ -27,7 +31,7 @@ func (s *issueCreate) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "create",
 		Summary:  "Create an issue in the issue tracker",
-		Synopsis: "",
+		Synopsis: "[options]",
 		Options:  *s.fs,
 	}
 }
@@ -45,7 +49,18 @@ func (s *issueCreate) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	template := issue.Report{Author: s.getAuthor()}
+	var template issue.Report
+	if s.filePath != "" {
+		data, err := os.ReadFile(s.filePath)
+		if err != nil {
+			return fmt.Errorf("read from file report path %q: %w", s.filePath, err)
+		}
+		if err := yaml.Unmarshal(data, &template); err != nil {
+			return fmt.Errorf("unmarshal yaml file report %q: %w", s.filePath, err)
+		}
+	}
+	template.Author = s.getAuthor()
+
 	r, err := tempIssue(template, getDefaultAuthor())
 	if err != nil {
 		return err
