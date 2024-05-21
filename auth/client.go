@@ -220,8 +220,6 @@ func (h redirectHandler) ServeHTTP(
 	}
 
 	code := queryparams.Get("code")
-	h.ch <- tokenResult{data: code}
-
 	fields := []logging.Field{
 		{Key: logging.KeyClass, Value: "redirectHandler"},
 		{Key: "Method", Value: r.Method},
@@ -231,5 +229,7 @@ func (h redirectHandler) ServeHTTP(
 	w.Header().Set("Content-Type", "text/html")
 
 	_, err := w.Write([]byte(h.doneCopy))
+
+	h.ch <- tokenResult{data: code}
 	logging.LogResultInfo(err, attemptAt, traceID, redirectCallType, fields...)
 }
