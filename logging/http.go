@@ -108,9 +108,5 @@ func (m *Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	fields[KeyStep] = ValueStepSuccess
 
-	if status >= 300 {
-		m.logger.WithFields(fields).Warning()
-		return
-	}
 	m.logger.WithFields(fields).Info()
 }
