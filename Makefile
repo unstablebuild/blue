@@ -58,7 +58,7 @@ make_release:
 ARM=arm
 AMD=amd64
 GOOS=linux
-release: default
+release:
 	@ rm -rf $(TARGET)
 	@ TARGET_OS=linux TARGET_ARCH=arm TARGET_ARCH_FLAGS=GOARM=7 $(MAKE) make_release
 	@ TARGET_OS=linux TARGET_ARCH=amd64 $(MAKE) make_release
