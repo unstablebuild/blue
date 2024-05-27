@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -28,6 +29,7 @@ var (
 		"Google Cloud credentials file for datastore")
 	gcProjectID      = flag.String("p", "", "Google Cloud project ID")
 	version          = flag.Bool("v", false, "Print version information to stdout")
+	flagPprof        = flag.Bool("P", false, "Start pprof server at :8080")
 	debug            = flag.Bool("V", false, "Enable verbose logging")
 	jsonLogFormatter = flag.Bool("J", false, "Enable JSON log formatter for structured logs.")
 	channelID        = flag.String("C", "", "Channel to post updates to")
@@ -82,6 +84,14 @@ func parseFlags() {
 
 	if *channelID == "" {
 		log.Fatal("Must pass -C flag")
+	}
+
+	if *flagPprof {
+		go func() {
+			if err := http.ListenAndServe(":8080", nil); err != http.ErrServerClosed {
+				log.Errorf("listen and serve pprof: %v", err)
+			}
+		}()
 	}
 }
 
