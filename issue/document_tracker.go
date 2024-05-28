@@ -8,11 +8,10 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/iterator"
 	"github.com/unstablebuild/blue/retry"
-	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 )
 
 type documentType uint8
@@ -51,6 +50,11 @@ func (r ReportDocument) UpdatedTime() time.Time {
 
 func (r ReportDocument) WithUpdatedTime(now time.Time) ReportDocument {
 	r.Report.UpdatedAt = now
+	return r
+}
+
+func (r ReportDocument) WithUpdatedBy(author string) ReportDocument {
+	r.Report.UpdatedBy = author
 	return r
 }
 
@@ -168,7 +172,7 @@ func (d *documentTracker) CreateReport(
 func (d *documentTracker) list(ctx context.Context, filters []document.Filter) (
 	iterator.Iterator[Report], error,
 ) {
-	logrus.Debugf("calling List with filters: %#v", filters)
+	log.Debugf("calling List with filters: %#v", filters)
 
 	it, err := d.db.List(ctx, filters)
 	if err != nil {
