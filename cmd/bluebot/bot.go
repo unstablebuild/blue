@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ const (
 type bot struct {
 	ctx        context.Context
 	cancel     func()
+	hostname   string
 	slack      *socketmode.Client
 	firestore  *firestore.Client
 	channelID  string
@@ -42,6 +44,11 @@ func newBot(
 
 	if !strings.HasPrefix(botToken, "xoxb-") {
 		return nil, errors.New("botToken must have the prefix \"xoxb-\".")
+	}
+
+	name, err := os.Hostname()
+	if err != nil {
+		return nil, fmt.Errorf("os hostname: %w", err)
 	}
 
 	api := slack.New(
@@ -65,6 +72,7 @@ func newBot(
 	}
 
 	return &bot{
+		hostname:   name,
 		ctx:        ctx,
 		cancel:     cancel,
 		issues:     make(map[string]issue.ReportDocument),
@@ -239,6 +247,7 @@ func (b *bot) postSlackMessage(doc issue.ReportDocument, color, msg string) {
 			{Title: "Type", Value: typeOfIssue, Short: true},
 			{Title: "Notes", Value: rep.Notes, Short: false},
 		},
+		Footer: fmt.Sprintf("Bluebot %s running on %q", Version, b.hostname),
 	}
 
 	_, _, err := b.slack.PostMessage(

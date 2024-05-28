@@ -36,6 +36,10 @@ var (
 	issuesCollection = flag.String("i", "blue-issues-beta", "Firestore collection for managing issues")
 )
 
+func init() {
+	Version = fmt.Sprintf("%s (HEAD is %s)", Tag, Commit)
+}
+
 func main() {
 	parseFlags()
 	setupLogging()
