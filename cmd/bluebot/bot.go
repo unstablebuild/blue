@@ -165,7 +165,7 @@ func (b *bot) processSnapshotChange(change firestore.DocumentChange) {
 		} else if _, ok := doc.Report.Metadata["feature"]; ok {
 			msg = fmt.Sprintf("Feature request %s created 🚀", doc.ID())
 		}
-		b.postSlackMessage(doc, color, msg)
+		b.postSlackMessage(doc, color, msg, doc.Report.Author)
 
 	case firestore.DocumentModified:
 		b.handleDocumentModified(doc)
@@ -179,10 +179,6 @@ func (b *bot) processSnapshotChange(change firestore.DocumentChange) {
 }
 
 func (b *bot) handleDocumentModified(doc issue.ReportDocument) {
-	defer func() {
-		// update issue in cache
-		b.issues[doc.ID()] = doc
-	}()
 	color := "#CA9E69"
 	msg := fmt.Sprintf("Issue %s modified", doc.ID())
 	prev, ok := b.issues[doc.ID()]
@@ -215,10 +211,13 @@ func (b *bot) handleDocumentModified(doc issue.ReportDocument) {
 				prev.Report.Metadata[keyMilestones], milestones)
 		}
 	}
-	b.postSlackMessage(doc, color, msg)
+	b.postSlackMessage(doc, color, msg, doc.Report.UpdatedBy)
+
+	// update issue in cache
+	b.issues[doc.ID()] = doc
 }
 
-func (b *bot) postSlackMessage(doc issue.ReportDocument, color, msg string) {
+func (b *bot) postSlackMessage(doc issue.ReportDocument, color, msg, author string) {
 	rep := doc.Report
 	var typeOfIssue string
 	if _, ok := rep.Metadata["bug"]; ok {
@@ -230,9 +229,8 @@ func (b *bot) postSlackMessage(doc issue.ReportDocument, color, msg string) {
 	}
 	attachment := slack.Attachment{
 		MarkdownIn: []string{"text"},
-		// TODO add updated_by: field to correctly set this
 		// TODO lookup via email userID
-		AuthorName: rep.Author,
+		AuthorName: author,
 		Color:      color,
 		Title:      doc.ID(),
 		Text:       rep.Subject,
@@ -267,7 +265,7 @@ func (b *bot) unmarshalDocumentFromChange(change *firestore.DocumentChange) (
 	ret issue.ReportDocument, ok bool,
 ) {
 	if strings.HasSuffix(change.Doc.Ref.ID, ".swp") {
-		log.Debugf("skipping swap file: %s", ret.ID())
+		log.Debugf("skipping swap file: %s", change.Doc.Ref.ID)
 		return
 	}
 	err := change.Doc.DataTo(&ret)

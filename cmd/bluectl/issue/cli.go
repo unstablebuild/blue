@@ -29,7 +29,7 @@ func NewCLI(t issue.Tracker, version string, author string) cli.CLI {
 		cmds: map[string]cli.CLI{
 			actionPanic:  newReportPanicCLI(version, t),
 			actionCreate: newReportCreateCLI(t, author),
-			actionEdit:   newReportEditCLI(t),
+			actionEdit:   newReportEditCLI(t, author),
 			actionClose:  newReportCloseCLI(t),
 			actionDelete: newReportDeleteCLI(t),
 			actionGet:    newReportGetCLI(t),
