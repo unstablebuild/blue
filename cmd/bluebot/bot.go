@@ -209,6 +209,8 @@ func (b *bot) handleDocumentModified(doc issue.ReportDocument) {
 		} else if milestones := doc.Report.Metadata[keyMilestones]; prev.Report.Metadata[keyMilestones] != milestones {
 			msg = fmt.Sprintf("Issue %s milestones changed from '%s' to %s", doc.ID(),
 				prev.Report.Metadata[keyMilestones], milestones)
+		} else {
+			return
 		}
 	}
 	b.postSlackMessage(doc, color, msg, doc.Report.UpdatedBy)
