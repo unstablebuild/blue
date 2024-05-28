@@ -43,17 +43,3 @@ jobs:
 
       - name: Single Test
         run: make test GOTESTFLAGS="-timeout 240s"
-
-  notify:
-    if: always() && github.event_name != 'pull_request'
-    needs:
-      - test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Send Slack notification with workflow result.
-        uses: ScribeMD/slack-templates@0.6.38
-        with:
-          bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
-          channel-id: https://unstablebuild.slack.com/archives/C075G1W9C6N
-          template: result
-          results: "${{ join(needs.*.result, ' ') }}"
