@@ -12,13 +12,15 @@ import (
 const updateTimeout = 20 * time.Second
 
 type issueEdit struct {
-	t  issue.Tracker
-	fs *cli.FlagSet
+	t      issue.Tracker
+	fs     *cli.FlagSet
+	author string
 }
 
-func newReportEditCLI(t issue.Tracker) cli.CLI {
+func newReportEditCLI(t issue.Tracker, author string) cli.CLI {
 	c := &issueEdit{
-		t: t,
+		t:      t,
+		author: author,
 	}
 	c.fs = cli.NewFlagSet("edit")
 	return c
@@ -48,13 +50,14 @@ func (s *issueEdit) Run(ctx context.Context, args []string) error {
 	closedAt := report.ClosedAt
 	pkg := report.Package
 
-	r, err := tempIssue(report, getDefaultAuthor())
+	r, err := tempIssue(report)
 	if err != nil {
 		return err
 	}
-	report.CreatedAt = createdAt
-	report.ClosedAt = closedAt
-	report.Package = pkg
+	r.UpdatedBy = s.getAuthor()
+	r.CreatedAt = createdAt
+	r.ClosedAt = closedAt
+	r.Package = pkg
 
 	ctx, cancel := context.WithTimeout(ctx, updateTimeout)
 	defer cancel()
@@ -66,4 +69,11 @@ func (s *issueEdit) Run(ctx context.Context, args []string) error {
 
 	fmt.Printf("Updated issue %q", issueID)
 	return nil
+}
+
+func (s *issueEdit) getAuthor() string {
+	if s.author != "" {
+		return s.author
+	}
+	return getDefaultAuthor()
 }

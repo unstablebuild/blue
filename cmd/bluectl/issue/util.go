@@ -27,7 +27,7 @@ func getDefaultAuthor() string {
 	return fmt.Sprintf("%s@%s", u.Username, h)
 }
 
-func tempIssue(ret issue.Report, defaultAuthor string) (issue.Report, error) {
+func tempIssue(ret issue.Report) (issue.Report, error) {
 	f, err := ioutil.TempFile("", "blue-issue")
 	if err != nil {
 		err = fmt.Errorf("failed create temp file: %v", err)

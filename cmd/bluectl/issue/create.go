@@ -61,7 +61,7 @@ func (s *issueCreate) Run(ctx context.Context, args []string) error {
 	}
 	template.Author = s.getAuthor()
 
-	r, err := tempIssue(template, getDefaultAuthor())
+	r, err := tempIssue(template)
 	if err != nil {
 		return err
 	}
