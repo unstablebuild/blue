@@ -124,8 +124,11 @@ func (b *bot) postChange(change firestore.DocumentChange) {
 		// TODO documents are never deleted, so we should
 		// handle an issue going from not closed to closed,
 		// via update message.
-		msg = fmt.Sprintf("Issue %s deleted", report.ID())
-		color = "#23272D"
+		// msg = fmt.Sprintf("Issue %s deleted", report.ID())
+		// color = "#23272D"
+		// NOTE: .swp file move causes document remove to be emitted.
+		log.Debugf("skipping document removed: %s", report.ID())
+		return
 	}
 	rep := report.Report
 	var typeOfIssue string
