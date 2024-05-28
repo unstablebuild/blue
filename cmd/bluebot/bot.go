@@ -10,11 +10,15 @@ import (
 	"cloud.google.com/go/firestore"
 	log "github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
-	"github.com/slack-go/slack/slackevents"
 	"github.com/slack-go/slack/socketmode"
 	"github.com/unstablebuild/blue/issue"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+)
+
+const (
+	keyAssignee   = "assignee"
+	keyMilestones = "milestones"
 )
 
 type bot struct {
@@ -24,6 +28,7 @@ type bot struct {
 	firestore  *firestore.Client
 	channelID  string
 	collection string
+	issues     map[string]issue.ReportDocument
 }
 
 func newBot(
@@ -62,6 +67,7 @@ func newBot(
 	return &bot{
 		ctx:        ctx,
 		cancel:     cancel,
+		issues:     make(map[string]issue.ReportDocument),
 		firestore:  firestoreClient,
 		slack:      slackClient,
 		channelID:  channelID,
@@ -76,61 +82,136 @@ func (b *bot) run() error {
 }
 
 func (b *bot) handleFirestoreSnapshots() {
+	defer b.cancel()
+
 	it := b.firestore.Collection(b.collection).Snapshots(b.ctx)
-	// skip first snapshot: it contains all events in the collection
-	_ , _ = it.Next()
+	// process first snapshot separately: it contains all documents in the collection
+	snapshot, err := it.Next()
+	if err != nil {
+		log.Errorf("fetch first snapshot: %v", err)
+		return
+	}
+	if err := b.processFirstSnapshot(snapshot); err != nil {
+		log.Errorf("process first snapshot: %v", err)
+		return
+	}
+
 	for {
+		// this blocks until next change is available
 		snap, err := it.Next()
-		// DeadlineExceeded will be returned when ctx is cancelled.
-		if status.Code(err) == codes.DeadlineExceeded {
+		if code := status.Code(err); code == codes.Canceled || code == codes.DeadlineExceeded {
 			return
 		}
 		if err != nil {
 			log.Errorf("Snapshots.Next: %v", err)
 			// force graceful cleanup
-			b.cancel()
 			return
 		}
 		if snap == nil {
 			continue
 		}
-
 		for _, change := range snap.Changes {
-			b.postChange(change)
+			b.processSnapshotChange(change)
 		}
 	}
 }
 
-func (b *bot) postChange(change firestore.DocumentChange) {
-	var color, msg string
-	var report issue.ReportDocument
-	err := change.Doc.DataTo(&report)
-	if err != nil {
-		log.Errorf("unmarshal issue report: %v", err)
-		return
+func (b *bot) processFirstSnapshot(snap *firestore.QuerySnapshot) error {
+	var count int
+	for _, change := range snap.Changes {
+		doc, ok := b.unmarshalDocumentFromChange(&change)
+		if !ok {
+			continue
+		}
+		count++
+		switch change.Kind {
+		case firestore.DocumentAdded:
+			b.issues[doc.ID()] = doc
+		case firestore.DocumentModified:
+			// an update sneaked while snapshot was being created?
+			// process it like below
+			b.handleDocumentModified(doc)
+		case firestore.DocumentRemoved:
+			// no-op
+		}
 	}
-	if strings.HasSuffix(report.ID(), ".swp") {
-		log.Debugf("skipping swap file: %s", report.ID())
+
+	log.Debugf("processed first snapshot: cached %d issues, total in snapshot: %d",
+		count, len(snap.Changes))
+	return nil
+}
+
+func (b *bot) processSnapshotChange(change firestore.DocumentChange) {
+	doc, ok := b.unmarshalDocumentFromChange(&change)
+	if !ok {
 		return
 	}
 	switch change.Kind {
 	case firestore.DocumentAdded:
-		msg = fmt.Sprintf("Issue %s created", report.ID())
-		color = "#CAB3E8"
+		// add to history for modified comparisons
+		b.issues[doc.ID()] = doc
+		const color = "#CAB3E8"
+		msg := fmt.Sprintf("Issue %s created 🔧", doc.ID())
+		if _, ok := doc.Report.Metadata["bug"]; ok {
+			msg = fmt.Sprintf("Bug %s created 🐞", doc.ID())
+		} else if _, ok := doc.Report.Metadata["feature"]; ok {
+			msg = fmt.Sprintf("Feature request %s created 🚀", doc.ID())
+		}
+		b.postSlackMessage(doc, color, msg)
+
 	case firestore.DocumentModified:
-		msg = fmt.Sprintf("Issue %s modified", report.ID())
-		color = "#DF5D32"
+		b.handleDocumentModified(doc)
+
 	case firestore.DocumentRemoved:
-		// TODO documents are never deleted, so we should
-		// handle an issue going from not closed to closed,
-		// via update message.
-		// msg = fmt.Sprintf("Issue %s deleted", report.ID())
-		// color = "#23272D"
-		// NOTE: .swp file move causes document remove to be emitted.
-		log.Debugf("skipping document removed: %s", report.ID())
-		return
+		// delete from history
+		delete(b.issues, doc.ID())
+		// issues are never deleted; just marked as closed
+		log.Debugf("skipping document removed: %s", doc.ID())
 	}
-	rep := report.Report
+}
+
+func (b *bot) handleDocumentModified(doc issue.ReportDocument) {
+	defer func() {
+		// update issue in cache
+		b.issues[doc.ID()] = doc
+	}()
+	color := "#CA9E69"
+	msg := fmt.Sprintf("Issue %s modified", doc.ID())
+	prev, ok := b.issues[doc.ID()]
+	if ok {
+		if !prev.Report.Closed && doc.Report.Closed {
+			msg = fmt.Sprintf("Issue %s closed 🎉", doc.ID())
+			color = "#009F4D"
+		} else if prev.Report.Closed && !doc.Report.Closed {
+			msg = fmt.Sprintf("Issue %s re-opened 🧐", doc.ID())
+			color = "#A53C3C"
+		} else if assignee := doc.Report.Metadata[keyAssignee]; prev.Report.Metadata[keyAssignee] == "" && assignee != "" {
+			msg = fmt.Sprintf("Issue %s assigned to %s", doc.ID(), assignee)
+		} else if assignee := doc.Report.Metadata[keyAssignee]; prev.Report.Metadata[keyAssignee] != "" && assignee == "" {
+			msg = fmt.Sprintf("Issue %s asignee removed (was %s)", doc.ID(), prev.Report.Metadata[keyAssignee])
+		} else if assignee := doc.Report.Metadata[keyAssignee]; prev.Report.Metadata[keyAssignee] != assignee {
+			msg = fmt.Sprintf("Issue %s asignee changed from %s to %s", doc.ID(),
+				prev.Report.Metadata[keyAssignee], assignee)
+		} else if prev.Report.Subject != doc.Report.Subject {
+			msg = fmt.Sprintf("Issue %s subject changed", doc.ID())
+		} else if prev.Report.Notes != doc.Report.Notes {
+			msg = fmt.Sprintf("Issue %s notes changed", doc.ID())
+		} else if prev.Report.Package != doc.Report.Package {
+			msg = fmt.Sprintf("Issue %s package changed", doc.ID())
+		} else if prev.Report.Version != doc.Report.Version {
+			msg = fmt.Sprintf("Issue %s version changed", doc.ID())
+		} else if prev.Report.Author != doc.Report.Author {
+			msg = fmt.Sprintf("Issue %s author changed", doc.ID())
+		} else if milestones := doc.Report.Metadata[keyMilestones]; prev.Report.Metadata[keyMilestones] != milestones {
+			msg = fmt.Sprintf("Issue %s milestones changed from '%s' to %s", doc.ID(),
+				prev.Report.Metadata[keyMilestones], milestones)
+		}
+	}
+	b.postSlackMessage(doc, color, msg)
+}
+
+func (b *bot) postSlackMessage(doc issue.ReportDocument, color, msg string) {
+	rep := doc.Report
 	var typeOfIssue string
 	if _, ok := rep.Metadata["bug"]; ok {
 		typeOfIssue = "bug"
@@ -145,7 +226,7 @@ func (b *bot) postChange(change firestore.DocumentChange) {
 		// TODO lookup via email userID
 		AuthorName: rep.Author,
 		Color:      color,
-		Title:      report.ID(),
+		Title:      doc.ID(),
 		Text:       rep.Subject,
 		Fields: []slack.AttachmentField{
 			{Title: "Package", Value: rep.Package, Short: true},
@@ -154,13 +235,13 @@ func (b *bot) postChange(change firestore.DocumentChange) {
 			{Title: "UpdatedAt", Value: rep.UpdatedAt.Format(time.RFC3339), Short: true},
 			{Title: "Closed", Value: fmt.Sprintf("%t", rep.Closed), Short: true},
 			{Title: "ClosedAt", Value: rep.ClosedAt.Format(time.RFC3339), Short: true},
-			{Title: "Assignee", Value: rep.Metadata["assignee"], Short: true},
+			{Title: "Assignee", Value: rep.Metadata[keyAssignee], Short: true},
 			{Title: "Type", Value: typeOfIssue, Short: true},
 			{Title: "Notes", Value: rep.Notes, Short: false},
 		},
 	}
 
-	_, _, err = b.slack.PostMessage(
+	_, _, err := b.slack.PostMessage(
 		b.channelID,
 		slack.MsgOptionText(msg, false),
 		slack.MsgOptionAttachments(attachment),
@@ -173,103 +254,20 @@ func (b *bot) postChange(change firestore.DocumentChange) {
 	}
 }
 
-func (b *bot) handleSlackEvents() {
-	for evt := range b.slack.Events {
-		switch evt.Type {
-		case socketmode.EventTypeConnecting:
-			log.Info("connecting to Slack with Socket Mode...")
-		case socketmode.EventTypeConnectionError:
-			log.Info("connection failed. Retrying later...")
-		case socketmode.EventTypeConnected:
-			log.Info("connected to Slack with Socket Mode.")
-		case socketmode.EventTypeEventsAPI:
-			eventsAPIEvent, ok := evt.Data.(slackevents.EventsAPIEvent)
-			if !ok {
-				log.Debugf("event ignored %+v", evt)
-				continue
-			}
-
-			log.Debugf("event received: %+v", eventsAPIEvent)
-
-			b.slack.Ack(*evt.Request)
-
-			switch eventsAPIEvent.Type {
-			case slackevents.CallbackEvent:
-				innerEvent := eventsAPIEvent.InnerEvent
-				switch ev := innerEvent.Data.(type) {
-				case *slackevents.AppMentionEvent:
-					_, _, err := b.slack.PostMessage(ev.Channel, slack.MsgOptionText("Yes, hello.", false))
-					if err != nil {
-						log.Errorf("failed posting message: %v", err)
-					}
-				case *slackevents.MemberJoinedChannelEvent:
-					log.Debugf("user %q joined to channel %q", ev.User, ev.Channel)
-				}
-			default:
-				b.slack.Debugf("unsupported Events API event received")
-				log.Warn("unsupported Events API event received")
-			}
-		case socketmode.EventTypeInteractive:
-			callback, ok := evt.Data.(slack.InteractionCallback)
-			if !ok {
-				log.Debugf("interaction ignored %+v", evt)
-				continue
-			}
-
-			log.Debugf("interaction received: %+v", callback)
-
-			var payload interface{}
-			switch callback.Type {
-			case slack.InteractionTypeBlockActions:
-				// See https://api.slack.com/apis/connections/socket-implement#button
-				b.slack.Debugf("button clicked!")
-			case slack.InteractionTypeShortcut:
-			case slack.InteractionTypeViewSubmission:
-				// See https://api.slack.com/apis/connections/socket-implement#modal
-			case slack.InteractionTypeDialogSubmission:
-			default:
-
-			}
-			b.slack.Ack(*evt.Request, payload)
-
-		case socketmode.EventTypeSlashCommand:
-			cmd, ok := evt.Data.(slack.SlashCommand)
-			if !ok {
-				log.Debugf("slash command ignored %+v", evt)
-				continue
-			}
-
-			log.Debugf("slash command received: %+v", cmd)
-
-			payload := map[string]interface{}{
-				"blocks": []slack.Block{
-					slack.NewSectionBlock(
-						&slack.TextBlockObject{
-							Type: slack.MarkdownType,
-							Text: "foo",
-						},
-						nil,
-						slack.NewAccessory(
-							slack.NewButtonBlockElement(
-								"",
-								"somevalue",
-								&slack.TextBlockObject{
-									Type: slack.PlainTextType,
-									Text: "bar",
-								},
-							),
-						),
-					),
-				},
-			}
-
-			b.slack.Ack(*evt.Request, payload)
-		case socketmode.EventTypeHello:
-			log.Debugf("connection with the server has been correctly opened")
-		default:
-			log.Warnf("unexpected payload received: %s", evt.Type)
-		}
+func (b *bot) unmarshalDocumentFromChange(change *firestore.DocumentChange) (
+	ret issue.ReportDocument, ok bool,
+) {
+	if strings.HasSuffix(change.Doc.Ref.ID, ".swp") {
+		log.Debugf("skipping swap file: %s", ret.ID())
+		return
 	}
+	err := change.Doc.DataTo(&ret)
+	if err != nil {
+		log.Warnf("skipping issue: unmarshal issue report: %v", err)
+		return
+	}
+	ok = true
+	return
 }
 
 func (b *bot) Close() error {
