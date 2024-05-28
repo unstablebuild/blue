@@ -54,6 +54,6 @@ jobs:
         uses: ScribeMD/slack-templates@0.6.38
         with:
           bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
-          channel-id: C075G1W9C6N
+          channel-id: https://unstablebuild.slack.com/archives/C075G1W9C6N
           template: result
           results: "${{ join(needs.*.result, ' ') }}"
