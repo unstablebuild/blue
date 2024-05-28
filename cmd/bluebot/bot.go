@@ -227,21 +227,22 @@ func (b *bot) postSlackMessage(doc issue.ReportDocument, color, msg, author stri
 	} else {
 		typeOfIssue = "unspecified"
 	}
+
+	author = b.resolveAuthor(author)
+	assignee := b.resolveAuthor(rep.Metadata[keyAssignee])
+
 	attachment := slack.Attachment{
-		MarkdownIn: []string{"text"},
-		// TODO lookup via email userID
-		AuthorName: author,
 		Color:      color,
+		MarkdownIn: []string{"text"},
 		Title:      doc.ID(),
 		Text:       rep.Subject,
 		Fields: []slack.AttachmentField{
 			{Title: "Package", Value: rep.Package, Short: true},
 			{Title: "Version", Value: rep.Version, Short: true},
 			{Title: "CreatedAt", Value: rep.CreatedAt.Format(time.RFC3339), Short: true},
-			{Title: "UpdatedAt", Value: rep.UpdatedAt.Format(time.RFC3339), Short: true},
 			{Title: "Closed", Value: fmt.Sprintf("%t", rep.Closed), Short: true},
-			{Title: "ClosedAt", Value: rep.ClosedAt.Format(time.RFC3339), Short: true},
-			{Title: "Assignee", Value: rep.Metadata[keyAssignee], Short: true},
+			{Title: "Assignee", Value: assignee, Short: true},
+			{Title: "UpdatedBy", Value: author, Short: true},
 			{Title: "Type", Value: typeOfIssue, Short: true},
 			{Title: "Notes", Value: rep.Notes, Short: false},
 		},
@@ -275,6 +276,20 @@ func (b *bot) unmarshalDocumentFromChange(change *firestore.DocumentChange) (
 	}
 	ok = true
 	return
+}
+
+// best effort resolve author as a slack username
+func (b *bot) resolveAuthor(author string) string {
+	if author == "" {
+		return author
+	}
+
+	user, err := b.slack.GetUserByEmail(author)
+	if err != nil {
+		log.Warnf("slack: get user by email: %v", err)
+		return author
+	}
+	return fmt.Sprintf("<@%s>", user.ID)
 }
 
 func (b *bot) Close() error {
