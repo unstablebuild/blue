@@ -228,8 +228,8 @@ func (b *bot) postSlackMessage(doc issue.ReportDocument, color, msg, author stri
 		typeOfIssue = "unspecified"
 	}
 
-	author = b.resolveAuthor(author)
-	assignee := b.resolveAuthor(rep.Metadata[keyAssignee])
+	author = b.resolveUpdatedBy(author)
+	assignee := b.resolveAssignee(rep.Metadata[keyAssignee])
 
 	attachment := slack.Attachment{
 		Color:      color,
@@ -278,18 +278,36 @@ func (b *bot) unmarshalDocumentFromChange(change *firestore.DocumentChange) (
 	return
 }
 
-// best effort resolve author as a slack username
-func (b *bot) resolveAuthor(author string) string {
-	if author == "" {
+func (b *bot) resolveUpdatedBy(author string) string {
+	user := b.resolveSlackUser(author)
+	if user == nil {
 		return author
+	}
+	// do not notify author
+	return fmt.Sprintf("@%s", user.Profile.DisplayName)
+}
+
+func (b *bot) resolveAssignee(author string) string {
+	user := b.resolveSlackUser(author)
+	if user == nil {
+		return author
+	}
+	// notify assignee
+	return fmt.Sprintf("<@%s>", user.ID)
+}
+
+// best effort resolve author as a slack username
+func (b *bot) resolveSlackUser(author string) *slack.User {
+	if author == "" {
+		return nil
 	}
 
 	user, err := b.slack.GetUserByEmail(author)
 	if err != nil {
 		log.Warnf("slack: get user by email: %v", err)
-		return author
+		return nil
 	}
-	return fmt.Sprintf("<@%s>", user.ID)
+	return user
 }
 
 func (b *bot) Close() error {
