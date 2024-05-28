@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/cli"
 	"github.com/unstablebuild/blue/cli/format"
 	"github.com/unstablebuild/blue/issue"
 	"github.com/unstablebuild/blue/iterator"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -100,6 +100,8 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 
 	log.Debugf("received reports: %#v", reports)
 
+	reports = &filterDuplicatesIterator{it: reports, seen: make(map[string]struct{})}
+
 	switch strings.ToLower(s.format) {
 	case "json":
 		t := format.JSON[issue.Report]()
@@ -140,4 +142,32 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 		return cli.ErrInvalidArgs
 	}
 
+}
+
+type filterDuplicatesIterator struct {
+	it iterator.Iterator[issue.Report]
+	// workaround for BLUE-2 issue:
+	// un-closed .swp files are double listed.
+	// The returned iterator has no access to the document's ID
+	// which is an implementation detail of the firestore document.Service
+	// so this is the only work-around.
+	seen map[string]struct{}
+}
+
+func (it *filterDuplicatesIterator) Err() error {
+	return it.it.Err()
+}
+
+func (it *filterDuplicatesIterator) Next() (issue.Report, bool) {
+	for {
+		next, ok := it.it.Next()
+		if !ok {
+			return next, ok
+		}
+		id := next.Metadata["_id"]
+		if _, seen := it.seen[id]; !seen {
+			it.seen[id] = struct{}{}
+			return next, ok
+		}
+	}
 }
