@@ -109,6 +109,10 @@ func (b *bot) postChange(change firestore.DocumentChange) {
 		log.Errorf("unmarshal issue report: %v", err)
 		return
 	}
+	if strings.HasSuffix(report.ID(), ".swp") {
+		log.Debugf("skipping swap file: %s", report.ID())
+		return
+	}
 	switch change.Kind {
 	case firestore.DocumentAdded:
 		msg = fmt.Sprintf("Issue %s created", report.ID())
