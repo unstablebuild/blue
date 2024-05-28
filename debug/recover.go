@@ -5,13 +5,15 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/unstablebuild/blue/issue"
 	log "github.com/sirupsen/logrus"
+	"github.com/unstablebuild/blue/issue"
 )
 
 const (
 	ReportMetadataErrorField      = "error"
 	ReportMetadataStackTraceField = "stack"
+	ReportMetadataPanicField      = "panic"
+	ReportMetadataBugField        = "bug"
 )
 
 // CapturePanic attempts to capture a panic during execution of f, logs it
@@ -46,6 +48,8 @@ func CapturePanic(log *log.Logger, pkg, version string, f func()) (ok bool, repo
 			errStr = fmt.Sprintf("unknown: %v", r)
 		}
 		report.Metadata[ReportMetadataStackTraceField] = string(debug.Stack())
+		report.Metadata[ReportMetadataBugField] = ""
+		report.Metadata[ReportMetadataPanicField] = ""
 		report.Subject = fmt.Sprintf("%20s", errStr)
 		report.Metadata[ReportMetadataErrorField] = errStr
 
