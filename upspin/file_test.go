@@ -16,13 +16,6 @@ import (
 	"upspin.io/upspin"
 )
 
-var (
-	inProcess = upspin.Endpoint{
-		Transport: upspin.InProcess,
-		NetAddr:   "", // ignored
-	}
-)
-
 func create(t *testing.T, name upspin.PathName) *File {
 	f, err := Open(&dummyClient{}, name, os.O_RDWR|os.O_CREATE)
 	require.NoError(t, err)

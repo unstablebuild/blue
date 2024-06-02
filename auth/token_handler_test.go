@@ -172,16 +172,16 @@ func TestTokenHandler(t *testing.T) {
 			defer certsServer.Close()
 
 			pwdStore := NewPasswordStore(document.NewInMemoryService())
-			pwdStore.CreatePassword(context.Background(), validClientID, validSecret, map[string]string{
+			require.NoError(t, pwdStore.CreatePassword(context.Background(), validClientID, validSecret, map[string]string{
 				metadataKeyRedeemURL: tokenServer.URL,
 				metadataKeyTokenURL:  tokenServer.URL,
 				metadataKeyCertsURL:  certsServer.URL,
-			})
-			pwdStore.CreatePassword(context.Background(), clientIDMissingURLS, secretMissingURLS, nil)
-			pwdStore.CreatePassword(context.Background(), clientIDMissingTokenURLS, secretMissingTokenURLS, map[string]string{
+			}))
+			require.NoError(t, pwdStore.CreatePassword(context.Background(), clientIDMissingURLS, secretMissingURLS, nil))
+			require.NoError(t, pwdStore.CreatePassword(context.Background(), clientIDMissingTokenURLS, secretMissingTokenURLS, map[string]string{
 				metadataKeyRedeemURL: tokenServer.URL,
 				metadataKeyCertsURL:  certsServer.URL,
-			})
+			}))
 
 			encodedClientID := EncodeSecretID(validClientID)
 			secretStore := MapSecretStore(map[string][]byte{encodedClientID: validSecret},
@@ -265,7 +265,7 @@ func writeTestRedeemResponse(
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 func goodRedeemHandler(clientID string, rsaPrivateKey *rsa.PrivateKey) http.Handler {

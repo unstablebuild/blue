@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/unstablebuild/blue/document"
-	"github.com/unstablebuild/blue/retry"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/retry"
 )
 
 type FnServiceFactory func(t *testing.T) document.Service
@@ -141,7 +141,8 @@ func testDatastoreCreate(t *testing.T, serviceFactory FnServiceFactory) {
 
 		assert.Error(t, s.Create(ctx, "my1234", 1234))
 
-		myReaper := &bob
+		var myReaper Reaper //nolint:gosimple
+		myReaper = &bob
 		assert.Error(t, s.Create(ctx, "my1234", &myReaper))
 	})
 
@@ -223,7 +224,8 @@ func testDatastoreSet(t *testing.T, serviceFactory FnServiceFactory) {
 
 		assert.Error(t, s.Set(ctx, "my1234", 1234))
 
-		myReaper := &bob
+		var myReaper Reaper //nolint:gosimple
+		myReaper = &bob
 		assert.Error(t, s.Set(ctx, "my1234", &myReaper))
 	})
 

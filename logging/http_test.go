@@ -18,7 +18,7 @@ type mockHandler struct {
 
 func (m mockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	time.Sleep(m.latency)
-	w.Write(m.data)
+	_, _ = w.Write(m.data)
 }
 
 func TestMiddleware(t *testing.T) {

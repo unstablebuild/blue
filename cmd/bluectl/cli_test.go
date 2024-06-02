@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"io/ioutil"
 	"net"
+	"os"
 	"testing"
 
-	"github.com/unstablebuild/blue/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/unstablebuild/blue/cli"
 )
 
 const (
@@ -26,7 +26,7 @@ func skipIfServerNotRunning(t *testing.T, addr string) {
 }
 
 func newTestCLI(t *testing.T) cli.CLI {
-	tempDir, err := ioutil.TempDir("", "blue_test")
+	tempDir, err := os.MkdirTemp("", "blue_test")
 	require.NoError(t, err)
 
 	i := newInitializer(tempDir)

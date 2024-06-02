@@ -20,20 +20,6 @@ func newTestingDocumentTracker() (m Tracker, svc document.Service) {
 	return
 }
 
-func capturePanic(log *log.Logger, pkg, version string, f func()) (ok bool, report Report) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			return
-		}
-		ok = false
-	}()
-
-	f()
-	ok = true
-	return
-}
-
 func TestIsInternal(t *testing.T) {
 	assert.True(t, IsInternalLabel(ReportMetadataIDField))
 }
@@ -129,7 +115,7 @@ func TestDocumentTracker(t *testing.T) {
 		err = m.DeleteReport(context.Background(), id)
 		require.NoError(t, err)
 
-		r, err = m.GetReport(context.Background(), id)
+		_, err = m.GetReport(context.Background(), id)
 		require.Error(t, err)
 		assert.Equal(t, document.ErrNotFound, err)
 

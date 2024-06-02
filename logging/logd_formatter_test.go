@@ -118,7 +118,7 @@ func BenchmarkFormatterDebugOn(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		f.Format(entry)
+		_, _ = f.Format(entry)
 	}
 }
 
@@ -128,7 +128,7 @@ func BenchmarkFormatterDebugOff(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		f.Format(entry)
+		_, _ = f.Format(entry)
 	}
 }
 

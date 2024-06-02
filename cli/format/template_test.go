@@ -4,17 +4,17 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/unstablebuild/blue/iterator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/unstablebuild/blue/iterator"
 )
 
 func TestTemplate(t *testing.T) {
-	var ifc interface{}
+	var ifc interface{} //nolint:gosimple
 	ifc = testStruct1{Public: "hello"}
 	tsuite := []struct {
 		desc        string
-		inTemplate string
+		inTemplate  string
 		inEls       []interface{}
 		expectedOut string
 		expectedErr bool
@@ -60,7 +60,7 @@ func TestTemplate(t *testing.T) {
 
 	for _, tcase := range tsuite {
 		t.Run(tcase.desc, func(t *testing.T) {
-			table, err  := Template[interface{}](tcase.inTemplate)
+			table, err := Template[interface{}](tcase.inTemplate)
 			require.NoError(t, err)
 			var buf bytes.Buffer
 			it := iterator.FromSlice[any](tcase.inEls)
