@@ -16,7 +16,7 @@ import (
 	"github.com/unstablebuild/blue/cmd/bluectl/options"
 	"github.com/unstablebuild/blue/crypto"
 	"github.com/unstablebuild/blue/release"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 const (
@@ -101,7 +101,7 @@ func findPrivateKeyInKeyRing(
 
 func readPasswordFromStdin() (string, error) {
 	fmt.Fprintf(os.Stdout, "PGP key passphrase:")
-	bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
+	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 	if err != nil {
 		err = fmt.Errorf("failed to read passphrase from stdin: %s", err)
 		return "", err

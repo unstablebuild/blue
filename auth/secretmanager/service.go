@@ -281,12 +281,6 @@ func (i *versionsIterator) Err() error {
 	return i.err
 }
 
-func stdTimeToProto(ts time.Time) timestamppb.Timestamp {
-	seconds := ts.Unix()
-	nanos := ts.Nanosecond()
-	return timestamppb.Timestamp{Seconds: seconds, Nanos: int32(nanos)}
-}
-
 func protoTimeToStd(ts *timestamppb.Timestamp) time.Time {
 	return time.Unix(ts.GetSeconds(), int64(ts.GetNanos()))
 }

@@ -79,7 +79,7 @@ func (s *secretRotate) Run(ctx context.Context, args []string) error {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), rotateTimeout)
+	ctx, cancel := context.WithTimeout(ctx, rotateTimeout)
 	defer cancel()
 
 	disabled, err := s.manager.RotateSecret(ctx, secretID, payload, s.disablePrevious)

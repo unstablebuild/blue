@@ -10,16 +10,18 @@ import (
 )
 
 const (
-	ReportMetadataErrorField      = "error"
-	ReportMetadataStackTraceField = "stack"
-	ReportMetadataPanicField      = "panic"
-	ReportMetadataBugField        = "bug"
+	reportMetadataErrorField      = "error"
+	reportMetadataStackTraceField = "stack"
+	reportMetadataPanicField      = "panic"
+	reportMetadataBugField        = "bug"
 )
 
 // CapturePanic attempts to capture a panic during execution of f, logs it
 // and returns a Report and false, or returns true if f returned
 // successfully.
-func CapturePanic(log *log.Logger, pkg, version string, f func()) (ok bool, report issue.Report) {
+func CapturePanic(log *log.Logger, pkg, version string, f func()) (
+	ok bool, report issue.Report,
+) {
 	defer func() {
 		r := recover()
 		if r == nil {
@@ -47,14 +49,13 @@ func CapturePanic(log *log.Logger, pkg, version string, f func()) (ok bool, repo
 		default:
 			errStr = fmt.Sprintf("unknown: %v", r)
 		}
-		report.Metadata[ReportMetadataStackTraceField] = string(debug.Stack())
-		report.Metadata[ReportMetadataBugField] = ""
-		report.Metadata[ReportMetadataPanicField] = ""
+		report.Metadata[reportMetadataStackTraceField] = string(debug.Stack())
+		report.Metadata[reportMetadataBugField] = ""
+		report.Metadata[reportMetadataPanicField] = ""
 		report.Subject = fmt.Sprintf("%20s", errStr)
-		report.Metadata[ReportMetadataErrorField] = errStr
+		report.Metadata[reportMetadataErrorField] = errStr
 
-		log.Errorf("CapturePanic: panic: %v", report.Metadata[ReportMetadataErrorField])
-		ok = false
+		log.Errorf("CapturePanic: panic: %v", report.Metadata[reportMetadataErrorField])
 	}()
 
 	f()

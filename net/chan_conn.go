@@ -1,3 +1,4 @@
+//nolint:gosimple
 package net
 
 import (

@@ -5,20 +5,19 @@ import (
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/unstablebuild/blue/crypto"
-	cryptest "github.com/unstablebuild/blue/crypto/test"
 	gomock "github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/unstablebuild/blue/crypto"
+	cryptest "github.com/unstablebuild/blue/crypto/test"
 )
 
 func makeReleaseContent(t *testing.T, content string) *os.File {
-	f, err := ioutil.TempFile("", "")
+	f, err := os.CreateTemp("", "")
 	require.NoError(t, err)
 
 	_, err = io.Copy(f, strings.NewReader(content))
@@ -218,7 +217,7 @@ func TestSigningManager(t *testing.T) {
 			Return(Bundle{}, errors.New("oopsie daisy")).Times(1)
 
 		_, err := m.Get(ctx, man.Package, man.Version,
-			NopProgressWriter(ioutil.Discard))
+			NopProgressWriter(io.Discard))
 		require.Error(t, err)
 	})
 

@@ -25,12 +25,12 @@ func TestCapturePanic(t *testing.T) {
 			panic("ralfing")
 		})
 		assert.False(t, actualOk)
-		stack, ok := actualReport.Metadata[ReportMetadataStackTraceField]
+		stack, ok := actualReport.Metadata[reportMetadataStackTraceField]
 		require.True(t, ok)
 		assert.NotNil(t, stack)
 		assert.NotZero(t, actualReport.Build)
 		assert.NotZero(t, actualReport.CreatedAt)
-		err, ok := actualReport.Metadata[ReportMetadataErrorField]
+		err, ok := actualReport.Metadata[reportMetadataErrorField]
 		require.True(t, ok)
 		assert.NotNil(t, err)
 		assert.True(t, strings.Contains(err, "ralfing"))

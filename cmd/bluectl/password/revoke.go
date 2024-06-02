@@ -39,7 +39,7 @@ func (s passwordRevoke) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), revokeTimeout)
+	ctx, cancel := context.WithTimeout(ctx, revokeTimeout)
 	defer cancel()
 
 	return s.store.Revoke(ctx, args[0])

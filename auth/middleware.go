@@ -53,7 +53,6 @@ func WithMiddleware[T any](next http.Handler, config MiddlewareConfig[T]) http.H
 type middleware[T any] struct {
 	verifyKeys   Keys
 	authorizer   Authorizer[T]
-	client       http.Client
 	next         http.Handler
 	successLevel log.Level
 	failureLevel log.Level

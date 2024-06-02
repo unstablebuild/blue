@@ -2,11 +2,11 @@ package rpc
 
 import (
 	"context"
-	"io/ioutil"
 	"net"
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
 	proto "github.com/unstablebuild/blue/document/rpc/proto"
 	documenttest "github.com/unstablebuild/blue/document/test"
@@ -14,8 +14,8 @@ import (
 	"github.com/unstablebuild/blue/encoding/bson"
 	"github.com/unstablebuild/blue/encoding/json"
 	"github.com/unstablebuild/blue/encoding/toml"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func tcpListener() (net.Listener, error) {
@@ -67,7 +67,8 @@ func testRPCDatastoreOverListener(
 			listener, marshaler, proto.RegisterDocumentStoreServer)
 		teardowns = append(teardowns, teardown)
 
-		store, err := NewClient(addr, marshaler, grpc.WithInsecure())
+		store, err := NewClient(addr, marshaler,
+			grpc.WithTransportCredentials(insecure.NewCredentials()))
 		require.NoError(t, err)
 
 		return store
@@ -81,7 +82,7 @@ func testRPCDatastoreOverListener(
 // tempUnixListener creates a temp file and exposes it
 // as a unix domain sockets net.Listener.
 func tempUnixListener() (net.Listener, error) {
-	tf, err := ioutil.TempFile("", "plugin")
+	tf, err := os.CreateTemp("", "plugin")
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +177,8 @@ func TestRPCInterop(t *testing.T) {
 					addr, teardown := runDatastoreServer(t, cache, marshaler)
 					teardowns = append(teardowns, teardown)
 
-					store, err := NewClient(addr, marshaler, grpc.WithInsecure())
+					store, err := NewClient(addr, marshaler,
+						grpc.WithTransportCredentials(insecure.NewCredentials()))
 					require.NoError(t, err)
 
 					return interopHelper{read: cache, write: store}
@@ -189,7 +191,8 @@ func TestRPCInterop(t *testing.T) {
 					addr, teardown := runDatastoreServer(t, cache, marshaler)
 					teardowns = append(teardowns, teardown)
 
-					store, err := NewClient(addr, marshaler, grpc.WithInsecure())
+					store, err := NewClient(addr, marshaler,
+						grpc.WithTransportCredentials(insecure.NewCredentials()))
 					require.NoError(t, err)
 
 					return interopHelper{read: store, write: cache}

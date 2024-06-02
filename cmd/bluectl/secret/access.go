@@ -71,7 +71,7 @@ func (s *secretAccess) Run(ctx context.Context, args []string) error {
 
 	if s.noPrompt {
 		for _, sec := range res {
-			fmt.Fprintf(os.Stdout, string(sec.Payload))
+			fmt.Fprint(os.Stdout, string(sec.Payload))
 		}
 		return nil
 	}

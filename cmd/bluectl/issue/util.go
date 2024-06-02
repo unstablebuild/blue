@@ -4,14 +4,13 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/user"
 
-	"github.com/unstablebuild/blue/issue"
 	multierr "github.com/ernestrc/go-multierror"
 	"github.com/ernestrc/sensible/editor"
 	log "github.com/sirupsen/logrus"
+	"github.com/unstablebuild/blue/issue"
 	"gopkg.in/yaml.v3"
 )
 
@@ -28,7 +27,7 @@ func getDefaultAuthor() string {
 }
 
 func tempIssue(ret issue.Report) (issue.Report, error) {
-	f, err := ioutil.TempFile("", "blue-issue")
+	f, err := os.CreateTemp("", "blue-issue")
 	if err != nil {
 		err = fmt.Errorf("failed create temp file: %v", err)
 		return issue.Report{}, err
@@ -63,7 +62,7 @@ func tempIssue(ret issue.Report) (issue.Report, error) {
 			return issue.Report{}, err
 		}
 
-		data, err := ioutil.ReadFile(f.Name())
+		data, err := os.ReadFile(f.Name())
 		if err != nil {
 			err = fmt.Errorf("failed read data from temp file: %v", err)
 			return issue.Report{}, err

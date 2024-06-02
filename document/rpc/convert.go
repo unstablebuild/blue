@@ -17,7 +17,7 @@ func makeProtoUpdates(m encoding.Marshaler, updates []document.Update) (
 	slab := make(map[string]interface{})
 	for _, u := range updates {
 		// re-use make filter logic
-		f := document.Filter{Field: document.Field{FieldPath: u.FieldPath, Value: u.Value}}
+		f := document.Filter{Field: document.Field(u)}
 		pf := makeProtoFilter(m, slab, f)
 		pu := &proto.UpdateDocumentRequest_Field{
 			FieldPath: pf.FieldPath,
@@ -33,7 +33,7 @@ func makeProtoPreconditions(m encoding.Marshaler, preconds ...document.Precondit
 ) {
 	slab := make(map[string]interface{})
 	for _, u := range preconds {
-		f := document.Filter{Field: document.Field{FieldPath: u.FieldPath, Value: u.Value}}
+		f := document.Filter{Field: document.Field(u)}
 		pf := makeProtoFilter(m, slab, f)
 		pu := &proto.UpdateDocumentRequest_Field{
 			FieldPath: pf.FieldPath,

@@ -3,7 +3,7 @@ package net
 import "context"
 
 // satisfy net.Error
-var errTimeout error = &timeoutError{}
+var _ error = &timeoutError{}
 
 type timeoutError struct{}
 

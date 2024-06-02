@@ -3,13 +3,13 @@ package issue
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/cli"
 	"github.com/unstablebuild/blue/debug"
 	"github.com/unstablebuild/blue/issue"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -40,7 +40,7 @@ func (s *panicReportPanic) Man() cli.Manual {
 }
 
 func (s *panicReportPanic) Run(ctx context.Context, args []string) error {
-	args, _, ok, err := cli.ParseUsage(s, s.fs, 0, args)
+	_, _, ok, err := cli.ParseUsage(s, s.fs, 0, args)
 	if err != nil || !ok {
 		return err
 	}
@@ -48,7 +48,7 @@ func (s *panicReportPanic) Run(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 	discard := log.New()
-	discard.Out = ioutil.Discard
+	discard.Out = io.Discard
 
 	ok, report := debug.CapturePanic(discard, "blue", s.version, func() {
 		panic("this is a simulation")

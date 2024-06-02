@@ -7,13 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/iterator"
-	"github.com/sirupsen/logrus"
 )
 
 // ErrDataIntegrity is returned when downloaded release data is compromised.
@@ -270,7 +269,7 @@ func (d *documentManager) Get(
 	}
 
 	if del, ok := out.(progressDelegate); ok {
-		if del.writeDelegate == ioutil.Discard {
+		if del.writeDelegate == io.Discard {
 			return doc.Bundle, nil
 		}
 	}

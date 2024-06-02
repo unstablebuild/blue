@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	//nolint:all
 	"crypto/dsa"
 	"crypto/ecdsa"
 	"crypto/ed25519"

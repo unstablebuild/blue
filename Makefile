@@ -32,6 +32,9 @@ coverage-html: $(COVERPROF)
 format:
 	@ go fmt ./.../...
 
+lint:
+	@ golangci-lint run
+
 generate:
 	@ go generate ./.../...
 

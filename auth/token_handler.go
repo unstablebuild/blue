@@ -3,13 +3,11 @@ package auth
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -142,7 +140,7 @@ func validateSecret(
 			response{Message: "secret does not have a redeem URL"})
 		return
 	}
-	tokenURL, _ = metadata[metadataKeyTokenURL]
+	tokenURL = metadata[metadataKeyTokenURL]
 
 	return
 }
@@ -179,7 +177,7 @@ func fetchSecret(
 	}
 
 	// optional
-	tokenURL, _ = metadata[metadataKeyTokenURL]
+	tokenURL = metadata[metadataKeyTokenURL]
 
 	clientSecretData, err := secretStore.AccessSecret(ctx, clientID)
 	if err != nil {
@@ -216,7 +214,7 @@ func validateTokenRequest(
 	ctx context.Context, traceID trace.ID, attemptAt time.Time,
 	w http.ResponseWriter, in *http.Request,
 ) (body []byte, refreshToken, clientSecret, clientID string, err error) {
-	body, err = ioutil.ReadAll(in.Body)
+	body, err = io.ReadAll(in.Body)
 	if err != nil {
 		err = fmt.Errorf("read body: %v", err)
 		return
@@ -224,7 +222,7 @@ func validateTokenRequest(
 
 	// reassign the body so we can call ParseForm but use intact data
 	// for forwarded request
-	in.Body = ioutil.NopCloser(bytes.NewReader(body))
+	in.Body = io.NopCloser(bytes.NewReader(body))
 	err = in.ParseForm()
 	if err != nil {
 		err = fmt.Errorf("parse request form: %v", err)
@@ -317,7 +315,7 @@ func fetchProviderToken[T any](
 
 		defer res.Body.Close()
 
-		respBody, err = ioutil.ReadAll(res.Body)
+		respBody, err = io.ReadAll(res.Body)
 		if err != nil {
 			return true, fmt.Errorf("read response body: %v", err)
 		}
@@ -426,12 +424,4 @@ func writeRedeemTokenResponse[T any](
 
 	_, err = w.Write(data)
 	logging.LogResultInfo(err, attemptAt, traceID, callType, fields...)
-}
-
-func makeUserID(clientID, subject, email string) string {
-	hash := sha256.New()
-	hash.Write([]byte(clientID))
-	hash.Write([]byte(subject))
-	hash.Write([]byte(email))
-	return hex.EncodeToString(hash.Sum(nil))
 }

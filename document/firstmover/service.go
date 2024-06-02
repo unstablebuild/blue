@@ -9,18 +9,18 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
+	multierr "github.com/ernestrc/go-multierror"
+	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/document/rpc"
 	"github.com/unstablebuild/blue/document/rpc/proto"
 	"github.com/unstablebuild/blue/logging"
 	"github.com/unstablebuild/blue/retry"
-	multierr "github.com/ernestrc/go-multierror"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
 
@@ -184,9 +184,9 @@ func (s *service) isLeader() bool {
 
 func (s *service) follow(ctx context.Context, addr net.Addr) (bool, error) {
 	quitCh := s.quitCh
-	opts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
-	opts = append(opts, grpc.WithDialer(
-		func(_ string, _ time.Duration) (net.Conn, error) {
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()}
+	opts = append(opts, grpc.WithContextDialer(
+		func(ctx context.Context, _ string) (net.Conn, error) {
 			var d net.Dialer
 			return d.DialContext(ctx, addr.Network(), addr.String())
 		},

@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/logging"
 	"github.com/unstablebuild/blue/logging/trace"
 	"github.com/unstablebuild/blue/retry"
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/go-jose/go-jose.v2"
 	"gopkg.in/go-jose/go-jose.v2/jwt"
 )
@@ -24,9 +24,9 @@ var (
 	// This is optional but, if this is not set in the secret metadata,
 	// then refresh tokens will be omitted from responses so client will have
 	// to do an authorization_code every time, requiring user input.
-	metadataKeyTokenURL  = "token_url"
+	metadataKeyTokenURL = "token_url"
 	// endpoint URL to pull jwks public keys to validate token signature
-	metadataKeyCertsURL  = "certs_url"
+	metadataKeyCertsURL = "certs_url"
 
 	httpOutboundRetryStrategy = retry.CombinedStrategy(
 		retry.LimitStrategy(10), retry.ExponentialStrategy(100*time.Millisecond, 1*time.Second),
@@ -86,7 +86,7 @@ func ValidateProviderIDWithCertsURL(
 			return true, fmt.Errorf("status code: %v", resp.StatusCode)
 		}
 
-		data, err = ioutil.ReadAll(resp.Body)
+		data, err = io.ReadAll(resp.Body)
 		if err != nil {
 			return true, fmt.Errorf("read certs url body: %v", err)
 		}
@@ -117,7 +117,7 @@ func ValidateProviderIDWithJWKS(
 	ctx context.Context, jwks *jose.JSONWebKeySet, clientID, idToken string,
 ) (*ProviderClaims, error) {
 	// logs "invalid token" requests with traceID for debugging
-	traceID, ctx := trace.FromContextOrNew(ctx)
+	traceID, _ := trace.FromContextOrNew(ctx)
 	logger := log.WithFields(log.Fields{logging.KeyTraceID: traceID})
 
 	token, err := jwt.ParseSigned(idToken)

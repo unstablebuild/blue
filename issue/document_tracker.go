@@ -59,8 +59,7 @@ func (r ReportDocument) WithUpdatedBy(author string) ReportDocument {
 }
 
 func (r ReportDocument) ID() string {
-	id, _ := r.Report.Metadata[ReportMetadataIDField]
-	return id
+	return r.Report.Metadata[ReportMetadataIDField]
 }
 
 func (r ReportDocument) WithID(id string) ReportDocument {

@@ -141,8 +141,7 @@ func testDatastoreCreate(t *testing.T, serviceFactory FnServiceFactory) {
 
 		assert.Error(t, s.Create(ctx, "my1234", 1234))
 
-		var myReaper Reaper
-		myReaper = &bob
+		myReaper := &bob
 		assert.Error(t, s.Create(ctx, "my1234", &myReaper))
 	})
 
@@ -224,8 +223,7 @@ func testDatastoreSet(t *testing.T, serviceFactory FnServiceFactory) {
 
 		assert.Error(t, s.Set(ctx, "my1234", 1234))
 
-		var myReaper Reaper
-		myReaper = &bob
+		myReaper := &bob
 		assert.Error(t, s.Set(ctx, "my1234", &myReaper))
 	})
 

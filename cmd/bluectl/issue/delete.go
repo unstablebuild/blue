@@ -39,7 +39,7 @@ func (s reportDelete) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), deleteTimeout)
+	ctx, cancel := context.WithTimeout(ctx, deleteTimeout)
 	defer cancel()
 
 	return s.t.DeleteReport(ctx, args[0])

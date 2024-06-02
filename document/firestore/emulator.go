@@ -34,7 +34,7 @@ func RunFirestoreEmulator() (teardown func() error, err error) {
 	teardown = cmd.Process.Kill
 	err = waitForEmulator(addr)
 	if err != nil {
-		teardown()
+		_ = teardown()
 	} else {
 		os.Setenv("FIRESTORE_EMULATOR_HOST", addr)
 	}

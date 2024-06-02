@@ -63,7 +63,7 @@ func Open(
 			return nil, err
 		}
 	} else if create && flag&os.O_EXCL != 0 {
-		return nil, errors.E(errors.Exist)
+		return nil, errors.E(op, name, errors.Exist)
 	}
 	f := &File{
 		client:      client,

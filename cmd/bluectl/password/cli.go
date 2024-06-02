@@ -8,10 +8,9 @@ import (
 )
 
 var (
-	actionCreate   string = "create"
-	actionRevoke   string = "revoke"
-	actionDescribe string = "describe"
-	actionList     string = "list"
+	actionCreate string = "create"
+	actionRevoke string = "revoke"
+	actionList   string = "list"
 )
 
 type passwordCLI struct {

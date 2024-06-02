@@ -36,8 +36,8 @@ func GRPCServerWithOauth2[T any](
 	creds credentials.TransportCredentials,
 ) []grpc.ServerOption {
 	return []grpc.ServerOption{
-		grpc.UnaryInterceptor(oauth2UnaryInterceptor(verifyKeys, authorizer)),
-		grpc.StreamInterceptor(oauth2StreamInterceptor(verifyKeys, authorizer)),
+		grpc.UnaryInterceptor(oauth2UnaryInterceptor[T](verifyKeys, authorizer)),
+		grpc.StreamInterceptor(oauth2StreamInterceptor[T](verifyKeys, authorizer)),
 		grpc.Creds(creds),
 	}
 }

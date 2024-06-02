@@ -4,15 +4,13 @@ package iterator
 // apply fn to each of the elements produced.
 func Map[T any, V any](it Iterator[T], fn func(T) V) Iterator[V] {
 	return FromFunc(func() (ret V, ok bool, err error) {
-		for {
-			var t T
-			t, ok = it.Next()
-			if !ok {
-				err = it.Err()
-				return
-			}
-			ret = fn(t)
+		var t T
+		t, ok = it.Next()
+		if !ok {
+			err = it.Err()
 			return
 		}
+		ret = fn(t)
+		return
 	})
 }

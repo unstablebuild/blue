@@ -5,13 +5,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
 	proto "github.com/unstablebuild/blue/document/rpc/proto"
 	documenttest "github.com/unstablebuild/blue/document/test"
 	"github.com/unstablebuild/blue/encoding/bson"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func TestRPCDatastoreCustomServiceDesc(t *testing.T) {
@@ -36,7 +37,8 @@ func TestRPCDatastoreCustomServiceDesc(t *testing.T) {
 				RegisterCollectionDocumentService(reg, srv, collectionName)
 			}, opts...)
 
-		cc, err := grpc.Dial(addr.String(), grpc.WithInsecure())
+		opt := grpc.WithTransportCredentials(insecure.NewCredentials())
+		cc, err := grpc.Dial(addr.String(), opt)
 		require.NoError(t, err)
 
 		store := new(Client)

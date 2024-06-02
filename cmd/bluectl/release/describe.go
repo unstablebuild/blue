@@ -3,7 +3,7 @@ package release
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"time"
 
 	"github.com/unstablebuild/blue/cli"
@@ -54,7 +54,7 @@ func (s releaseDescribe) Run(ctx context.Context, args []string) error {
 	defer cancel()
 
 	man, err := s.m.Get(ctx, pack, version,
-		release.NopProgressWriter(ioutil.Discard))
+		release.NopProgressWriter(io.Discard))
 	if err != nil {
 		return err
 	}

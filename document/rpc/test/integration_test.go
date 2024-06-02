@@ -7,6 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/document/firestore"
 	doclog "github.com/unstablebuild/blue/document/logging"
@@ -16,10 +19,8 @@ import (
 	"github.com/unstablebuild/blue/encoding"
 	"github.com/unstablebuild/blue/encoding/bson"
 	"github.com/unstablebuild/blue/encoding/toml"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func TestFirestoreIntegration(t *testing.T) {
@@ -57,7 +58,8 @@ func TestFirestoreIntegration(t *testing.T) {
 				addr, teardown := runDatastoreServerOverListener(t, svc, tcpListener, marshaler)
 				t.Cleanup(teardown)
 
-				svc, err = rpc.NewClient(addr, marshaler, grpc.WithInsecure())
+				opts := grpc.WithTransportCredentials(insecure.NewCredentials())
+				svc, err = rpc.NewClient(addr, marshaler, opts)
 				require.NoError(t, err)
 				return svc
 			})
@@ -309,7 +311,7 @@ func makeFirestoreClientPair(t *testing.T, marshaler encoding.Marshaler) (
 	addr, teardown := runDatastoreServerOverListener(t, dbWithLogs, tcpListener, marshaler)
 	t.Cleanup(teardown)
 
-	client, err := rpc.NewClient(addr, marshaler, grpc.WithInsecure())
+	client, err := rpc.NewClient(addr, marshaler, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 
 	return firestore, client

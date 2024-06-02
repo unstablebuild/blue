@@ -3,15 +3,15 @@ package release
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
+	"io"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/unstablebuild/blue/document"
-	"github.com/unstablebuild/blue/iterator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/iterator"
 )
 
 var (
@@ -315,6 +315,6 @@ func BenchmarkDocumentManagerGet(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		_, _ = m.Get(ctx, fixtureRelease.Package, fixtureRelease.Version,
-			NopProgressWriter(ioutil.Discard))
+			NopProgressWriter(io.Discard))
 	}
 }
