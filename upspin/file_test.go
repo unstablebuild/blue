@@ -4,14 +4,13 @@ import (
 	stdErrors "errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/unstablebuild/blue/retry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/unstablebuild/blue/retry"
 	"upspin.io/errors"
 	_ "upspin.io/pack/plain"
 	"upspin.io/upspin"
@@ -303,7 +302,7 @@ func TestReadWritable(t *testing.T) {
 		_, err := f.Seek(1, io.SeekStart)
 		require.NoError(t, err)
 
-		got, err := ioutil.ReadAll(f)
+		got, err := io.ReadAll(f)
 		require.NoError(t, err)
 		assert.Equal(t, "ello world", string(got))
 
@@ -323,7 +322,7 @@ func TestReadWritable(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, 1, n)
 
-				got, err := ioutil.ReadAll(f)
+				got, err := io.ReadAll(f)
 				require.NoError(t, err)
 				assert.Equal(t, fmt.Sprintf("%d", i), string(got))
 			}
@@ -340,7 +339,7 @@ func expectFileContent(t *testing.T, f *File, client *dummyClient, expected stri
 	_, err := f.Seek(0, io.SeekStart)
 	require.NoError(t, err)
 
-	got, err := ioutil.ReadAll(f)
+	got, err := io.ReadAll(f)
 	require.NoError(t, err)
 	assert.Equal(t, expected, string(got))
 

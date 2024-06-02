@@ -2,16 +2,16 @@ package issue
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/unstablebuild/blue/document"
-	"github.com/unstablebuild/blue/iterator"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/iterator"
 )
 
 func newTestingDocumentTracker() (m Tracker, svc document.Service) {
@@ -61,7 +61,7 @@ func TestDocumentTracker(t *testing.T) {
 		m, _ := newTestingDocumentTracker()
 
 		ll := log.New()
-		ll.Out = ioutil.Discard
+		ll.Out = io.Discard
 		for i := 0; i < 10; i++ {
 			report := Report{
 				Author:    "test.capturePanic",
@@ -158,10 +158,9 @@ func TestDocumentTracker(t *testing.T) {
 	})
 
 	t.Run("should be able to create issues past max number of retries", func(t *testing.T) {
-		m, _ := newTestingDocumentTracker()
 		svc := document.NewInMemoryService()
 		for i := 0; i < int(10+1); i++ {
-			m = NewDocumentTracker(svc)
+			m := NewDocumentTracker(svc)
 			report := Report{
 				Author:  "test2",
 				Subject: "bummers",

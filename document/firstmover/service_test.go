@@ -3,18 +3,17 @@ package firstmover
 import (
 	"context"
 	"errors"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/document/test"
 	"github.com/unstablebuild/blue/encoding"
 	"github.com/unstablebuild/blue/encoding/bson"
 	"github.com/unstablebuild/blue/encoding/json"
 	"github.com/unstablebuild/blue/encoding/toml"
-	"github.com/stretchr/testify/require"
 )
 
 func TestServiceIntegration(t *testing.T) {
@@ -27,7 +26,7 @@ func TestServiceIntegration(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Run("single instance assumes leader", func(t *testing.T) {
 				test.TestDocumentService(t, func(t *testing.T) document.Service {
-					f, err := ioutil.TempFile("", "")
+					f, err := os.CreateTemp("", "")
 					require.NoError(t, err)
 					require.NoError(t, f.Close())
 					require.NoError(t, os.Remove(f.Name()))
@@ -40,7 +39,7 @@ func TestServiceIntegration(t *testing.T) {
 
 			t.Run("two instances, seconds assumes follower", func(t *testing.T) {
 				test.TestDocumentService(t, func(t *testing.T) document.Service {
-					f, err := ioutil.TempFile("", "")
+					f, err := os.CreateTemp("", "")
 					require.NoError(t, err)
 					require.NoError(t, f.Close())
 					require.NoError(t, os.Remove(f.Name()))
@@ -61,7 +60,7 @@ func TestServiceIntegration(t *testing.T) {
 
 	t.Run("single instance eventually assumes leader if leader is non-responsive (lock leaked)", func(t *testing.T) {
 		test.TestDocumentService(t, func(t *testing.T) document.Service {
-			f, err := ioutil.TempFile("", "")
+			f, err := os.CreateTemp("", "")
 			require.NoError(t, err)
 			require.NoError(t, f.Close())
 			// do not remove file
@@ -72,7 +71,7 @@ func TestServiceIntegration(t *testing.T) {
 
 	t.Run("two instances, seconds assumes leader after leader dies", func(t *testing.T) {
 		test.TestDocumentService(t, func(t *testing.T) document.Service {
-			f, err := ioutil.TempFile("", "")
+			f, err := os.CreateTemp("", "")
 			require.NoError(t, err)
 			require.NoError(t, f.Close())
 			require.NoError(t, os.Remove(f.Name()))
@@ -97,7 +96,7 @@ func TestServiceIntegration(t *testing.T) {
 			const n = 50
 			cfg := testConfig()
 
-			f, err := ioutil.TempFile("", "")
+			f, err := os.CreateTemp("", "")
 			require.NoError(t, err)
 			require.NoError(t, f.Close())
 			require.NoError(t, os.Remove(f.Name()))
@@ -151,7 +150,7 @@ func TestCustomRetryableErrors(t *testing.T) {
 
 	for _, tcase := range tsuite {
 		t.Run(tcase.desc, func(t *testing.T) {
-			f, err := ioutil.TempFile("", "")
+			f, err := os.CreateTemp("", "")
 			require.NoError(t, err)
 			require.NoError(t, f.Close())
 			require.NoError(t, os.Remove(f.Name()))

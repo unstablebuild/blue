@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/firestore v1.9.0
 	cloud.google.com/go/secretmanager v1.10.0
 	github.com/BurntSushi/toml v1.2.0
+	github.com/ProtonMail/go-crypto v1.0.0
 	github.com/cheggaaa/pb/v3 v3.0.8
 	github.com/ernestrc/go-multierror v1.1.2
 	github.com/ernestrc/logd-go v0.0.0-20180509171507-65871c1d5504
@@ -24,6 +25,7 @@ require (
 	golang.org/x/crypto v0.23.0
 	golang.org/x/net v0.25.0
 	golang.org/x/oauth2 v0.7.0
+	golang.org/x/term v0.20.0
 	google.golang.org/api v0.114.0
 	google.golang.org/grpc v1.54.0
 	google.golang.org/grpc/examples v0.0.0-20230426190518-e853dbf004c3
@@ -42,6 +44,7 @@ require (
 	cloud.google.com/go/longrunning v0.4.1 // indirect
 	github.com/VividCortex/ewma v1.1.1 // indirect
 	github.com/cilium/ebpf v0.7.0 // indirect
+	github.com/cloudflare/circl v1.3.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/color v1.10.0 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
@@ -68,7 +71,6 @@ require (
 	golang.org/x/mod v0.10.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.20.0 // indirect
-	golang.org/x/term v0.20.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
 	golang.org/x/time v0.1.0 // indirect
 	golang.org/x/tools v0.8.0 // indirect

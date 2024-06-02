@@ -42,7 +42,7 @@ func (s *secretDisable) Run(ctx context.Context, args []string) error {
 	secretID := args[0]
 	versionID := args[1]
 
-	ctx, cancel := context.WithTimeout(context.Background(), disableTimeout)
+	ctx, cancel := context.WithTimeout(ctx, disableTimeout)
 	defer cancel()
 
 	return s.manager.DisableSecretVersion(ctx, secretID, versionID)

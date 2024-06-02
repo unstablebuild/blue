@@ -39,18 +39,21 @@ func NewProvider(overridesConfigPath, fallbackConfigLiteral string) (
 	configDef := strings.NewReader(fallbackConfigLiteral)
 	if overridesConfigPath == "" {
 		log.Warning("configuration file not defined, using defaults")
+		//nolint:staticcheck
 		return config.NewYAMLProviderFromReader(configDef)
 	}
 	configFile, err := os.Open(overridesConfigPath)
 	if err != nil {
 		return nil, err
 	}
+	//nolint:staticcheck
 	return config.NewYAMLProviderFromReader(configDef, configFile)
 }
 
 // NewStringProvider returns a config Provider backed by a config string literal.
 func NewStringProvider(stringConfig string) (Provider, error) {
 	configDef := strings.NewReader(stringConfig)
+	//nolint:staticcheck
 	return config.NewYAMLProviderFromReader(configDef)
 }
 
@@ -60,10 +63,12 @@ func NewFileProvider(filePath string) (provider Provider, err error) {
 	if err != nil {
 		return nil, err
 	}
+	//nolint:staticcheck
 	return config.NewYAMLProviderFromReader(configFile)
 }
 
 // NewReaderProvider returns a config Provider backed by a config io.Reader.
 func NewReaderProvider(reader ...io.Reader) (provider Provider, err error) {
+	//nolint:staticcheck
 	return config.NewYAMLProviderFromReader(reader...)
 }

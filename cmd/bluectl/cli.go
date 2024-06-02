@@ -153,7 +153,7 @@ func (c *blueCtl) printVersion() {
 }
 
 func (c *blueCtl) Run(ctx context.Context, args []string) error {
-	args, rest, ok, err := cli.ParseUsage(c, c.fs, 0, args)
+	_, rest, ok, err := cli.ParseUsage(c, c.fs, 0, args)
 	if err != nil || !ok {
 		return err
 	}

@@ -39,7 +39,7 @@ func (s releaseDelete) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), deleteTimeout)
+	ctx, cancel := context.WithTimeout(ctx, deleteTimeout)
 	defer cancel()
 
 	return s.m.DeletePackage(ctx, args[0])

@@ -2,7 +2,6 @@ package secret
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -15,21 +14,6 @@ import (
 const (
 	defaultListTimeout = 30 * time.Second
 )
-
-type metaFilters map[string]string
-
-func (i *metaFilters) String() string {
-	return fmt.Sprintf("%v", map[string]string(*i))
-}
-
-func (i *metaFilters) Set(value string) error {
-	split := strings.Split(value, "=")
-	if len(split) != 2 {
-		return fmt.Errorf("invalid metadata filter: %s: expected format is 'key=value'", value)
-	}
-	(*i)[split[0]] = split[1]
-	return nil
-}
 
 type secretList struct {
 	manager *secretmanager.Service

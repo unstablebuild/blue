@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/ernestrc/sensible/editor"
@@ -35,15 +34,6 @@ func (m manifest) validate() error {
 	return nil
 }
 
-func (m manifest) toYAML() (string, error) {
-	data, err := yaml.Marshal(m)
-	if err != nil {
-		err = fmt.Errorf("failed to encode stored manifest to yaml: %v", err)
-		return "", err
-	}
-	return string(data), nil
-}
-
 func (d passwordData) MarshalYAML() (interface{}, error) {
 	return base64.StdEncoding.EncodeToString(d), nil
 }
@@ -64,7 +54,7 @@ func tempPassword(
 	log.Debugf("decoding password %q manifest from temp file with metadata: %#v",
 		id, extraMdata)
 
-	f, err := ioutil.TempFile("", "blue-password")
+	f, err := os.CreateTemp("", "blue-password")
 	if err != nil {
 		err = fmt.Errorf("failed create temp file: %v", err)
 		return manifest{}, err
@@ -123,7 +113,7 @@ func tempPassword(
 		return
 	}
 
-	data, err := ioutil.ReadFile(f.Name())
+	data, err := os.ReadFile(f.Name())
 	if err != nil {
 		err = fmt.Errorf("failed read data from temp file: %v", err)
 		return

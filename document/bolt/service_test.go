@@ -2,19 +2,19 @@ package bolt
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"sync"
 	"testing"
 
-	"github.com/unstablebuild/blue/document"
-	documenttest "github.com/unstablebuild/blue/document/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/unstablebuild/blue/document"
+	documenttest "github.com/unstablebuild/blue/document/test"
 )
 
 func TestBolt(t *testing.T) {
 	documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
-		f, err := ioutil.TempFile("", "barnack_bolt_test")
+		f, err := os.CreateTemp("", "barnack_bolt_test")
 		require.NoError(t, err)
 		defer f.Close()
 
@@ -26,7 +26,7 @@ func TestBolt(t *testing.T) {
 
 	t.Run("Drop deletes all documents in a collection", func(t *testing.T) {
 		ctx := context.Background()
-		f, err := ioutil.TempFile("", "blue_is_gold")
+		f, err := os.CreateTemp("", "blue_is_gold")
 		require.NoError(t, err)
 
 		defer f.Close()
@@ -45,7 +45,7 @@ func TestBolt(t *testing.T) {
 
 	t.Run("with two concurrent instances", func(t *testing.T) {
 		ctx := context.Background()
-		f, err := ioutil.TempFile("", "what_is_barnack_test")
+		f, err := os.CreateTemp("", "what_is_barnack_test")
 		require.NoError(t, err)
 		defer f.Close()
 

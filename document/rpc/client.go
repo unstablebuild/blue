@@ -3,12 +3,12 @@ package rpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"reflect"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/unstablebuild/blue/document"
 	proto "github.com/unstablebuild/blue/document/rpc/proto"
@@ -28,15 +28,20 @@ type Client struct {
 // by relaying operations to remote datastore server. See NewServer
 // for more details.
 func NewClient(addr net.Addr, m encoding.Marshaler, opts ...grpc.DialOption) (document.Service, error) {
-	opts = append(opts, grpc.WithDialer(
-		func(_ string, _ time.Duration) (net.Conn, error) {
+	opts = append(opts, grpc.WithContextDialer(
+		func(ctx context.Context, _ string) (net.Conn, error) {
+			var d net.Dialer
+			d.Deadline, _ = ctx.Deadline()
 			conn, err := net.Dial(addr.Network(), addr.String())
 			if err != nil {
 				return nil, err
 			}
 			if tcpConn, ok := conn.(*net.TCPConn); ok {
 				// Make sure to set keep alive so that the connection doesn't die
-				tcpConn.SetKeepAlive(true)
+				err := tcpConn.SetKeepAlive(true)
+				if err != nil {
+					return nil, fmt.Errorf("tcp conn set keep alive: %w", err)
+				}
 			}
 			return conn, err
 		},

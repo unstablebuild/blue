@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path"
 	"testing"
@@ -40,10 +40,10 @@ func assertConfigInitialized(
 	require.NoError(t, err)
 
 	f, err := os.Open(fileName)
-	defer f.Close()
+	t.Cleanup(func() { _ = f.Close() })
 	require.NoError(t, err)
 
-	b, err := ioutil.ReadAll(f)
+	b, err := io.ReadAll(f)
 	require.NoError(t, err)
 
 	expectedB, err := yaml.Marshal(&expected)
@@ -87,13 +87,13 @@ func TestInitializerRun(t *testing.T) {
 	})
 
 	t.Run("created new config", func(t *testing.T) {
-		dirName, err := ioutil.TempDir("", testTempDirPrefix)
+		dirName, err := os.MkdirTemp("", testTempDirPrefix)
 		require.NoError(t, err)
 		testInitializerRun(t, dirName, "1234")
 	})
 
 	t.Run("overrides existing config", func(t *testing.T) {
-		dirName, err := ioutil.TempDir("", testTempDirPrefix)
+		dirName, err := os.MkdirTemp("", testTempDirPrefix)
 		require.NoError(t, err)
 
 		f, err := os.Create(path.Join(dirName, configFile))
@@ -111,7 +111,7 @@ func TestInitializerRun(t *testing.T) {
 	})
 
 	t.Run("returns error if config is corrupted", func(t *testing.T) {
-		dirName, err := ioutil.TempDir("", testTempDirPrefix)
+		dirName, err := os.MkdirTemp("", testTempDirPrefix)
 		require.NoError(t, err)
 
 		f, err := os.Create(path.Join(dirName, configFile))

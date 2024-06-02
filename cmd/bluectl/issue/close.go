@@ -39,7 +39,7 @@ func (s reportClose) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), closeTimeout)
+	ctx, cancel := context.WithTimeout(ctx, closeTimeout)
 	defer cancel()
 
 	return s.t.CloseReport(ctx, args[0])

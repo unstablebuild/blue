@@ -3,11 +3,11 @@ package pack
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 
-	"github.com/unstablebuild/blue/release"
 	"github.com/ernestrc/sensible/editor"
 	log "github.com/sirupsen/logrus"
+	"github.com/unstablebuild/blue/release"
 	"gopkg.in/yaml.v3"
 )
 
@@ -65,7 +65,7 @@ func tempPackage(
 	log.Debugf("decoding package %q manifest from temp file with metadata: %#v",
 		pack, extraMdata)
 
-	f, err := ioutil.TempFile("", "blue-release")
+	f, err := os.CreateTemp("", "blue-release")
 	if err != nil {
 		err = fmt.Errorf("failed create temp file: %v", err)
 		return release.Package{}, err
@@ -108,7 +108,7 @@ func tempPackage(
 		return
 	}
 
-	data, err := ioutil.ReadFile(f.Name())
+	data, err := os.ReadFile(f.Name())
 	if err != nil {
 		err = fmt.Errorf("failed read data from temp file: %v", err)
 		return
