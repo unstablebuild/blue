@@ -65,7 +65,9 @@ func TestClientServerUnary(t *testing.T) {
 			lis, err := net.Listen("tcp", "127.0.0.1:")
 			require.NoError(t, err)
 
-			go s.Serve(lis)
+			go func() {
+				_ = s.Serve(lis)
+			}()
 
 			clientCreds, err := credentials.NewClientTLSFromFile(data.Path("x509/ca_cert.pem"), "x.test.example.com")
 			require.NoError(t, err)
@@ -86,7 +88,6 @@ func TestClientServerUnary(t *testing.T) {
 			conn, err := grpc.Dial(lis.Addr().String(), clientOpts...)
 			require.NoError(t, err)
 
-			defer conn.Close()
 			rgc := pb.NewEchoClient(conn)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -119,6 +120,7 @@ func TestClientServerUnary(t *testing.T) {
 			} else {
 				require.Error(t, err)
 			}
+			_ = conn.Close()
 		})
 	}
 }

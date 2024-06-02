@@ -3,15 +3,3 @@ run:
   exclude-dirs:
     - bin
     - target
-# we should slowly fix tests too
-issues:
-  exclude-rules:
-    - path: (.+)_test.go
-      linters:
-        - funlen
-        - errcheck
-        - unused
-        - govet
-        - ineffassign
-        - staticcheck
-        - gosimple

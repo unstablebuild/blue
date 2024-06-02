@@ -270,7 +270,9 @@ func runDatastoreServerOverListener(
 		lis.Close()
 	}
 
-	go gsrv.Serve(lis)
+	go func() {
+		_ = gsrv.Serve(lis)
+	}()
 
 	return lis.Addr(), teardown
 }

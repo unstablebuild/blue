@@ -15,6 +15,7 @@ func TestFirt(t *testing.T) {
 		tt := time.Now().Add(24 * time.Hour)
 
 		ctx := context.Background()
+		//nolint:staticcheck
 		ctx = context.WithValue(ctx, "a", "A")
 		ctx, cancel := context.WithDeadline(ctx, tt)
 		fctx := First(ctx)
@@ -74,8 +75,11 @@ func TestFirt(t *testing.T) {
 	t.Run("multiple return the first value", func(t *testing.T) {
 		ctx1, cancel := context.WithCancel(context.Background()) // avoid leak
 		defer cancel()
+		// nolint:staticcheck
 		ctx2 := context.WithValue(context.Background(), "a", "A")
+		// nolint:staticcheck
 		ctx3 := context.WithValue(context.Background(), "a", "B")
+		// nolint:staticcheck
 		ctx3 = context.WithValue(ctx3, "b", "B")
 
 		fctx := First(ctx1, ctx2, ctx3)
