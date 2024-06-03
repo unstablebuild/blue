@@ -40,26 +40,6 @@ type ProviderClaims struct {
 	Email string `json:"email,omitempty"`
 }
 
-// ValidateProviderIDWithSecret validates that a given oauth2 ID token is valid
-// given a secret provider. The Certs are fetched from the stored certs_url
-// in the secret metadata. See ValidateIDWithCerts for more details.
-func ValidateProviderIDWithSecret(
-	ctx context.Context, store *PasswordStore,
-	clientID, clientSecret string, idToken string,
-) (*ProviderClaims, error) {
-	metadata, err := store.VerifyPassword(ctx, clientID, []byte(clientSecret))
-	if err != nil {
-		return nil, fmt.Errorf("store verify secret: %v", err)
-	}
-
-	certsURL, ok := metadata[metadataKeyCertsURL]
-	if !ok {
-		return nil, fmt.Errorf("invalid secret: missing %s", metadataKeyCertsURL)
-	}
-
-	return ValidateProviderIDWithCertsURL(ctx, certsURL, clientID, idToken)
-}
-
 // ValidateProviderIDWithCertsURL fetches a set of certs in JWT format from the given URL
 // and uses them to validate the given token ID. See ValidateIDWithCerts for more details.
 func ValidateProviderIDWithCertsURL(

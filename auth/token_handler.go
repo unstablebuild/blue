@@ -30,27 +30,24 @@ import (
 // then a client secret is fetched from secretStore with the client id
 // as the base64 encoded (url encoded, no padding) as the secret id.
 func TokenHTTPHandler[T any](
-	keys Keys, passwordStore *PasswordStore,
-	secretStore SecretStore, granter Granter[T],
+	keys Keys, secretStore SecretStore, granter Granter[T],
 	expiry time.Duration,
 ) http.Handler {
 	return tokenHandler[T]{
-		secretStore:   secretStore,
-		passwordStore: passwordStore,
-		signKey:       keys,
-		expiry:        expiry,
-		granter:       granter,
+		secretStore: secretStore,
+		signKey:     keys,
+		expiry:      expiry,
+		granter:     granter,
 	}
 }
 
 const tokenCallType = "Oauth2RedeemToken"
 
 type tokenHandler[T any] struct {
-	passwordStore *PasswordStore
-	secretStore   SecretStore
-	signKey       Keys
-	granter       Granter[T]
-	expiry        time.Duration
+	secretStore SecretStore
+	signKey     Keys
+	granter     Granter[T]
+	expiry      time.Duration
 }
 
 func (h tokenHandler[T]) ServeHTTP(
@@ -60,7 +57,7 @@ func (h tokenHandler[T]) ServeHTTP(
 	logger := log.WithFields(log.Fields{logging.KeyTraceID: traceID})
 	attemptAt := logAttempt(tokenCallType, in, traceID)
 
-	body, refreshToken, clientSecret, clientID, err := validateTokenRequest(
+	body, refreshToken, clientID, err := validateTokenRequest(
 		ctx, traceID, attemptAt, w, in)
 	if err != nil {
 		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusBadRequest,
@@ -69,8 +66,8 @@ func (h tokenHandler[T]) ServeHTTP(
 	}
 
 	body, redeemURL, tokenURL, certsURL, ok := validateClientSecret(
-		ctx, traceID, attemptAt, tokenCallType, w, in, clientSecret, clientID, body,
-		h.passwordStore, h.secretStore)
+		ctx, traceID, attemptAt, tokenCallType, w, in, clientID, body,
+		h.secretStore)
 	if !ok {
 		// validateClientSecret writes response
 		return
@@ -114,35 +111,6 @@ func (h tokenHandler[T]) ServeHTTP(
 	writeRedeemTokenResponse(
 		ctx, traceID, attemptAt, tokenCallType, w, in, tokenURL, h.signKey,
 		h.expiry, providerResponse, claims, extra)
-}
-
-func validateSecret(
-	ctx context.Context, traceID trace.ID,
-	attemptAt time.Time, callType string,
-	w http.ResponseWriter, in *http.Request,
-	clientSecret, clientID string, passwordStore *PasswordStore,
-) (redeemURL, tokenURL, certsURL string, ok bool) {
-	metadata, err := passwordStore.VerifyPassword(ctx, clientID, []byte(clientSecret))
-	if err != nil {
-		writeResponse(ctx, callType, traceID, attemptAt, w, in, http.StatusBadRequest,
-			response{Message: fmt.Sprintf("verify secret: %v", err.Error())})
-		return
-	}
-	if certsURL, ok = metadata[metadataKeyCertsURL]; !ok {
-		writeResponse(ctx, callType, traceID, attemptAt, w, in, http.StatusInternalServerError,
-			response{Message: "secret does not have a keys URL"})
-		return
-	}
-
-	redeemURL, ok = metadata[metadataKeyRedeemURL]
-	if !ok {
-		writeResponse(ctx, callType, traceID, attemptAt, w, in, http.StatusInternalServerError,
-			response{Message: "secret does not have a redeem URL"})
-		return
-	}
-	tokenURL = metadata[metadataKeyTokenURL]
-
-	return
 }
 
 func fetchSecret(
@@ -213,7 +181,7 @@ type redeemResponse[T any] struct {
 func validateTokenRequest(
 	ctx context.Context, traceID trace.ID, attemptAt time.Time,
 	w http.ResponseWriter, in *http.Request,
-) (body []byte, refreshToken, clientSecret, clientID string, err error) {
+) (body []byte, refreshToken, clientID string, err error) {
 	body, err = io.ReadAll(in.Body)
 	if err != nil {
 		err = fmt.Errorf("read body: %v", err)
@@ -234,7 +202,6 @@ func validateTokenRequest(
 	// form.
 	grantType := in.PostForm.Get("grant_type")
 	clientID = in.PostForm.Get("client_id")
-	clientSecret = in.PostForm.Get("client_secret")
 	refreshToken = in.PostForm.Get("refresh_token")
 
 	// validate by gran type
@@ -242,19 +209,18 @@ func validateTokenRequest(
 	case "authorization_code":
 		challenge := in.PostForm.Get("code_challenge")
 		verifier := in.PostForm.Get("code_verifier")
-		if clientID == "" || (clientSecret == "" && (challenge == "" || verifier == "")) {
-			err := errors.New("'client_id' must always be set and either " +
-				"'client_secret' or pkce params must be set for this grant_type")
-			return nil, "", "", "", err
+		if clientID == "" || challenge == "" || verifier == "" {
+			err := errors.New("'client_id' and pkce params must always be set for this grant_type")
+			return nil, "", "", err
 		}
 	case "refresh_token":
 		if refreshToken == "" || clientID == "" {
 			err := errors.New("'refresh_token' and 'client_id' must always be set for this gran_type")
-			return nil, "", "", "", err
+			return nil, "", "", err
 		}
 	default:
 		err := fmt.Errorf("unsupported grant_type: %v", grantType)
-		return nil, "", "", "", err
+		return nil, "", "", err
 	}
 
 	return
@@ -265,21 +231,18 @@ func validateTokenRequest(
 func validateClientSecret(
 	ctx context.Context, traceID trace.ID, attemptAt time.Time,
 	callType string, w http.ResponseWriter, in *http.Request,
-	clientSecret, clientID string, inBody []byte,
-	passwordStore *PasswordStore, secretStore SecretStore,
+	clientID string, inBody []byte,
+	secretStore SecretStore,
 ) (body []byte, redeemURL, tokenURL, certsURL string, ok bool) {
 	body = inBody
-	if clientSecret != "" {
-		redeemURL, tokenURL, certsURL, ok = validateSecret(ctx, traceID, attemptAt, callType,
-			w, in, clientSecret, clientID, passwordStore)
-	} else {
-		redeemURL, tokenURL, certsURL, clientSecret, ok = fetchSecret(ctx, traceID,
-			attemptAt, callType, w, in, clientID, secretStore)
-		// add client_secret to forwarded request
-		if ok {
-			in.PostForm.Add("client_secret", clientSecret)
-			body = []byte(in.PostForm.Encode())
-		}
+
+	var clientSecret string
+	redeemURL, tokenURL, certsURL, clientSecret, ok = fetchSecret(ctx, traceID,
+		attemptAt, callType, w, in, clientID, secretStore)
+	// add client_secret to forwarded request
+	if ok {
+		in.PostForm.Add("client_secret", clientSecret)
+		body = []byte(in.PostForm.Encode())
 	}
 	return
 }

@@ -6,12 +6,10 @@ import (
 	"os"
 
 	multierr "github.com/ernestrc/go-multierror"
-	"github.com/unstablebuild/blue/auth"
 	"github.com/unstablebuild/blue/auth/secretmanager"
 	"github.com/unstablebuild/blue/cli"
 	issueCLI "github.com/unstablebuild/blue/cmd/bluectl/issue"
 	packageCLI "github.com/unstablebuild/blue/cmd/bluectl/package"
-	passwordCLI "github.com/unstablebuild/blue/cmd/bluectl/password"
 	releaseCLI "github.com/unstablebuild/blue/cmd/bluectl/release"
 	secretCLI "github.com/unstablebuild/blue/cmd/bluectl/secret"
 	"github.com/unstablebuild/blue/document"
@@ -78,7 +76,6 @@ func (c *blueCtl) Man() cli.Manual {
 			"init":     newInitializer(c.configFolder),
 			"release":  releaseCLI.NewCLI(nil),
 			"package":  packageCLI.NewCLI(nil),
-			"password": passwordCLI.NewCLI(nil),
 			"secret":   secretCLI.NewCLI(nil),
 			"analysis": newAnalysisCli(),
 			"issue":    issueCLI.NewCLI(nil, Tag, ""),
@@ -119,13 +116,6 @@ func (c *blueCtl) initializeCli() error {
 	releaseManager := release.NewDocumentManager(docDB)
 	issueTracker := issue.NewDocumentTracker(trackerDB)
 
-	passwordDB, err := firestore.New(config.Auth.ProjectID,
-		config.Password.Collection, config.Auth.CredentialsFile)
-	if err != nil {
-		return err
-	}
-	passwordStore := auth.NewPasswordStore(passwordDB)
-
 	secretManager, err := secretmanager.NewService(config.Auth.ProjectID,
 		config.Auth.CredentialsFile)
 	if err != nil {
@@ -136,7 +126,6 @@ func (c *blueCtl) initializeCli() error {
 		"init":     init,
 		"release":  releaseCLI.NewCLI(releaseManager),
 		"package":  packageCLI.NewCLI(releaseManager),
-		"password": passwordCLI.NewCLI(passwordStore),
 		"secret":   secretCLI.NewCLI(secretManager),
 		"analysis": newAnalysisCli(),
 		"issue":    issueCLI.NewCLI(issueTracker, Tag, config.Issue.Author),
