@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/unstablebuild/blue/document"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -46,12 +45,8 @@ func TestTokenHandler(t *testing.T) {
 		KeyID:     keyID,
 	}
 
-	validSecret := []byte("1")
 	validClientID := "id: 1"
-	invalidSecret := []byte("2")
 	invalidClientID := "id: 2"
-	secretMissingURLS := []byte("3")
-	secretMissingTokenURLS := []byte("4")
 	clientIDMissingURLS := "id: 3"
 	clientIDMissingTokenURLS := "id: 4"
 
@@ -74,20 +69,21 @@ func TestTokenHandler(t *testing.T) {
 		{"empty client_id is a bad request",
 			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{""}},
 			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
-		{"client_id with bad client_secret is a bad request",
+		{"client_id with empty pkce code_challenge is a bad request",
 			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{validClientID},
-				"client_secret": []string{string(invalidSecret)}},
+				"code_challenge": []string{""}, "code_verifier": []string{"1234"}},
 			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
-		{"client_id with empty client_secret is a bad request",
+		{"client_id with empty pkce code_verifier is a bad request",
 			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{validClientID},
-				"client_secret": []string{""}},
+				"code_challenge": []string{"1234"}, "code_verifier": []string{""}},
 			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
-		{"client_id with valid client_secret but missing urls in auth store is 500",
+		{"client_id with valid PKCE params but missing urls in auth store is 500",
 			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{clientIDMissingURLS},
-				"client_secret": []string{string(secretMissingURLS)}},
+				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"}},
 			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusInternalServerError},
 		{"missing grant_type is a 400",
-			url.Values{"client_id": []string{validClientID}, "client_secret": []string{string(validSecret)}},
+			url.Values{"client_id": []string{validClientID},
+				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
 			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
 		{"incorrect grant_type with PKCE",
 			url.Values{"grant_type": []string{"AHORA!"}, "client_id": []string{validClientID},
@@ -95,28 +91,16 @@ func TestTokenHandler(t *testing.T) {
 			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
 		{"refresh token grant type without refresh_token field is 400",
 			url.Values{"grant_type": []string{"refresh_token"}, "client_id": []string{validClientID},
-				"client_secret": []string{string(validSecret)}},
+				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
 			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
-		{"happy path",
-			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{validClientID},
-				"client_secret": []string{string(validSecret)}},
-			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusOK},
 		{"happy path with PKCE",
 			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{validClientID},
 				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
 			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusOK},
-		{"refresh token with missing clientID is a 400",
-			url.Values{"grant_type": []string{"refresh_token"}, "client_id": []string{},
-				"refresh_token": []string{"123455666"}, "client_secret": []string{string(validSecret)}},
-			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
 		{"refresh token, with PKCE, with missing clientID is a 400",
 			url.Values{"grant_type": []string{"refresh_token"}, "client_id": []string{},
 				"refresh_token": []string{"123455666"}},
 			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
-		{"happy path refresh token",
-			url.Values{"grant_type": []string{"refresh_token"}, "client_id": []string{validClientID},
-				"refresh_token": []string{"123455666"}, "client_secret": []string{string(validSecret)}},
-			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusOK},
 		{"happy path refresh token with PKCE",
 			url.Values{"grant_type": []string{"refresh_token"}, "client_id": []string{validClientID},
 				"refresh_token": []string{"123455666"}},
@@ -131,35 +115,35 @@ func TestTokenHandler(t *testing.T) {
 			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusInternalServerError},
 		{"retries redeem endpoints 5xx",
 			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{validClientID},
-				"client_secret": []string{string(validSecret)}},
+				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
 			flakyRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusOK},
 		{"retries certs endpoint 5xx",
 			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{validClientID},
-				"client_secret": []string{string(validSecret)}},
+				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
 			goodRedeemHandler(validClientID, rsaPrivateKey), flakyCertsHandler(&validJWKS), http.StatusOK},
 		{"malformed redeem endpoint response is 502",
 			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{validClientID},
-				"client_secret": []string{string(validSecret)}},
+				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
 			malformedHandler(), goodCertsHandler(&validJWKS), http.StatusBadGateway},
 		{"malformed certs endpoint response is 502",
 			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{validClientID},
-				"client_secret": []string{string(validSecret)}},
+				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
 			goodRedeemHandler(validClientID, rsaPrivateKey), malformedHandler(), http.StatusBadGateway},
 		{"missing keys from certs endpoint response is 502",
 			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{validClientID},
-				"client_secret": []string{string(validSecret)}},
+				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
 			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&jose.JSONWebKeySet{}), http.StatusBadGateway},
 		{"redeem provider token audience does not match clientID is 424",
 			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{validClientID},
-				"client_secret": []string{string(validSecret)}},
+				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
 			goodRedeemHandler(invalidClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusFailedDependency},
 		{"redeem provider returned expired token is 424",
 			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{validClientID},
-				"client_secret": []string{string(validSecret)}},
+				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
 			expiredRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusFailedDependency},
 		{"redeem provider returned token with non-matching signature is 424",
 			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{validClientID},
-				"client_secret": []string{string(validSecret)}},
+				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
 			badRedeemHandler(validClientID), goodCertsHandler(&validJWKS), http.StatusFailedDependency},
 	}
 
@@ -171,20 +155,8 @@ func TestTokenHandler(t *testing.T) {
 			certsServer := httptest.NewServer(test.certsProvider)
 			defer certsServer.Close()
 
-			pwdStore := NewPasswordStore(document.NewInMemoryService())
-			require.NoError(t, pwdStore.CreatePassword(context.Background(), validClientID, validSecret, map[string]string{
-				metadataKeyRedeemURL: tokenServer.URL,
-				metadataKeyTokenURL:  tokenServer.URL,
-				metadataKeyCertsURL:  certsServer.URL,
-			}))
-			require.NoError(t, pwdStore.CreatePassword(context.Background(), clientIDMissingURLS, secretMissingURLS, nil))
-			require.NoError(t, pwdStore.CreatePassword(context.Background(), clientIDMissingTokenURLS, secretMissingTokenURLS, map[string]string{
-				metadataKeyRedeemURL: tokenServer.URL,
-				metadataKeyCertsURL:  certsServer.URL,
-			}))
-
 			encodedClientID := EncodeSecretID(validClientID)
-			secretStore := MapSecretStore(map[string][]byte{encodedClientID: validSecret},
+			secretStore := MapSecretStore(map[string][]byte{encodedClientID: []byte("1")},
 				metadataKeyRedeemURL, tokenServer.URL,
 				metadataKeyTokenURL, tokenServer.URL,
 				metadataKeyCertsURL, certsServer.URL,
@@ -195,7 +167,7 @@ func TestTokenHandler(t *testing.T) {
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 			w := httptest.NewRecorder()
-			sut := TokenHTTPHandler(testSignKeys, pwdStore, secretStore, grantAll, tokenExpiresIn)
+			sut := TokenHTTPHandler(testSignKeys, secretStore, grantAll, tokenExpiresIn)
 			sut.ServeHTTP(w, req)
 
 			resp := w.Result()
