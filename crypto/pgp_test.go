@@ -5,14 +5,14 @@ import (
 	"strings"
 	"testing"
 
-	cryptest "github.com/unstablebuild/blue/crypto/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/unstablebuild/blue/crypto/cryptotest"
 )
 
 func TestSignVerify(t *testing.T) {
 	t.Run("verifies signature correctly", func(t *testing.T) {
-		key := Key(cryptest.GenerateTestKey(t))
+		key := Key(cryptotest.GenerateTestKey(t))
 
 		str := "bluectl crypo"
 
@@ -25,7 +25,7 @@ func TestSignVerify(t *testing.T) {
 	})
 
 	t.Run("returns error if data has been tampered with", func(t *testing.T) {
-		key := Key(cryptest.GenerateTestKey(t))
+		key := Key(cryptotest.GenerateTestKey(t))
 
 		str := "bluectl crypo"
 
@@ -39,8 +39,8 @@ func TestSignVerify(t *testing.T) {
 	})
 
 	t.Run("returns error if a different key pair has been used to sign data", func(t *testing.T) {
-		key1 := Key(cryptest.GenerateTestKey(t))
-		key2 := Key(cryptest.GenerateTestKey(t))
+		key1 := Key(cryptotest.GenerateTestKey(t))
+		key2 := Key(cryptotest.GenerateTestKey(t))
 
 		str := "bluectl crypo"
 

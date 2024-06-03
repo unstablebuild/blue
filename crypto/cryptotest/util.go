@@ -1,4 +1,4 @@
-package cryptest
+package cryptotest
 
 import (
 	"crypto"
@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/packet"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -17,7 +17,9 @@ const (
 	keyLifetimeSecs = uint32(86400 * 365)
 )
 
-func createEntityFromKeys(pubKey *packet.PublicKey, privKey *packet.PrivateKey) *openpgp.Entity {
+func createEntityFromKeys(
+	now time.Time, pubKey *packet.PublicKey, privKey *packet.PrivateKey,
+) *openpgp.Entity {
 	config := packet.Config{
 		DefaultHash:            crypto.SHA256,
 		DefaultCipher:          packet.CipherAES256,
@@ -27,7 +29,6 @@ func createEntityFromKeys(pubKey *packet.PublicKey, privKey *packet.PrivateKey) 
 		},
 		RSABits: rsaBits,
 	}
-	currentTime := config.Now()
 	uid := packet.NewUserId("", "", "")
 
 	e := &openpgp.Entity{
@@ -41,7 +42,7 @@ func createEntityFromKeys(pubKey *packet.PublicKey, privKey *packet.PrivateKey) 
 		Name:   uid.Name,
 		UserId: uid,
 		SelfSignature: &packet.Signature{
-			CreationTime: currentTime,
+			CreationTime: now,
 			SigType:      packet.SigTypePositiveCert,
 			PubKeyAlgo:   packet.PubKeyAlgoRSA,
 			Hash:         config.Hash(),
@@ -59,7 +60,7 @@ func createEntityFromKeys(pubKey *packet.PublicKey, privKey *packet.PrivateKey) 
 		PublicKey:  pubKey,
 		PrivateKey: privKey,
 		Sig: &packet.Signature{
-			CreationTime:              currentTime,
+			CreationTime:              now,
 			SigType:                   packet.SigTypeSubkeyBinding,
 			PubKeyAlgo:                packet.PubKeyAlgoRSA,
 			Hash:                      config.Hash(),
@@ -76,7 +77,10 @@ func createEntityFromKeys(pubKey *packet.PublicKey, privKey *packet.PrivateKey) 
 
 // GenerateTestKey generates an openpgp.Key suitable for testing.
 func GenerateTestKey(t *testing.T) openpgp.Key {
-	now := time.Now()
+	// truncate to second so key verifier in openpgp library
+	// which checks that createTime is < now (truncated to seconds)
+	// doesn't fail.
+	now := time.Now().Truncate(time.Second)
 	key, err := rsa.GenerateKey(rand.Reader, rsaBits)
 	require.NoError(t, err)
 
@@ -85,6 +89,6 @@ func GenerateTestKey(t *testing.T) openpgp.Key {
 	return openpgp.Key{
 		PrivateKey: privKey,
 		PublicKey:  pubKey,
-		Entity:     createEntityFromKeys(pubKey, privKey),
+		Entity:     createEntityFromKeys(now, pubKey, privKey),
 	}
 }

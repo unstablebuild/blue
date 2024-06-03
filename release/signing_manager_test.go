@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/crypto"
-	cryptest "github.com/unstablebuild/blue/crypto/test"
+	"github.com/unstablebuild/blue/crypto/cryptotest"
 )
 
 func makeReleaseContent(t *testing.T, content string) *os.File {
@@ -81,7 +81,7 @@ func expectUpload(
 
 func TestSigningManager(t *testing.T) {
 	ctx := context.Background()
-	key := crypto.Key(cryptest.GenerateTestKey(t))
+	key := crypto.Key(cryptotest.GenerateTestKey(t))
 	man := Bundle{
 		Package: "bla",
 		Version: "blo",
@@ -130,7 +130,7 @@ func TestSigningManager(t *testing.T) {
 		defer ctrl.Finish()
 
 		mock := NewMockManager(ctrl)
-		encryptedKey := crypto.Key(cryptest.GenerateTestKey(t))
+		encryptedKey := crypto.Key(cryptotest.GenerateTestKey(t))
 		encryptedKey.Entity.PrivateKey.Encrypted = true
 		m := NewSigningManager(mock, encryptedKey)
 		in := makeReleaseContent(t, "wasup")
