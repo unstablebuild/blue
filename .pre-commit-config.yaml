@@ -11,3 +11,13 @@ repos:
     rev: v1.58.1
     hooks:
     -   id: golangci-lint-full
+
+-   repo: local
+    hooks:
+    -   id: validate_generate
+        language: system
+        files: (\.pb.go$|\.proto$)
+        name: validate_generate
+        # if make generate changes any files, then pre-commit
+        # automatically fails
+        entry: make generate
