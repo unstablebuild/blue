@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ernestrc/go-multierror"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -908,6 +909,56 @@ func TestDocumentServicePreconditions(t *testing.T, serviceFactory FnServiceFact
 		err = s.Get(ctx, myID, &e1)
 		require.NoError(t, err)
 		assert.Equal(t, 1234, e1.Value)
+	})
+
+	t.Run("consistent updates", func(t *testing.T) {
+		myID := "consistent_updates_id"
+		type myStruct struct {
+			Count   int
+			Version int
+		}
+		s := prepareForUpdate(t, myID, myStruct{}, serviceFactory)
+		defer s.Close()
+		m := myStruct{}
+		docID := uuid.New().String()
+		ctx := context.Background()
+		require.NoError(t, s.Create(ctx, docID, m))
+
+		n := 100
+		retryStrategy := retry.CombinedStrategy(
+			retry.LimitStrategy(uint(n+1)),
+		)
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		wg.Add(n)
+		errors := make([]error, n)
+		for i := 0; i < n; i++ {
+			go func(m myStruct, i int) {
+				defer wg.Done()
+				<-start
+				errors[i] = document.ConsistentUpdate(ctx, s, docID, &m, retryStrategy,
+					func() ([]document.Update, []document.Precondition) {
+						return []document.Update{
+								{FieldPath: []string{"Count"}, Value: m.Count + 1},
+								{FieldPath: []string{"Version"}, Value: m.Version + 1},
+							}, []document.Precondition{
+								{FieldPath: []string{"Version"}, Value: m.Version},
+							}
+					})
+			}(m, i)
+		}
+		close(start)
+		wg.Wait()
+		var err error
+		for _, nerr := range errors {
+			if nerr != nil {
+				err = multierror.Append(err, nerr)
+			}
+		}
+		m = myStruct{}
+		require.NoError(t, err)
+		require.NoError(t, s.Get(ctx, docID, &m))
+		assert.Equal(t, n, m.Count, m.Version)
 	})
 }
 
