@@ -24,6 +24,17 @@ func TestBolt(t *testing.T) {
 		return store
 	})
 
+	documenttest.TestDocumentServicePreconditions(t, func(t *testing.T) document.Service {
+		f, err := os.CreateTemp("", "preconds_bolt_test")
+		require.NoError(t, err)
+		defer f.Close()
+
+		store, err := New(f.Name(), "test")
+		require.NoError(t, err)
+
+		return store
+	})
+
 	t.Run("Drop deletes all documents in a collection", func(t *testing.T) {
 		ctx := context.Background()
 		f, err := os.CreateTemp("", "blue_is_gold")

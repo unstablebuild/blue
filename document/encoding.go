@@ -7,43 +7,111 @@ import (
 	"strings"
 	"time"
 
-	"github.com/unstablebuild/blue/encoding"
 	"github.com/stretchr/testify/assert"
+	"github.com/unstablebuild/blue/encoding"
 )
 
 // UpdateUpdatedAtField updates the default UpdatedAt field in the given document.
-func UpdateUpdatedAtField(marshaler encoding.Marshaler, doc interface{}) interface{} {
+// Deprecated: Use UpdateDefaultUpdatedAtField.
+func UpdateUpdatedAtField(marshaler encoding.Marshaler, doc any) any {
 	now := time.Now()
-	m, ok := doc.(map[string]interface{})
+	return UpdateDefaultUpdatedAtField(doc, now, marshaler.DefaultLowerCase())
+}
+
+// UpdateDefaultUpdatedAtField updates the default UpdatedAt field in the given document.
+// If lowerCase is false DefaultUpdatedAtField is used, otherwise LowerUpdatedAtField is used.
+// If doc is not a map, a struct or a pointer to a struct, this method panics.
+func UpdateDefaultUpdatedAtField(doc any, now time.Time, lowerCase bool) any {
 	updatedAtField := DefaultUpdatedAtField
-	if marshaler.DefaultLowerCase() {
+	if lowerCase {
 		updatedAtField = LowerUpdatedAtField
 	}
+	m, ok := doc.(map[string]any)
 	if ok {
-		doc = setField(m, updatedAtField, now)
-	} else {
-		dst := clone(doc)
+		doc = setMapField(m, updatedAtField, now)
+	} else if reflect.ValueOf(doc).Kind() == reflect.Struct {
+		dst := cloneReflectValue(doc)
 		reflectSetTimeField(dst, updatedAtField, now)
-		doc = dst.Elem().Interface()
+		doc = dst.Interface()
+	} else {
+		dst := reflect.ValueOf(doc)
+		reflectSetTimeField(dst, updatedAtField, now)
+		doc = dst.Interface()
 	}
 	return doc
 }
 
-// UpdateCreatedAtField updates the default CreatedAt field in the given document
+// UpdateCreatedAtField calls UpdateCreatedAtFieldTime with time.Now.
+// Deprecated: Use UpdateDefaultCreatedAtField.
+func UpdateCreatedAtField(marshaler encoding.Marshaler, doc any) any {
+	now := time.Now()
+	return UpdateDefaultCreatedAtField(doc, now, marshaler.DefaultLowerCase())
+}
+
+// DerefUpdateValue dereferences data until it finds a value that can be used
+// by UpdateDefaultCreatedAtField and UpdateDefaultUpdatedAtField to update
+// their updated at or created at fields.
+func DerefUpdateValue(data reflect.Value) (any, error) {
+	prev := data
+	for {
+		switch data.Kind() {
+		case reflect.Struct:
+			if prev.Kind() == reflect.Ptr {
+				return prev.Interface(), nil
+			}
+			return nil, errors.New("only pointers to a struct or map values are allowed")
+		case reflect.Map:
+			return data.Interface(), nil
+		case reflect.Ptr:
+			prev = data
+			data = data.Elem()
+		case reflect.Interface:
+			if data.NumMethod() == 0 {
+				prev = data
+				data = data.Elem()
+				continue
+			}
+			fallthrough
+		default:
+			return nil, errors.New("only pointers to a struct or map values are allowed")
+		}
+	}
+}
+
+// UpdateDefaultCreatedAtField updates the default CreatedAt field in the given document
 // and the default UpdatedAt field.
-func UpdateCreatedAtField(marshaler encoding.Marshaler, doc interface{}) interface{} {
-	m, ok := doc.(map[string]interface{})
+// If lowerCase is false DefaultUpdatedAtField is used, otherwise LowerUpdatedAtField is used.
+// If doc is not a map, a struct or a pointer to a struct, this method panics.
+func UpdateDefaultCreatedAtField(doc any, now time.Time, lowerCase bool) any {
+	updatedAtField := DefaultUpdatedAtField
+	createdAtField := DefaultCreatedAtField
+	m, ok := doc.(map[string]any)
+	if lowerCase {
+		updatedAtField = LowerUpdatedAtField
+		createdAtField = LowerCreatedAtField
+	}
 	if ok {
-		doc = setMapUpdatedAtFields(marshaler, m)
+		setMapField(m, updatedAtField, now)
+		setMapField(m, createdAtField, now)
+	} else if reflect.ValueOf(doc).Kind() == reflect.Struct {
+		dst := cloneReflectValue(doc)
+		now := time.Now()
+		reflectSetTimeField(dst, DefaultCreatedAtField, now)
+		reflectSetTimeField(dst, DefaultUpdatedAtField, now)
+		doc = dst.Elem().Interface()
 	} else {
-		doc = setStructUpdatedAtFields(doc)
+		dst := reflect.ValueOf(doc)
+		now := time.Now()
+		reflectSetTimeField(dst, DefaultCreatedAtField, now)
+		reflectSetTimeField(dst, DefaultUpdatedAtField, now)
+		doc = dst.Elem().Interface()
 	}
 	return doc
 }
 
 // Encode encodes doc into a reversible format (via Decode)
 // and returns the data in bytes.
-func Encode(m encoding.Marshaler, doc interface{}, addCreatedAt bool) []byte {
+func Encode(m encoding.Marshaler, doc any, addCreatedAt bool) []byte {
 	if addCreatedAt {
 		doc = UpdateCreatedAtField(m, doc)
 	} else {
@@ -59,7 +127,7 @@ func Encode(m encoding.Marshaler, doc interface{}, addCreatedAt bool) []byte {
 
 // SafeDecode checks if the given interface would be decoded by Decode
 // and decodes it or otherwise returns an error.
-func SafeDecode(m encoding.Marshaler, rcv interface{}, raw []byte) error {
+func SafeDecode(m encoding.Marshaler, rcv any, raw []byte) error {
 	if !IsEncodeable(rcv) {
 		return errors.New("receiver is not a pointer and not a map or is nil")
 	}
@@ -69,7 +137,7 @@ func SafeDecode(m encoding.Marshaler, rcv interface{}, raw []byte) error {
 
 // IsEncodeable returns true if doc is a structure that can be safely
 // decoded via Decode.
-func IsEncodeable(doc interface{}) bool {
+func IsEncodeable(doc any) bool {
 	v := reflect.ValueOf(doc)
 	return (v.Kind() == reflect.Ptr || v.Kind() == reflect.Map) && !v.IsNil()
 }
@@ -77,7 +145,7 @@ func IsEncodeable(doc interface{}) bool {
 // Decode decotes raw into rcv and panics if there's an error decoding.
 // Use SafeDecode if you are not sure if the structure rcv is safe to be
 // encoded/decoded.
-func Decode(m encoding.Marshaler, rcv interface{}, raw []byte) {
+func Decode(m encoding.Marshaler, rcv any, raw []byte) {
 	err := m.Unmarshal(raw, rcv)
 	if err != nil {
 		// this is a progammer error anyway so add more information
@@ -90,7 +158,7 @@ func Decode(m encoding.Marshaler, rcv interface{}, raw []byte) {
 // It will uson bson to encode and decode the data so
 // it shouldn't be used by a document.Service that doesn't use
 // the suite of Decode/Encode functions in this package.
-func NewListIterator(m encoding.Marshaler, docs ...interface{}) *ListIterator {
+func NewListIterator(m encoding.Marshaler, docs ...any) *ListIterator {
 	iter := &ListIterator{marshaler: m, docs: make([][]byte, 0)}
 	for _, data := range docs {
 		iter.Extend(nil, Encode(m, data, false))
@@ -112,7 +180,7 @@ func (l *ListIterator) HasNext() bool {
 
 // NextTo decodes the next chunk of data into doc or returns
 // an error if there was a decoding issue.
-func (l *ListIterator) NextTo(doc interface{}) error {
+func (l *ListIterator) NextTo(doc any) error {
 	if err := SafeDecode(l.marshaler, doc, l.docs[0]); err != nil {
 		return err
 	}
@@ -128,7 +196,7 @@ func (l *ListIterator) Close() error {
 // Extend extends this iterator if and only if the data chunk's
 // structure satisfies all filters.
 func (l *ListIterator) Extend(filters []Filter, v []byte) {
-	var proto map[string]interface{}
+	var proto map[string]any
 	Decode(l.marshaler, &proto, v)
 
 	if !MatchesAllFilters(l.marshaler, proto, filters) {
@@ -142,7 +210,7 @@ func (l *ListIterator) Extend(filters []Filter, v []byte) {
 
 // UpdateProto updates proto with the given slice of updates.
 func UpdateProto(m encoding.Marshaler, updates []Update,
-	proto map[string]interface{}, preconds ...Precondition) error {
+	proto map[string]any, preconds ...Precondition) error {
 	lowerCase := m.DefaultLowerCase()
 
 	updatedAtField := DefaultUpdatedAtField
@@ -198,7 +266,7 @@ func UpdateProto(m encoding.Marshaler, updates []Update,
 // DerefCreateValue dereferences data for a service.Create implementation
 // until it finds a structure that can be used for Encode/Decode
 // or returns an error if no such structure could be found.
-func DerefCreateValue(data reflect.Value) (interface{}, error) {
+func DerefCreateValue(data reflect.Value) (any, error) {
 	for {
 		switch data.Kind() {
 		case reflect.Struct, reflect.Map:
@@ -226,7 +294,7 @@ func reflectSetTimeField(s reflect.Value, k string, v time.Time) {
 	f.Set(reflect.ValueOf(v))
 }
 
-func clone(data interface{}) reflect.Value {
+func cloneReflectValue(data any) reflect.Value {
 	typ := reflect.TypeOf(data)
 	src := reflect.ValueOf(data)
 	dst := reflect.New(typ)
@@ -239,8 +307,8 @@ func clone(data interface{}) reflect.Value {
 	return dst
 }
 
-func setField(m map[string]interface{}, key string, value interface{}) map[string]interface{} {
-	ret := make(map[string]interface{})
+func setMapField(m map[string]any, key string, value any) map[string]any {
+	ret := make(map[string]any)
 	for k, v := range m {
 		ret[k] = v
 	}
@@ -248,29 +316,7 @@ func setField(m map[string]interface{}, key string, value interface{}) map[strin
 	return ret
 }
 
-func setMapUpdatedAtFields(
-	marshaler encoding.Marshaler, m map[string]interface{},
-) map[string]interface{} {
-	now := time.Now()
-	if marshaler.DefaultLowerCase() {
-		m = setField(m, LowerUpdatedAtField, now)
-		m = setField(m, LowerCreatedAtField, now)
-	} else {
-		m = setField(m, DefaultUpdatedAtField, now)
-		m = setField(m, DefaultCreatedAtField, now)
-	}
-	return m
-}
-
-func setStructUpdatedAtFields(data interface{}) interface{} {
-	dst := clone(data)
-	now := time.Now()
-	reflectSetTimeField(dst, DefaultCreatedAtField, now)
-	reflectSetTimeField(dst, DefaultUpdatedAtField, now)
-	return dst.Elem().Interface()
-}
-
-func precondField(proto map[string]interface{}, cond Precondition) bool {
+func precondField(proto map[string]any, cond Precondition) bool {
 	if len(cond.FieldPath) == 1 {
 		return proto[cond.FieldPath[0]] == cond.Value
 	}
@@ -280,7 +326,7 @@ func precondField(proto map[string]interface{}, cond Precondition) bool {
 		return false
 	}
 
-	m, ok := field.(map[string]interface{})
+	m, ok := field.(map[string]any)
 	if !ok {
 		return false
 	}
@@ -289,7 +335,7 @@ func precondField(proto map[string]interface{}, cond Precondition) bool {
 	return precondField(m, cond)
 }
 
-func updateField(proto map[string]interface{}, update Update) {
+func updateField(proto map[string]any, update Update) {
 	if len(update.FieldPath) == 1 {
 		proto[update.FieldPath[0]] = update.Value
 		return
@@ -304,7 +350,7 @@ func updateField(proto map[string]interface{}, update Update) {
 		return
 	}
 
-	m, ok := field.(map[string]interface{})
+	m, ok := field.(map[string]any)
 	if !ok {
 		return
 	}
@@ -317,11 +363,11 @@ type filterAsserter struct {
 	res *bool
 }
 
-func (f *filterAsserter) Errorf(_ string, _ ...interface{}) {
+func (f *filterAsserter) Errorf(_ string, _ ...any) {
 	*f.res = false
 }
 
-func doMatchFilter(value interface{}, f Filter) bool {
+func doMatchFilter(value any, f Filter) bool {
 	matches := true
 	t := filterAsserter{res: &matches}
 
@@ -352,7 +398,7 @@ func doMatchFilter(value interface{}, f Filter) bool {
 }
 
 // MatchFilter returns true if proto satisfies the filter condition of f.
-func MatchFilter(proto map[string]interface{}, f Filter) bool {
+func MatchFilter(proto map[string]any, f Filter) bool {
 	if len(f.FieldPath) == 1 {
 		return doMatchFilter(proto[f.FieldPath[0]], f)
 	}
@@ -362,13 +408,13 @@ func MatchFilter(proto map[string]interface{}, f Filter) bool {
 		return false
 	}
 
-	m := field.(map[string]interface{})
+	m := field.(map[string]any)
 	f.FieldPath = f.FieldPath[1:]
 	return MatchFilter(m, f)
 }
 
 func MatchesAllFilters(
-	m encoding.Marshaler, proto map[string]interface{},
+	m encoding.Marshaler, proto map[string]any,
 	filters []Filter,
 ) bool {
 	for _, f := range filters {

@@ -27,6 +27,14 @@ func TestInMemoryService(t *testing.T) {
 			TestDocumentService(t, func(t *testing.T) document.Service {
 				return document.NewInMemoryServiceWithMarshaler(tcase.marshaler)
 			})
+			// NOTE: time preconditions don't quite work in json
+			// or toml due to lossy time marshalling
+			if tcase.encoding == "json" || tcase.encoding == "toml" {
+				return
+			}
+			TestDocumentServicePreconditions(t, func(t *testing.T) document.Service {
+				return document.NewInMemoryServiceWithMarshaler(tcase.marshaler)
+			})
 		})
 	}
 }

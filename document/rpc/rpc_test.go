@@ -200,6 +200,20 @@ func TestRPCInterop(t *testing.T) {
 					return interopHelper{read: store, write: cache}
 				})
 			})
+
+			t.Run("single instance preconditions", func(t *testing.T) {
+				documenttest.TestDocumentServicePreconditions(t, func(t *testing.T) document.Service {
+					cache := document.NewInMemoryServiceWithMarshaler(marshaler)
+					addr, teardown := runDatastoreServer(t, cache, marshaler)
+					teardowns = append(teardowns, teardown)
+
+					store, err := NewClient(addr, marshaler,
+						grpc.WithTransportCredentials(insecure.NewCredentials()))
+					require.NoError(t, err)
+
+					return interopHelper{read: cache, write: store}
+				})
+			})
 		})
 	}
 }

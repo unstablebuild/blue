@@ -198,7 +198,7 @@ func testDatastoreCreate(t *testing.T, serviceFactory FnServiceFactory) {
 		assert.Equal(t, "", myPutxi.internalField)
 	})
 
-	t.Run("Create always creates document with CreatedAt and UpdatedAt fields", func(t *testing.T) {
+	t.Run("Create always creates document with CreatedAt and UpdatedAt fields (struct)", func(t *testing.T) {
 		s := serviceFactory(t)
 		defer s.Close()
 		myID := "create_always_created_at_updated_at"
@@ -399,16 +399,20 @@ func updateTrait(k string, v interface{}) document.Update {
 		Value:     v,
 	}
 }
+func prepareForUpdate(
+	t *testing.T, myID string, document interface{},
+	serviceFactory FnServiceFactory,
+) (s document.Service) {
+	ctx := context.Background()
+	s = serviceFactory(t)
+	err := s.Create(ctx, myID, document)
+	require.NoError(t, err)
+	return
+}
 
 func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
-	ctx := context.Background()
 
-	prepareForUpdate := func(t *testing.T, myID string, document interface{}) (s document.Service) {
-		s = serviceFactory(t)
-		err := s.Create(ctx, myID, document)
-		require.NoError(t, err)
-		return
-	}
+	ctx := context.Background()
 
 	t.Run("Update panics if updates is empty", func(t *testing.T) {
 		s := serviceFactory(t)
@@ -434,7 +438,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 
 	t.Run("Update updates a document field", func(t *testing.T) {
 		myID := "updates_doc_field"
-		s := prepareForUpdate(t, myID, alice)
+		s := prepareForUpdate(t, myID, alice, serviceFactory)
 		defer s.Close()
 
 		err := s.Update(ctx, myID, []document.Update{updateName("Alexandra")})
@@ -448,7 +452,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 
 	t.Run("Update updates a nested document field", func(t *testing.T) {
 		myID := "update_nested_doc_field"
-		s := prepareForUpdate(t, myID, alice)
+		s := prepareForUpdate(t, myID, alice, serviceFactory)
 		defer s.Close()
 
 		err := s.Update(ctx, myID, []document.Update{
@@ -464,7 +468,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 
 	t.Run("Update converts a nested document field when type is a struct", func(t *testing.T) {
 		myID := "converts_nested_doc_field_struct"
-		s := prepareForUpdate(t, myID, alice)
+		s := prepareForUpdate(t, myID, alice, serviceFactory)
 		defer s.Close()
 
 		err := s.Update(ctx, myID, []document.Update{
@@ -485,7 +489,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 
 	t.Run("Update DOES NOT update a nested document field that does not exist", func(t *testing.T) {
 		myID := "update_not_update_nested_not_exist"
-		s := prepareForUpdate(t, myID, alice)
+		s := prepareForUpdate(t, myID, alice, serviceFactory)
 		defer s.Close()
 
 		myNewAttr := make(map[string]interface{})
@@ -504,7 +508,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 
 	t.Run("Update processes multiple updates", func(t *testing.T) {
 		myID := "multiple_updates"
-		s := prepareForUpdate(t, myID, alice)
+		s := prepareForUpdate(t, myID, alice, serviceFactory)
 		defer s.Close()
 
 		err := s.Update(ctx, myID, []document.Update{
@@ -522,7 +526,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 
 	t.Run("Update overrides client UpdatedAt field", func(t *testing.T) {
 		myID := "update_overrides_updated_at"
-		s := prepareForUpdate(t, myID, myOtherEntity{})
+		s := prepareForUpdate(t, myID, myOtherEntity{}, serviceFactory)
 		defer s.Close()
 
 		t1 := time.Now().Add(-time.Hour * 48)
@@ -543,7 +547,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 
 	t.Run("Update always updates UpdatedAt field", func(t *testing.T) {
 		myID := "update_always_updates_updated_at_field"
-		s := prepareForUpdate(t, myID, myOtherEntity{})
+		s := prepareForUpdate(t, myID, myOtherEntity{}, serviceFactory)
 		defer s.Close()
 
 		err := s.Update(ctx, myID, []document.Update{
@@ -561,7 +565,7 @@ func testDatastoreUpdate(t *testing.T, serviceFactory FnServiceFactory) {
 
 	t.Run("Update fails if precondition is not met", func(t *testing.T) {
 		myID := "update_precondition_updated_at"
-		s := prepareForUpdate(t, myID, myOtherEntity{})
+		s := prepareForUpdate(t, myID, myOtherEntity{}, serviceFactory)
 		defer s.Close()
 
 		t1 := time.Now().Add(-time.Hour * 48)
@@ -657,6 +661,7 @@ func testDatastoreList(t *testing.T, serviceFactory FnServiceFactory) {
 		require.NoError(t, err)
 
 		var myBob map[string]interface{}
+		require.True(t, it.HasNext())
 		err = it.NextTo(&myBob)
 		require.NoError(t, err)
 
@@ -849,6 +854,60 @@ func TestDocumentService(t *testing.T, serviceFactory FnServiceFactory) {
 			return false, nil
 		})
 		assert.NoError(t, err)
+	})
+}
+
+// TestDocumentServicePreconditions allow implementations to to test preconditions
+// separately as how and what preconditions work differs between implementations.
+func TestDocumentServicePreconditions(t *testing.T, serviceFactory FnServiceFactory) {
+	ctx := context.Background()
+	t.Run("Update does not fails if updated time precondition is met", func(t *testing.T) {
+		myID := "update_precondition_updated_at"
+		s := prepareForUpdate(t, myID, myOtherEntity{}, serviceFactory)
+		defer s.Close()
+
+		var entity myOtherEntity
+		// get updated timestamp
+		require.NoError(t, s.Get(ctx, myID, &entity))
+		require.NotZero(t, entity.UpdatedAt)
+
+		err := s.Update(ctx, myID,
+			[]document.Update{
+				{FieldPath: []string{"Value"}, Value: 1234},
+			},
+			document.Precondition{
+				FieldPath: []string{document.DefaultUpdatedAtField},
+				Value:     entity.UpdatedAt,
+			},
+		)
+		require.NoError(t, err)
+
+		var e1 myOtherEntity
+		err = s.Get(ctx, myID, &e1)
+		require.NoError(t, err)
+		assert.Equal(t, 1234, e1.Value)
+	})
+
+	t.Run("Update does not fails if version precondition is met", func(t *testing.T) {
+		myID := "update_precondition_updated_at"
+		entity := myOtherEntity{Value: 1}
+		s := prepareForUpdate(t, myID, entity, serviceFactory)
+		defer s.Close()
+
+		err := s.Update(ctx, myID,
+			[]document.Update{
+				{FieldPath: []string{"Value"}, Value: 1234},
+			},
+			document.Precondition{
+				FieldPath: []string{"Value"}, Value: 1,
+			},
+		)
+		require.NoError(t, err)
+
+		var e1 myOtherEntity
+		err = s.Get(ctx, myID, &e1)
+		require.NoError(t, err)
+		assert.Equal(t, 1234, e1.Value)
 	})
 }
 
