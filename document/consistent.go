@@ -2,6 +2,7 @@ package document
 
 import (
 	"context"
+	"errors"
 
 	"github.com/unstablebuild/blue/retry"
 )
@@ -20,16 +21,14 @@ func ConsistentUpdate(
 	retryStrategy retry.Strategy, callback func() ([]Update, []Precondition),
 ) error {
 	return retry.Retry(ctx, retryStrategy, func(ctx context.Context) (bool, error) {
+		if err := svc.Get(ctx, ID, doc); err != nil {
+			return false, err
+		}
 		updates, preconditions := callback()
 		err := svc.Update(ctx, ID, updates, preconditions...)
 		if err == nil {
-			// update to the latest version
 			return false, svc.Get(ctx, ID, doc)
 		}
-		if err != ErrPreconditionFailed {
-			return false, err
-		}
-		err = svc.Get(ctx, ID, doc)
-		return err == nil, ErrPreconditionFailed
+		return errors.Is(err, ErrPreconditionFailed), err
 	})
 }

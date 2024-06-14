@@ -71,9 +71,6 @@ func (c *inMemoryService) getValue(ID string, doc interface{}) (
 ) {
 	var ok bool
 
-	c.m.Lock()
-	defer c.m.Unlock()
-
 	var raw []byte
 	raw, ok = c.storage[ID]
 	if !ok {
@@ -87,10 +84,10 @@ func (c *inMemoryService) getValue(ID string, doc interface{}) (
 func (c *inMemoryService) Get(
 	ctx context.Context, ID string, to interface{},
 ) (err error) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
 	err = c.getValue(ID, to)
-	if err != nil {
-		return
-	}
 	return
 }
 
@@ -102,6 +99,9 @@ func (c *inMemoryService) Update(
 		panic("Update: no paths to update")
 	}
 
+	c.m.Lock()
+	defer c.m.Unlock()
+
 	var proto map[string]interface{}
 	err := c.getValue(ID, &proto)
 	if err != nil {
@@ -112,9 +112,6 @@ func (c *inMemoryService) Update(
 	if err != nil {
 		return err
 	}
-
-	c.m.Lock()
-	defer c.m.Unlock()
 
 	c.storage[ID] = Encode(c.marshaler, proto, false)
 
