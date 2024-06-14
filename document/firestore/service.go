@@ -3,12 +3,14 @@ package firestore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/document"
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
@@ -21,13 +23,18 @@ type fireStore struct {
 }
 
 // New returns an instance of Service backed by GC's FireStore.
+//
+// The returned service's Update method's preconditions only work with
+// document.DefaultUpdatedAtField or document.LowerUpdatedAtField fields.
+// See https://cloud.google.com/firestore/docs/reference/rest/v1/Precondition
+// for more details.
 func New(projectID, collectionID, credsFile string) (
 	s document.Service, err error,
 ) {
 	ctx := context.Background()
 
-	// in a GC runtime, the SDK knows how to fetch credentials
-	// for local development, we need to pass a file manually
+	// in a GCP runtime or VM, the SDK knows how to fetch credentials.
+	// For local development, we need to pass a file manually
 	if credsFile != "" {
 		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credsFile)
 	}
@@ -146,6 +153,19 @@ func (f *fireStore) Get(
 	}
 
 	err = snapshot.DataTo(doc)
+	if err != nil {
+		err = convertError(err)
+		return
+	}
+
+	doc, err = document.DerefUpdateValue(reflect.ValueOf(doc))
+	if err != nil {
+		return fmt.Errorf("dereference value for updating UpdatedAt: %w", err)
+	}
+	// best effort needed for updateTime precondition to
+	// work with default updated at fields
+	document.UpdateDefaultUpdatedAtField(doc, snapshot.UpdateTime, false)
+	document.UpdateDefaultUpdatedAtField(doc, snapshot.UpdateTime, true)
 	return
 }
 
@@ -228,7 +248,7 @@ func convertError(err error) error {
 	case codes.PermissionDenied:
 		err = document.ErrPermissionDenied
 	default:
-		logrus.Warningf("err %s: code %v", err, status.Code(err))
+		log.Debugf("unknown firestore err %v: code %v", err, status.Code(err))
 	}
 	return err
 }

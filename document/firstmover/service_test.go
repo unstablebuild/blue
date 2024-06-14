@@ -58,6 +58,19 @@ func TestServiceIntegration(t *testing.T) {
 		})
 	}
 
+	t.Run("single instance preconditions (bson)", func(t *testing.T) {
+		test.TestDocumentServicePreconditions(t, func(t *testing.T) document.Service {
+			f, err := os.CreateTemp("", "")
+			require.NoError(t, err)
+			require.NoError(t, f.Close())
+			require.NoError(t, os.Remove(f.Name()))
+			cfg := testConfig()
+			cfg.Marshaler = bson.Marshaler()
+			svc := document.NewInMemoryServiceWithMarshaler(cfg.Marshaler)
+			return New(svc, f.Name(), cfg)
+		})
+	})
+
 	t.Run("single instance eventually assumes leader if leader is non-responsive (lock leaked)", func(t *testing.T) {
 		test.TestDocumentService(t, func(t *testing.T) document.Service {
 			f, err := os.CreateTemp("", "")
