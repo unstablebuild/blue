@@ -48,7 +48,7 @@ func commandStats(fs FlagSet, cmds []Manual) (
 }
 
 func printCommandsUsage(output io.Writer, padding int, commands []Manual) {
-	fmt.Fprint(output, "Commands: \n")
+	fmt.Fprint(output, "Commands:\n")
 	for _, man := range commands {
 		fmt.Fprint(output,
 			pad.Right(fmt.Sprintf("  %s", man.Name), padding, " "))
@@ -58,7 +58,7 @@ func printCommandsUsage(output io.Writer, padding int, commands []Manual) {
 }
 
 func printOptionsUsage(output io.Writer, padding int, options FlagSet) {
-	fmt.Fprint(output, "Options: \n")
+	fmt.Fprint(output, "Options:\n")
 	options.VisitAll(func(f *flag.Flag) {
 		fmt.Fprint(output,
 			pad.Right(fmt.Sprintf("  -%s", f.Name), padding, " "))
