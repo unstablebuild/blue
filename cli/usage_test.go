@@ -53,7 +53,7 @@ Commands:
 
 `
 
-const expectedEmptyUsage = "Usage:  \n\nOptions: \n  -h  Display this message [default: false]\n\n"
+const expectedEmptyUsage = "Usage:  \n\nOptions:\n  -h  Display this message [default: false]\n\n"
 
 func TestUsage(t *testing.T) {
 
