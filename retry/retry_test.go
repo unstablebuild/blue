@@ -68,6 +68,10 @@ func TestRetry(t *testing.T) {
 			"2 errors occurred: context canceled; whoopsie", succeedAfter(2)},
 	}
 
+	// start running when cancelCtx is guaranteed to actually have been cancelled
+	// so test cases that employ canceledCtx are deterministic
+	<-canceledCtx.Done()
+
 	for _, tcase := range tsuite {
 		tcase := tcase
 		t.Run(tcase.msg, func(t *testing.T) {
