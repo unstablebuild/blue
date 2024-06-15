@@ -9,7 +9,7 @@ LIBRPC=$(wildcard **/**/*.proto)
 GOFLAGS="-ldflags=-X main.Tag=$$(git describe --tags) -X main.Commit=$$(git rev-parse --short HEAD)"
 GOTESTFLAGS=-timeout 120s
 
-.PHONY: clean test coverage generate release debug
+.PHONY: clean test coverage generate release debug license
 
 default: CGO_ENABLED=CGO_ENABLED=0
 default: .git/hooks/pre-commit $(EXEC)
@@ -37,6 +37,9 @@ lint:
 
 generate:
 	@ go generate ./.../...
+
+license:
+	@ pre-commit run insert-license --all-files
 
 install:
 	@ go install ./...
