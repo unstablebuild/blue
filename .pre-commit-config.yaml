@@ -21,3 +21,16 @@ repos:
         # if make generate changes any files, then pre-commit
         # automatically fails
         entry: make generate
+
+- repo: https://github.com/Lucas-C/pre-commit-hooks
+  rev: v1.5.5
+  hooks:
+    - id: insert-license
+      files: ^(?!.*(\.pb\.go|_gomock\.go)$).*\.go$
+      args:
+        - --license-filepath
+        - LICENSE
+        - --comment-style
+        - //
+        - --use-current-year
+        - --no-extra-eol
