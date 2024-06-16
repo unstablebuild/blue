@@ -100,6 +100,7 @@ func (c *blueCtl) Man() cli.Manual {
 			"package":  packageCLI.NewCLI(nil),
 			"secret":   secretCLI.NewCLI(nil),
 			"analysis": newAnalysisCli(),
+			"license":  newLicenseCli(),
 			"issue":    issueCLI.NewCLI(nil, Tag, ""),
 		}
 	}
@@ -150,6 +151,7 @@ func (c *blueCtl) initializeCli() error {
 		"package":  packageCLI.NewCLI(releaseManager),
 		"secret":   secretCLI.NewCLI(secretManager),
 		"analysis": newAnalysisCli(),
+		"license":  newLicenseCli(),
 		"issue":    issueCLI.NewCLI(issueTracker, Tag, config.Issue.Author),
 	}
 	c.dbs = []document.Service{docDB, trackerDB}
