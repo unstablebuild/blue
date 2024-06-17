@@ -41,5 +41,8 @@ jobs:
       - name: Build
         run: make debug
 
+      - name: License
+        run: make assert_license
+
       - name: Single Test
         run: make test GOTESTFLAGS="-timeout 240s"
