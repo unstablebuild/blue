@@ -39,7 +39,7 @@ generate:
 	@ go generate ./.../...
 
 license:
-	@ pre-commit run insert-license --all-files
+	@ bluectl license LICENSE `find . -name \*.go | grep -v gomock | grep -v .pb.go | xargs`
 
 install:
 	@ go install ./...
