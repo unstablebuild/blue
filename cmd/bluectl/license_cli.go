@@ -39,8 +39,9 @@ const defaultRegexpStr = `(?:\/\/.*(?:\r?\n|\r)?)+`
 var defaultRegexp = regexp.MustCompile(defaultRegexpStr)
 
 type licenseCli struct {
-	fs        *cli.FlagSet
-	regexpStr string
+	fs             *cli.FlagSet
+	regexpStr      string
+	errorOnChanges bool
 }
 
 func newLicenseCli() *licenseCli {
@@ -48,15 +49,19 @@ func newLicenseCli() *licenseCli {
 	ret := &licenseCli{fs: fs}
 	ret.fs.StringVar(&ret.regexpStr, "e", defaultRegexpStr,
 		"Regexp to use to search and replace the license header")
+	ret.fs.BoolVar(&ret.errorOnChanges, "d", false,
+		"Exit with non-zero status instead of making changes if any "+
+			"of the given files need to be updated.")
 	return ret
 }
 
 func (c *licenseCli) Man() cli.Manual {
 	var cmds []cli.Manual
 	return cli.Manual{
-		Name:     "license",
-		Summary:  "License files by either updating, or adding the license header found in <license>",
-		Synopsis: "<license> <file> ...",
+		Name: "license",
+		Summary: "License files by either updating, or adding the license " +
+			"header found in the given license file.",
+		Synopsis: "[options] <license> <file>...",
 		Commands: cmds,
 		Options:  *c.fs,
 	}
@@ -96,7 +101,7 @@ func (c *licenseCli) Run(ctx context.Context, args []string) error {
 	for i, filename := range files {
 		go func(i int, license, filename string) {
 			defer wg.Done()
-			results[i] = processFile(ctx, r, license, filename)
+			results[i] = processFile(ctx, r, license, filename, c.errorOnChanges)
 		}(i, license, filename)
 	}
 	wg.Wait()
@@ -116,6 +121,14 @@ func (c *licenseCli) Run(ctx context.Context, args []string) error {
 		} else {
 			already++
 		}
+	}
+
+	if c.errorOnChanges {
+		if added != 0 || updated != 0 {
+			err = multierror.Append(err, fmt.Errorf("Would have updated %d files "+
+				"and added license header to %d files", updated, added))
+		}
+		return err
 	}
 
 	fmt.Fprintf(os.Stderr, "Ok: %d files, Updated: %d files, Added: %d files\n", already, updated, added)
@@ -142,7 +155,8 @@ type result struct {
 }
 
 func processFile(
-	ctx context.Context, r *regexp.Regexp, license, filename string,
+	ctx context.Context, r *regexp.Regexp,
+	license, filename string, dryRun bool,
 ) (ret result) {
 	ret.filename = filename
 
@@ -159,6 +173,10 @@ func processFile(
 	header := r.FindString(content)
 	if containsLicenseHeader(header, content) {
 		newContent := replaceHeader(content, header, license)
+		if dryRun {
+			ret.updated = true
+			return
+		}
 		err := os.WriteFile(filename, []byte(newContent), 0666)
 		if err != nil {
 			ret.err = fmt.Errorf("write: %w", err)
@@ -169,6 +187,10 @@ func processFile(
 	}
 
 	newContent := insertHeader(content, license)
+	if dryRun {
+		ret.added = true
+		return
+	}
 	err = os.WriteFile(filename, []byte(newContent), 0666)
 	if err != nil {
 		ret.err = fmt.Errorf("write: %w", err)
