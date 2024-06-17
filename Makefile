@@ -9,7 +9,7 @@ LIBRPC=$(wildcard **/**/*.proto)
 GOFLAGS="-ldflags=-X main.Tag=$$(git describe --tags) -X main.Commit=$$(git rev-parse --short HEAD)"
 GOTESTFLAGS=-timeout 120s
 
-.PHONY: clean test coverage generate release debug license
+.PHONY: clean test coverage generate release debug license assert_license
 
 default: CGO_ENABLED=CGO_ENABLED=0
 default: .git/hooks/pre-commit $(EXEC)
@@ -38,8 +38,11 @@ lint:
 generate:
 	@ go generate ./.../...
 
-license:
-	@ bluectl license LICENSE `find . -name \*.go | grep -v gomock | grep -v .pb.go | xargs`
+license: $(EXEC)
+	@ $(BIN)/bluectl license LICENSE `find . -name \*.go | grep -v gomock | grep -v .pb.go | xargs`
+
+assert_license: $(EXEC)
+	@ $(BIN)/bluectl license -d LICENSE `find . -name \*.go | grep -v gomock | grep -v .pb.go | xargs`
 
 install:
 	@ go install ./...
