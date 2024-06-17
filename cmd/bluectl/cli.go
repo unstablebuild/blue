@@ -25,6 +25,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	multierr "github.com/ernestrc/go-multierror"
@@ -34,7 +35,6 @@ import (
 	packageCLI "github.com/unstablebuild/blue/cmd/bluectl/package"
 	releaseCLI "github.com/unstablebuild/blue/cmd/bluectl/release"
 	secretCLI "github.com/unstablebuild/blue/cmd/bluectl/secret"
-	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/document/firestore"
 	"github.com/unstablebuild/blue/issue"
 	"github.com/unstablebuild/blue/logging"
@@ -45,7 +45,7 @@ type blueCtl struct {
 	configFolder string
 	cmds         map[string]cli.CLI
 	fs           *cli.FlagSet
-	dbs          []document.Service
+	closers      []io.Closer
 	debug        bool
 	version      bool
 }
@@ -74,7 +74,7 @@ func initializeConfig(init initializer, configPath string) (*cliConfig, error) {
 }
 
 func (c *blueCtl) initFlagSet(configFolder string) {
-	fs := cli.NewFlagSet("blue")
+	fs := cli.NewFlagSet("bluectl")
 	fs.BoolVar(&c.version, "v", false, "Print CLI version information to stdout.")
 	fs.BoolVar(&c.debug, "V", false, "Run with verbose instrumentation.")
 	fs.StringVar(&c.configFolder, "c", configFolder, "Use a different config folder.")
@@ -108,8 +108,8 @@ func (c *blueCtl) Man() cli.Manual {
 		cmds = append(cmds, cmd.Man())
 	}
 	return cli.Manual{
-		Name:     "blue",
-		Summary:  "manage blue related resources",
+		Name:     "bluectl",
+		Summary:  "Manage internal resources.",
 		Synopsis: "[options] <cmd>",
 		Commands: cmds,
 		Options:  *c.fs,
@@ -120,41 +120,67 @@ func (c *blueCtl) initializeCli() error {
 	configFilePath := getCLIConfigFile(c.configFolder)
 	init := newInitializer(c.configFolder)
 
-	config, err := initializeConfig(init, configFilePath)
-	if err != nil {
-		return err
-	}
-
-	docDB, err := firestore.New(config.Auth.ProjectID,
-		config.Release.Collection, config.Auth.CredentialsFile)
-	if err != nil {
-		return err
-	}
-	trackerDB, err := firestore.New(config.Auth.ProjectID,
-		config.Issue.Collection, config.Auth.CredentialsFile)
-	if err != nil {
-		return err
-	}
-
-	releaseManager := release.NewDocumentManager(docDB)
-	issueTracker := issue.NewDocumentTracker(trackerDB)
-
-	secretManager, err := secretmanager.NewService(config.Auth.ProjectID,
-		config.Auth.CredentialsFile)
-	if err != nil {
-		return err
-	}
-
 	c.cmds = map[string]cli.CLI{
-		"init":     init,
-		"release":  releaseCLI.NewCLI(releaseManager),
-		"package":  packageCLI.NewCLI(releaseManager),
-		"secret":   secretCLI.NewCLI(secretManager),
+		"init": init,
+		"release": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
+			config, err := initializeConfig(init, configFilePath)
+			if err != nil {
+				return nil, err
+			}
+			docDB, err := firestore.New(config.Auth.ProjectID,
+				config.Release.Collection, config.Auth.CredentialsFile)
+			if err != nil {
+				return nil, fmt.Errorf("firestore: %w", err)
+			}
+			c.closers = append(c.closers, docDB)
+			releaseManager := release.NewDocumentManager(docDB)
+			return releaseCLI.NewCLI(releaseManager), nil
+		}),
+		"package": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
+			config, err := initializeConfig(init, configFilePath)
+			if err != nil {
+				return nil, err
+			}
+			docDB, err := firestore.New(config.Auth.ProjectID,
+				config.Release.Collection, config.Auth.CredentialsFile)
+			if err != nil {
+				return nil, fmt.Errorf("firestore: %w", err)
+			}
+			c.closers = append(c.closers, docDB)
+			releaseManager := release.NewDocumentManager(docDB)
+			return packageCLI.NewCLI(releaseManager), nil
+		}),
+		"secret": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
+			config, err := initializeConfig(init, configFilePath)
+			if err != nil {
+				return nil, err
+			}
+			secretManager, err := secretmanager.NewService(config.Auth.ProjectID,
+				config.Auth.CredentialsFile)
+			if err != nil {
+				return nil, fmt.Errorf("secretmanager: %w", err)
+			}
+			c.closers = append(c.closers, secretManager)
+			return secretCLI.NewCLI(secretManager), nil
+		}),
 		"analysis": newAnalysisCli(),
 		"license":  newLicenseCli(),
-		"issue":    issueCLI.NewCLI(issueTracker, Tag, config.Issue.Author),
+		"issue": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
+			config, err := initializeConfig(init, configFilePath)
+			if err != nil {
+				return nil, err
+			}
+			trackerDB, err := firestore.New(config.Auth.ProjectID,
+				config.Issue.Collection, config.Auth.CredentialsFile)
+			if err != nil {
+				return nil, fmt.Errorf("firestore: %w", err)
+			}
+			c.closers = append(c.closers, trackerDB)
+			issueTracker := issue.NewDocumentTracker(trackerDB)
+
+			return issueCLI.NewCLI(issueTracker, Tag, config.Issue.Author), nil
+		}),
 	}
-	c.dbs = []document.Service{docDB, trackerDB}
 
 	logging.SetDefaults(c.debug)
 
@@ -162,7 +188,7 @@ func (c *blueCtl) initializeCli() error {
 }
 
 func (c *blueCtl) printVersion() {
-	fmt.Printf("Bluectl %s\n", Version)
+	fmt.Printf("bluectl %s\n", Version)
 }
 
 func (c *blueCtl) Run(ctx context.Context, args []string) error {
@@ -196,8 +222,8 @@ func (c *blueCtl) Run(ctx context.Context, args []string) error {
 }
 
 func (c *blueCtl) Close() (ret error) {
-	for _, db := range c.dbs {
-		if err := db.Close(); err != nil {
+	for _, closer := range c.closers {
+		if err := closer.Close(); err != nil {
 			ret = multierr.Append(ret, err)
 		}
 	}

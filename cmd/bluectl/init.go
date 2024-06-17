@@ -57,7 +57,7 @@ func newInitializer(configFolder string) initializer {
 func (i initializer) Man() cli.Manual {
 	return cli.Manual{
 		Name:    "init",
-		Summary: "Initialize or reinitialize blue",
+		Summary: "Initialize or reinitialize this CLI's configuration.",
 	}
 }
 
