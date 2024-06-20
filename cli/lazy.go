@@ -22,11 +22,14 @@
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 package cli
 
-import "context"
+import (
+	"context"
+
+	log "github.com/sirupsen/logrus"
+)
 
 // Lazy returns a CLI that lazily uses the given constructor to
 // initialize a CLI when Run is called for the first time.
-// Note that the returned CLI will panic if Man is called before Run.
 func Lazy(constructor func(context.Context) (CLI, error)) CLI {
 	return &lazy{
 		constructor: constructor,
@@ -49,5 +52,13 @@ func (l *lazy) Run(ctx context.Context, args []string) (err error) {
 }
 
 func (l *lazy) Man() Manual {
+	var err error
+	if l.cli == nil {
+		l.cli, err = l.constructor(context.Background())
+		if err != nil {
+			log.Errorf("man: failed to build CLI: %v", err)
+			return Manual{}
+		}
+	}
 	return l.cli.Man()
 }
