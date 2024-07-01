@@ -46,8 +46,13 @@ func TestUnslice(t *testing.T) {
 			expectRes:   []int{9},
 		},
 		{
-			description: "continues calling fn until iterator is exhausted",
+			description: "iterator with multiple slices with different lengths",
 			it:          FromSlice[[]int]([][]int{{1, 1}, {1}, {1}, {1, 1, 1, 1}, {1, 1}}),
+			expectRes:   []int{1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+		},
+		{
+			description: "continues calling fn until iterator is exhausted",
+			it:          FromSlice[[]int]([][]int{{1, 1}, nil, {1, 1}, {1, 1, 1, 1}, nil, nil, {1, 1}}),
 			expectRes:   []int{1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
 		},
 	}
