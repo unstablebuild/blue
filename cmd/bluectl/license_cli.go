@@ -20,6 +20,7 @@
 // THIS SOURCE CODE AND/OR RELATED INFORMATION DOES NOT CONVEY OR IMPLY ANY RIGHTS TO
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
+
 package main
 
 import (
@@ -166,7 +167,7 @@ func processFile(
 		return
 	}
 
-	if strings.Contains(content, strings.TrimSpace(license)) {
+	if strings.Contains(content, strings.TrimSpace(license)+"\n\n") {
 		return
 	}
 
@@ -208,10 +209,86 @@ func containsLicenseHeader(header, content string) bool {
 }
 
 func insertHeader(content, header string) string {
-	return strings.TrimSpace(header) + "\n" + strings.TrimLeft(content, "\n")
+	return strings.TrimSpace(header) + "\n\n" + strings.TrimLeft(content, "\n")
+}
+
+// isDirective reports whether c is a comment directive.
+// See go.dev/issue/37974.
+// This code is also in go/ast.
+//
+// NOTE: copy-pasted from
+// https://github.com/golang/go/blob/f428c7b729d3d9b37ed4dacddcd7ff88f4213f70/src/go/printer/comment.go#L110
+// after reading it in
+// https://github.com/golang/go/issues/43776#issuecomment-1159233421
+func isDirective(c string) bool {
+	// "//line " is a line directive.
+	// "//extern " is for gccgo.
+	// "//export " is for cgo.
+	// (The // has been removed.)
+	if strings.HasPrefix(c, "line ") ||
+		strings.HasPrefix(c, "extern ") ||
+		strings.HasPrefix(c, "export ") {
+		return true
+	}
+
+	// "//[a-z0-9]+:[a-z0-9]"
+	// (The // has been removed.)
+	colon := strings.Index(c, ":")
+	if colon <= 0 || colon+1 >= len(c) {
+		return false
+	}
+	for i := 0; i <= colon+1; i++ {
+		if i == colon {
+			continue
+		}
+		b := c[i]
+		if !('a' <= b && b <= 'z' || '0' <= b && b <= '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func replaceHeader(content, oldHeader, header string) (res string) {
-	res = strings.ReplaceAll(content, strings.TrimSpace(oldHeader), strings.TrimSpace(header))
+	// Preserve directives that might come glued after the header without a new
+	// line, such as in:
+	//
+	//	1 // Copyright's first line bla bla bla bla
+	//	2 // more literal text about license bla bla
+	//	3 // ...
+	//	4 // last line of license header file bla bla.
+	//	5 //nolint:gosimple
+	//	6 package coolpkg
+	//
+	//	We want to end up with:
+	//
+	//	1 // Copyright's first line bla bla bla bla
+	//	2 // more literal text about license bla bla
+	//	3 // ...
+	//	4 // last line of license header file bla bla.
+	//	5
+	//	6 //nolint:gosimple
+	//	7 package coolpkg
+	//
+	// NOTE: 1, 2, 3 line number indicators needed here otherwise to prevent
+	// gofmt to remove the L5 on the block above.
+	//
+	preservedDirectives := ""
+
+	for _, line := range strings.Split(oldHeader, "\n") {
+		if strings.HasPrefix(line, "//") {
+			directive := strings.TrimPrefix(line, "//")
+			directive = strings.TrimSpace(directive)
+			if isDirective(directive) {
+				preservedDirectives += "\n" + line
+			}
+		}
+	}
+
+	res = strings.ReplaceAll(
+		content,
+		strings.TrimSpace(oldHeader),
+		strings.TrimSpace(header)+"\n"+preservedDirectives,
+	)
 	return res
 }
