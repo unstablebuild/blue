@@ -47,7 +47,16 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type service struct {
+// Service is a document.Service that either acquires a lock
+// by creating a unix socket at lockFile and exposes svc
+// to RPC clients or if it fails to acquire lock, it will connect
+// to the current leader via lockFile.
+//
+// If the leader is closed after this Service connects to it,
+// or it stops responding for more than a specificed timeout,
+// all running Services returned will race to re-acquire the lock and
+// act as the new leader.
+type Service struct {
 	mu       sync.Mutex
 	svc      document.Service
 	lockFile string
@@ -65,24 +74,18 @@ type service struct {
 	active         document.Service
 }
 
-// New returns a document.Service that either acquires a lock
-// by creating a unix socket at lockFile and exposes svc
-// to RPC clients or if it fails to acquire lock, it will connect
-// to the current leader via lockFile.
-//
-// If the leader is closed after this Service connects to it,
-// or it stops responding for more than a specificed timeout,
-// all running services returned will race to re-acquire the lock and
-// act as the new leader.
-//
-// It is highly recommended to use DefaultConfig to build a sane Config.
-func New(svc document.Service, lockFile string, cfg Config) document.Service {
-	ret := new(service)
-	ret.init(svc, lockFile, cfg)
+// New allocates storage for a new Service and initializes it.
+func New(svc document.Service, lockFile string, cfg Config) *Service {
+	ret := new(Service)
+	ret.Init(svc, lockFile, cfg)
 	return ret
 }
 
-func (s *service) init(svc document.Service, lockFile string, cfg Config) {
+// Init initializes this Service to lead or follow, depending on whether
+// lockFile has already been created or not.
+//
+// It is highly recommended to use DefaultConfig to build a sane Config.
+func (s *Service) Init(svc document.Service, lockFile string, cfg Config) {
 	if cfg.Marshaler == nil {
 		panic("empty Marshaler in config")
 	}
@@ -104,42 +107,8 @@ func (s *service) init(svc document.Service, lockFile string, cfg Config) {
 	go s.leadOrFollow()
 }
 
-func (s *service) isRetriableError(err error) bool {
-	if err == nil || s.svc == s.active {
-		return false
-	}
-
-	stat := status.Convert(err)
-	if s.cfg.CloseError != nil && strings.Contains(stat.Message(), s.cfg.CloseError.Error()) {
-		return true
-	}
-
-	c := stat.Code()
-	return c == codes.Unavailable || c == codes.DeadlineExceeded
-}
-
-// if last error is a document.Err*, then return that rather than any other transient errors.
-func retryHandleDocErrs(
-	ctx context.Context, retryStrategy retry.Strategy, fn func(ctx context.Context) (bool, error),
-) error {
-	var err error
-	retryErr := retry.Retry(ctx, retryStrategy, func(ctx context.Context) (bool, error) {
-		var shouldRetry bool
-		shouldRetry, err = fn(ctx)
-		if !shouldRetry {
-			// return nil so retryErr is nil and we know that we need to
-			// return original error
-			return shouldRetry, nil
-		}
-		return shouldRetry, err
-	})
-	if retryErr != nil {
-		return retryErr
-	}
-	return err
-}
-
-func (s *service) Create(ctx context.Context, ID string, doc interface{}) error {
+// Create satisfies document.Service.
+func (s *Service) Create(ctx context.Context, ID string, doc interface{}) error {
 	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -148,7 +117,8 @@ func (s *service) Create(ctx context.Context, ID string, doc interface{}) error 
 	})
 }
 
-func (s *service) Set(ctx context.Context, ID string, doc interface{}) error {
+// Set satisfies document.Service.
+func (s *Service) Set(ctx context.Context, ID string, doc interface{}) error {
 	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -157,7 +127,8 @@ func (s *service) Set(ctx context.Context, ID string, doc interface{}) error {
 	})
 }
 
-func (s *service) Update(
+// Update satisfies document.Service.
+func (s *Service) Update(
 	ctx context.Context, ID string, updates []document.Update,
 	preconds ...document.Precondition,
 ) error {
@@ -169,7 +140,8 @@ func (s *service) Update(
 	})
 }
 
-func (s *service) Get(ctx context.Context, ID string, doc interface{}) error {
+// Get satisfies document.Service.
+func (s *Service) Get(ctx context.Context, ID string, doc interface{}) error {
 	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -178,7 +150,8 @@ func (s *service) Get(ctx context.Context, ID string, doc interface{}) error {
 	})
 }
 
-func (s *service) Delete(ctx context.Context, ID string) error {
+// Delete satisfies document.Service.
+func (s *Service) Delete(ctx context.Context, ID string) error {
 	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -187,7 +160,8 @@ func (s *service) Delete(ctx context.Context, ID string) error {
 	})
 }
 
-func (s *service) List(ctx context.Context, filters []document.Filter) (
+// List satisfies document.Service.
+func (s *Service) List(ctx context.Context, filters []document.Filter) (
 	it document.Iterator, err error,
 ) {
 	err = retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
@@ -199,13 +173,36 @@ func (s *service) List(ctx context.Context, filters []document.Filter) (
 	return
 }
 
-func (s *service) isLeader() bool {
+// Close closes all resources associated with this Service.
+func (s *Service) Close() (ret error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return
+	}
+	s.closed = true
+	close(s.quitCh)
+	if s.active != s.svc {
+		if err := s.active.Close(); err != nil {
+			ret = multierr.Append(ret, err)
+		}
+	}
+	if err := s.svc.Close(); err != nil {
+		ret = multierr.Append(ret, err)
+	}
+	// wait until we're sure that lock has been removed
+	// if we're the leader
+	<-s.closeWaitCh
+	return
+}
+
+func (s *Service) isLeader() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.svc == s.active
 }
 
-func (s *service) follow(ctx context.Context, addr net.Addr) (bool, error) {
+func (s *Service) follow(ctx context.Context, addr net.Addr) (bool, error) {
 	quitCh := s.quitCh
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()}
 	opts = append(opts, grpc.WithContextDialer(
@@ -214,7 +211,7 @@ func (s *service) follow(ctx context.Context, addr net.Addr) (bool, error) {
 			return d.DialContext(ctx, addr.Network(), addr.String())
 		},
 	))
-	// do not override context as we're using it to know when service is closing
+	// do not override context as we're using it to know when Service is closing
 	dialCtx, cancel := context.WithTimeout(ctx, s.cfg.DialTimeout)
 	conn, err := grpc.DialContext(dialCtx, "", opts...)
 	cancel()
@@ -291,12 +288,12 @@ loop:
 	}
 }
 
-func (s *service) setActiveAndUnlock(svc document.Service) {
+func (s *Service) setActiveAndUnlock(svc document.Service) {
 	s.active = svc
 	s.mu.Unlock()
 }
 
-func (s *service) lead(ctx context.Context, listener net.Listener) (reconnect bool, err error) {
+func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bool, err error) {
 	server := rpc.NewServer(document.SyncWithLocker(s.svc, &s.mu), s.cfg.Marshaler)
 	defer listener.Close()
 
@@ -327,12 +324,12 @@ func (s *service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 	}
 }
 
-func (s *service) log(level log.Level, msg string, args ...interface{}) {
+func (s *Service) log(level log.Level, msg string, args ...interface{}) {
 	log.WithField(logging.KeyClass, "firstmover.Service").
 		Logf(level, msg, args...)
 }
 
-func (s *service) leadOrFollow() {
+func (s *Service) leadOrFollow() {
 	quitCh := s.quitCh
 	defer close(s.closeWaitCh)
 
@@ -388,24 +385,37 @@ func (s *service) leadOrFollow() {
 	}
 }
 
-func (s *service) Close() (ret error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return
+func (s *Service) isRetriableError(err error) bool {
+	if err == nil || s.svc == s.active {
+		return false
 	}
-	s.closed = true
-	close(s.quitCh)
-	if s.active != s.svc {
-		if err := s.active.Close(); err != nil {
-			ret = multierr.Append(ret, err)
+
+	stat := status.Convert(err)
+	if s.cfg.CloseError != nil && strings.Contains(stat.Message(), s.cfg.CloseError.Error()) {
+		return true
+	}
+
+	c := stat.Code()
+	return c == codes.Unavailable || c == codes.DeadlineExceeded
+}
+
+// if last error is a document.Err*, then return that rather than any other transient errors.
+func retryHandleDocErrs(
+	ctx context.Context, retryStrategy retry.Strategy, fn func(ctx context.Context) (bool, error),
+) error {
+	var err error
+	retryErr := retry.Retry(ctx, retryStrategy, func(ctx context.Context) (bool, error) {
+		var shouldRetry bool
+		shouldRetry, err = fn(ctx)
+		if !shouldRetry {
+			// return nil so retryErr is nil and we know that we need to
+			// return original error
+			return shouldRetry, nil
 		}
+		return shouldRetry, err
+	})
+	if retryErr != nil {
+		return retryErr
 	}
-	if err := s.svc.Close(); err != nil {
-		ret = multierr.Append(ret, err)
-	}
-	// wait until we're sure that lock has been removed
-	// if we're the leader
-	<-s.closeWaitCh
-	return
+	return err
 }
