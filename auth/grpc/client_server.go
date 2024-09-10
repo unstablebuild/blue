@@ -146,7 +146,7 @@ func authenticate[T any](
 	if !strings.HasPrefix(bearerAuthToken, bearerPrefix) {
 		msg := fmt.Sprintf("validate token request: bearer not found: %q",
 			bearerAuthToken)
-		err := status.Errorf(codes.PermissionDenied, msg)
+		err := status.Errorf(codes.PermissionDenied, "%s", msg)
 		logging.LogResult(err, attemptAt, traceID, callType, fields...)
 		return auth.UserClaims[T]{}, err
 	}
@@ -154,7 +154,7 @@ func authenticate[T any](
 	keys, err := verifyKeys.Verify(ctx)
 	if err != nil {
 		err = fmt.Errorf("get verify keys: %v", err)
-		err := status.Errorf(codes.PermissionDenied, err.Error())
+		err := status.Errorf(codes.PermissionDenied, "%s", err.Error())
 		logging.LogResult(err, attemptAt, traceID, callType, fields...)
 		return auth.UserClaims[T]{}, err
 	}
@@ -168,13 +168,13 @@ func authenticate[T any](
 		}
 	}
 	if err != nil {
-		err := status.Errorf(codes.PermissionDenied, err.Error())
+		err := status.Errorf(codes.PermissionDenied, "%s", err.Error())
 		logging.LogResult(err, attemptAt, traceID, callType, fields...)
 		return auth.UserClaims[T]{}, err
 	}
 
 	if err := authorizer.Authorize(ctx, claims, method); err != nil {
-		err := status.Errorf(codes.PermissionDenied, err.Error())
+		err := status.Errorf(codes.PermissionDenied, "%s", err.Error())
 		logging.LogResult(err, attemptAt, traceID, callType, fields...)
 		return auth.UserClaims[T]{}, err
 	}
