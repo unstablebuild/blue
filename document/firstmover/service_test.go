@@ -138,7 +138,7 @@ func TestServiceIntegration(t *testing.T) {
 			require.NoError(t, os.Remove(f.Name()))
 			svc := document.NewInMemoryService()
 
-			instances := make([]document.Service, 0, n)
+			instances := make([]*Service, 0, n)
 
 			// chances of returned follower to become leader are ~1/50
 			for i := 0; i < n-1; i++ {
@@ -152,7 +152,7 @@ func TestServiceIntegration(t *testing.T) {
 				for i := 0; i < n-1; i++ { // always leave one fully operating
 					time.Sleep(cfg.DialTimeout + cfg.ConnectRetryCadence)
 					for idx, instance := range instances {
-						if TestIsLeader(instance) {
+						if instance.isLeader() {
 							instance.Close()
 							if idx == len(instances)-1 {
 								instances = instances[:idx]
