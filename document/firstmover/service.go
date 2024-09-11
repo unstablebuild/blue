@@ -31,11 +31,13 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 
 	multierr "github.com/ernestrc/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/document"
+	pproto "github.com/unstablebuild/blue/document/firstmover/proto"
 	"github.com/unstablebuild/blue/document/rpc"
 	"github.com/unstablebuild/blue/document/rpc/proto"
 	"github.com/unstablebuild/blue/logging"
@@ -56,7 +58,11 @@ import (
 // or it stops responding for more than a specificed timeout,
 // all running Services returned will race to re-acquire the lock and
 // act as the new leader.
+//
+// This Service also exposes pub/sub capabilities with at least once
+// semantics.
 type Service struct {
+	pubsub   *pubsub
 	mu       sync.Mutex
 	svc      document.Service
 	lockFile string
@@ -91,6 +97,7 @@ func (s *Service) Init(svc document.Service, lockFile string, cfg Config) {
 	}
 	s.svc = svc
 	s.lockFile = lockFile
+	s.pubsub = new(pubsub) // un-initialized
 
 	s.cfg = cfg
 	s.maxFollowFailures = int(cfg.TimeToCoup / (cfg.DialTimeout + cfg.ConnectRetryCadence))
@@ -173,6 +180,37 @@ func (s *Service) List(ctx context.Context, filters []document.Filter) (
 	return
 }
 
+// Publish publishes an arbitrary message to the given topic.
+// It will be received by all subscribers of this topic.
+func (s *Service) Publish(
+	ctx context.Context, topic string, msg []byte,
+) error {
+	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		err := s.pubsub.publish(ctx, topic, msg)
+		return s.isRetriableError(err), err
+	})
+}
+
+// Receive returns the next message published to the given topic,
+// or blocks until a message is available.
+//
+// Under the hood a subscription is created so messages
+// between calls to Receive are never lost.
+func (s *Service) Receive(
+	ctx context.Context, topic string,
+) (data []byte, err error) {
+	err = retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
+		s.mu.Lock()
+		pubsub := s.pubsub
+		s.mu.Unlock()
+		data, err = pubsub.receive(ctx, topic)
+		return s.isRetriableError(err), err
+	})
+	return
+}
+
 // Close closes all resources associated with this Service.
 func (s *Service) Close() (ret error) {
 	s.mu.Lock()
@@ -190,6 +228,10 @@ func (s *Service) Close() (ret error) {
 	if err := s.svc.Close(); err != nil {
 		ret = multierr.Append(ret, err)
 	}
+
+	if err := s.pubsub.Close(); err != nil {
+		ret = multierr.Append(ret, err)
+	}
 	// wait until we're sure that lock has been removed
 	// if we're the leader
 	<-s.closeWaitCh
@@ -204,7 +246,10 @@ func (s *Service) isLeader() bool {
 
 func (s *Service) follow(ctx context.Context, addr net.Addr) (bool, error) {
 	quitCh := s.quitCh
-	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()}
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	}
 	opts = append(opts, grpc.WithContextDialer(
 		func(ctx context.Context, _ string) (net.Conn, error) {
 			var d net.Dialer
@@ -233,6 +278,7 @@ loop:
 		case connectivity.Ready:
 			s.followFailures = 0 // reset
 			// set active svc and unlock API
+			s.pubsub.initFollower(conn)
 			s.setActiveAndUnlock(client)
 			s.log(log.DebugLevel, "Successfully connected to leader. Unlocking API...")
 			break loop
@@ -297,19 +343,33 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 	server := rpc.NewServer(document.SyncWithLocker(s.svc, &s.mu), s.cfg.Marshaler)
 	defer listener.Close()
 
-	srv := grpc.NewServer()
-	defer srv.Stop()
+	gsrv := grpc.NewServer()
+	defer gsrv.Stop()
 
-	proto.RegisterDocumentStoreServer(srv, server)
+	proto.RegisterDocumentStoreServer(gsrv, server)
+	pproto.RegisterPubSubServer(gsrv, s.pubsub)
 
 	done := make(chan error)
+	ready := make(chan struct{})
 	quitCh := s.quitCh
 	go func() {
 		select {
-		case done <- srv.Serve(listener):
+		case done <- gsrv.Serve(&unlockListener{ready: ready, root: listener}):
 		case <-quitCh:
 		}
 	}()
+
+	// wait for grpcserver to be listening
+	// before we initialize pubsub as leader
+	select {
+	case <-ready:
+	case <-ctx.Done():
+		return true, ctx.Err()
+	}
+
+	if err := s.pubsub.initLeader(ctx, gsrv, listener); err != nil {
+		return false, fmt.Errorf("set pubsub leader: %w", err)
+	}
 
 	// set active svc and unlock API
 	s.log(log.DebugLevel, "Successfully assumed position of leader. Unlocking API...")
@@ -325,6 +385,9 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 }
 
 func (s *Service) log(level log.Level, msg string, args ...interface{}) {
+	if !log.IsLevelEnabled(level) {
+		return
+	}
 	log.WithField(logging.KeyClass, "firstmover.Service").
 		Logf(level, msg, args...)
 }
@@ -351,7 +414,7 @@ func (s *Service) leadOrFollow() {
 			return true, err
 		}
 
-		if !errors.Is(err, syscall.EADDRINUSE) {
+		if !errors.Is(err, syscall.EADDRINUSE) && !errors.Is(err, syscall.EEXIST) {
 			s.log(log.WarnLevel, "Unexpected error while trying to acquire lock %q: %v", s.lockFile, err)
 			return false, err
 		}
@@ -386,6 +449,7 @@ func (s *Service) leadOrFollow() {
 }
 
 func (s *Service) isRetriableError(err error) bool {
+	// for readibility's sake, do not coalesce all branches into a boolean value
 	if err == nil || s.svc == s.active {
 		return false
 	}
@@ -396,7 +460,9 @@ func (s *Service) isRetriableError(err error) bool {
 	}
 
 	c := stat.Code()
-	return c == codes.Unavailable || c == codes.DeadlineExceeded
+	return strings.Contains(stat.Message(), "connection error") ||
+		strings.Contains(stat.Message(), "EOF") ||
+		c == codes.Unavailable || c == codes.DeadlineExceeded
 }
 
 // if last error is a document.Err*, then return that rather than any other transient errors.
@@ -418,4 +484,29 @@ func retryHandleDocErrs(
 		return retryErr
 	}
 	return err
+}
+
+var _ net.Listener = (*unlockListener)(nil)
+
+type unlockListener struct {
+	root        net.Listener
+	ready       chan struct{}
+	readyClosed atomic.Bool
+}
+
+// Accept signals that the underlying server is ready
+func (u *unlockListener) Accept() (net.Conn, error) {
+	if u.readyClosed.CompareAndSwap(false, true) {
+		close(u.ready)
+	}
+	return u.root.Accept()
+}
+
+func (u *unlockListener) Close() error {
+	return u.root.Close()
+}
+
+// Addr returns the listener's network address.
+func (u *unlockListener) Addr() net.Addr {
+	return u.root.Addr()
 }

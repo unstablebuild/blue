@@ -1,0 +1,27 @@
+syntax = "proto3";
+option go_package = "/proto";
+
+package proto;
+
+message PublishRequest {
+	string topic = 1;
+	bytes data = 2;
+	string sender = 3;
+}
+
+message PublishResponse {
+}
+
+message ReceiveRequest {
+	string topic = 1;
+}
+
+message ReceiveResponse {
+	string sender = 1;
+	bytes data = 2;
+}
+
+service PubSub {
+	rpc Publish(PublishRequest) returns (PublishResponse);
+	rpc Receive(ReceiveRequest) returns (stream ReceiveResponse);
+}
