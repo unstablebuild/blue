@@ -37,8 +37,8 @@ import (
 	"github.com/unstablebuild/blue/document/doclog"
 	"github.com/unstablebuild/blue/document/docrpc"
 	"github.com/unstablebuild/blue/document/docrpc/docpb"
+	"github.com/unstablebuild/blue/document/doctest"
 	"github.com/unstablebuild/blue/document/firestore"
-	"github.com/unstablebuild/blue/document/test"
 	"github.com/unstablebuild/blue/encoding"
 	"github.com/unstablebuild/blue/encoding/bson"
 	"github.com/unstablebuild/blue/encoding/toml"
@@ -71,7 +71,7 @@ func TestFirestoreIntegration(t *testing.T) {
 		testProjectID := uuid.New().String()
 
 		t.Run(tcase.encoding, func(t *testing.T) {
-			test.TestDocumentService(t, func(t *testing.T) document.Service {
+			doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 				var svc document.Service
 
 				collection := uuid.New().String()

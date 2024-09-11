@@ -32,7 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
-	documenttest "github.com/unstablebuild/blue/document/test"
+	"github.com/unstablebuild/blue/document/doctest"
 )
 
 func runFirestoreOrSkip(t *testing.T) func() {
@@ -56,7 +56,7 @@ func TestFirestore(t *testing.T) {
 	teardown := runFirestoreOrSkip(t)
 	defer teardown()
 
-	documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
+	doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 		collection := uuid.New().String()
 		store, err := New(testProjectID, collection, "")
 		require.NoError(t, err)

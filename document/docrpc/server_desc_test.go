@@ -32,14 +32,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/document/docrpc/docpb"
-	documenttest "github.com/unstablebuild/blue/document/test"
+	"github.com/unstablebuild/blue/document/doctest"
 	"github.com/unstablebuild/blue/encoding/bson"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 func TestRPCDatastoreCustomServiceDesc(t *testing.T) {
-	documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
+	doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 		collectionName := "myCollection"
 		marshaler := bson.Marshaler()
 		cache := document.NewInMemoryServiceWithMarshaler(marshaler)

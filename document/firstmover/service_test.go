@@ -32,7 +32,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
-	"github.com/unstablebuild/blue/document/test"
+	"github.com/unstablebuild/blue/document/doctest"
 	"github.com/unstablebuild/blue/encoding"
 	"github.com/unstablebuild/blue/encoding/bson"
 	"github.com/unstablebuild/blue/encoding/json"
@@ -48,7 +48,7 @@ func TestServiceIntegration(t *testing.T) {
 		marshaler := _marshaler
 		t.Run(name, func(t *testing.T) {
 			t.Run("single instance assumes leader", func(t *testing.T) {
-				test.TestDocumentService(t, func(t *testing.T) document.Service {
+				doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 					lockFile := makeTempLockFile(t)
 					cfg := testConfig()
 					cfg.Marshaler = marshaler
@@ -58,7 +58,7 @@ func TestServiceIntegration(t *testing.T) {
 			})
 
 			t.Run("two instances, seconds assumes follower", func(t *testing.T) {
-				test.TestDocumentService(t, func(t *testing.T) document.Service {
+				doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 					lockFile := makeTempLockFile(t)
 					svc := document.NewInMemoryServiceWithMarshaler(marshaler)
 					cfg := testConfig()
@@ -76,7 +76,7 @@ func TestServiceIntegration(t *testing.T) {
 	}
 
 	t.Run("single instance preconditions (bson)", func(t *testing.T) {
-		test.TestDocumentServicePreconditions(t, func(t *testing.T) document.Service {
+		doctest.TestDocumentServicePreconditions(t, func(t *testing.T) document.Service {
 			lockFile := makeTempLockFile(t)
 			cfg := testConfig()
 			cfg.Marshaler = bson.Marshaler()
@@ -86,7 +86,7 @@ func TestServiceIntegration(t *testing.T) {
 	})
 
 	t.Run("single instance eventually assumes leader if leader is non-responsive (lock leaked)", func(t *testing.T) {
-		test.TestDocumentService(t, func(t *testing.T) document.Service {
+		doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 			f, err := os.CreateTemp("", "")
 			require.NoError(t, err)
 			require.NoError(t, f.Close())
@@ -97,7 +97,7 @@ func TestServiceIntegration(t *testing.T) {
 	})
 
 	t.Run("two instances, seconds assumes leader after leader dies", func(t *testing.T) {
-		test.TestDocumentService(t, func(t *testing.T) document.Service {
+		doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 			lockFile := makeTempLockFile(t)
 			svc := document.NewInMemoryService()
 			leader := New(svc, lockFile, testConfig())
@@ -116,7 +116,7 @@ func TestServiceIntegration(t *testing.T) {
 	})
 
 	t.Run("multiple instances", func(t *testing.T) {
-		test.TestDocumentService(t, func(t *testing.T) document.Service {
+		doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 			const n = 50
 			cfg := testConfig()
 
