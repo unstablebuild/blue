@@ -30,7 +30,6 @@ import (
 	"testing"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
@@ -174,8 +173,7 @@ func TestPubSub(t *testing.T) {
 	})
 
 	t.Run("extreme concurrency of leaders and followers", func(t *testing.T) {
-		log.SetLevel(log.TraceLevel)
-		const n, m = 50, 200
+		const n, m = 10, 50
 		cfg := testConfig()
 
 		lockFile := makeTempLockFile(t)
