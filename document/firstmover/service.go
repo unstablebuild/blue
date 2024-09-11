@@ -238,7 +238,8 @@ func (s *Service) Close() (ret error) {
 	return
 }
 
-func (s *Service) isLeader() bool {
+// IsLeader returns whether this instance is the leader of the system.
+func (s *Service) IsLeader() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.svc == s.active

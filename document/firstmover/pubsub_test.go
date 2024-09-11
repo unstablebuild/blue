@@ -200,7 +200,7 @@ func TestPubSub(t *testing.T) {
 			for i := 0; i < n-2; i++ { // always leave two fully operating
 				time.Sleep(cfg.DialTimeout + cfg.ConnectRetryCadence)
 				for _, instance := range instances {
-					if instance.isLeader() && instance != instance1 && instance != instance2 {
+					if instance.IsLeader() && instance != instance1 && instance != instance2 {
 						instance.Close()
 						break
 					}

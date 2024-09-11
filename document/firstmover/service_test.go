@@ -137,7 +137,7 @@ func TestServiceIntegration(t *testing.T) {
 				for i := 0; i < n-1; i++ { // always leave one fully operating
 					time.Sleep(cfg.DialTimeout + cfg.ConnectRetryCadence)
 					for idx, instance := range instances {
-						if instance.isLeader() {
+						if instance.IsLeader() {
 							instance.Close()
 							if idx == len(instances)-1 {
 								instances = instances[:idx]
