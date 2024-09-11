@@ -34,7 +34,7 @@ import (
 	"github.com/ernestrc/sensible/pager"
 	"github.com/unstablebuild/blue/auth/secretmanager"
 	"github.com/unstablebuild/blue/cli"
-	"github.com/unstablebuild/blue/cli/format"
+	"github.com/unstablebuild/blue/cli/cliformat"
 	"github.com/unstablebuild/blue/iterator"
 )
 
@@ -100,7 +100,7 @@ func (s *secretAccess) Run(ctx context.Context, args []string) error {
 	}
 
 	// do not show payload in table
-	t := format.Table[secretmanager.SecretVersion]([]string{"ID", "Version", "State", "CreatedAt"})
+	t := cliformat.Table[secretmanager.SecretVersion]([]string{"ID", "Version", "State", "CreatedAt"})
 	if err := t.Format(os.Stdout, iterator.FromSlice(res)); err != nil {
 		return err
 	}

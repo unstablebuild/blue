@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/unstablebuild/blue/cli"
-	"github.com/unstablebuild/blue/cli/format"
+	"github.com/unstablebuild/blue/cli/cliformat"
 	"github.com/unstablebuild/blue/release"
 	log "github.com/sirupsen/logrus"
 )
@@ -101,13 +101,13 @@ func (s *releaseList) Run(ctx context.Context, args []string) error {
 	}
 	switch strings.ToLower(s.format) {
 	case "json":
-		t := format.JSON[release.Bundle]()
+		t := cliformat.JSON[release.Bundle]()
 		return t.Format(os.Stdout, bundles)
 	case "table":
-		t := format.Table[release.Bundle]([]string{"Package", "Version", "Notes", "CreatedAt"})
+		t := cliformat.Table[release.Bundle]([]string{"Package", "Version", "Notes", "CreatedAt"})
 		return t.Format(os.Stdout, bundles)
 	default:
-		t, err := format.Template[release.Bundle](s.format)
+		t, err := cliformat.Template[release.Bundle](s.format)
 		if err == nil {
 			return t.Format(os.Stdout, bundles)
 		}
