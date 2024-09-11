@@ -22,7 +22,7 @@
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
 //nolint:gosimple
-package net
+package bluenet
 
 import (
 	"context"

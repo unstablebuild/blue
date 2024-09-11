@@ -21,40 +21,24 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package net
+package bluenet
 
 import (
 	"net"
-	"os"
 	"testing"
 
 	"golang.org/x/net/nettest"
 )
 
-func TestPipeConn(t *testing.T) {
+func TestChanConn(t *testing.T) {
 	nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
-		var r1, w1, r2, w2 *os.File
-		r1, w2, err = os.Pipe()
-		if err != nil {
-			return
-		}
-		r2, w1, err = os.Pipe()
-		if err != nil {
-			return
-		}
-		c1, err = PipeConn(r1, w1)
-		if err != nil {
-			return
-		}
-		c2, err = PipeConn(r2, w2)
-		if err != nil {
-			return
-		}
+		addr1, addr2 := &net.UDPAddr{Port: 1}, &net.UDPAddr{Port: 2}
+		ch1, ch2 := make(chan ReadResult), make(chan ReadResult)
+		c1 = ChanConn(addr1, addr2, ch1, ch2)
+		c2 = ChanConn(addr2, addr1, ch2, ch1)
 		stop = func() {
-			_ = r1.Close()
-			_ = r2.Close()
-			_ = w1.Close()
-			_ = w2.Close()
+			_ = c1.Close()
+			_ = c2.Close()
 		}
 		return
 	})
