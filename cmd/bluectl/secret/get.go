@@ -31,7 +31,7 @@ import (
 
 	"github.com/unstablebuild/blue/auth/secretmanager"
 	"github.com/unstablebuild/blue/cli"
-	"github.com/unstablebuild/blue/cli/format"
+	"github.com/unstablebuild/blue/cli/cliformat"
 	"github.com/unstablebuild/blue/iterator"
 )
 
@@ -81,13 +81,13 @@ func (s *secretDescribe) Run(ctx context.Context, args []string) error {
 	sec := iterator.FromSlice([]secretmanager.Secret{secView})
 	switch strings.ToLower(s.format) {
 	case "json":
-		t := format.JSON[secretmanager.Secret]()
+		t := cliformat.JSON[secretmanager.Secret]()
 		return t.Format(os.Stdout, sec)
 	case "table":
-		t := format.Table[secretmanager.Secret]([]string{"ID", "CreatedAt", "Annotations"})
+		t := cliformat.Table[secretmanager.Secret]([]string{"ID", "CreatedAt", "Annotations"})
 		return t.Format(os.Stdout, sec)
 	default:
-		t, err := format.Template[secretmanager.Secret](s.format)
+		t, err := cliformat.Template[secretmanager.Secret](s.format)
 		if err == nil {
 			return t.Format(os.Stdout, sec)
 		}

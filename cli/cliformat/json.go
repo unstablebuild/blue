@@ -21,46 +21,36 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package format
+package cliformat
 
 import (
-	"fmt"
+	"encoding/json"
 	"io"
-	"text/template"
 
 	"github.com/unstablebuild/blue/iterator"
 )
 
-// Template returns an IteratorFormatter that formats elements
-// according to the given Go text/template template.
-// See https://pkg.go.dev/text/template for more details.
-func Template[T any](tmpl string) (IteratorFormatter[T], error) {
-	t, err := template.New("temp").Parse(tmpl)
-	if err != nil {
-		return nil, fmt.Errorf("invalid args: not a valid Go template: "+
-			"%s. See https://pkg.go.dev/text/template", tmpl)
-	}
-	return templateFormatter[T]{tmpl: t}, nil
+// JSON returns an IteratorFormatter that formats elements into JSON objects.
+func JSON[T any]() IteratorFormatter[T] {
+	return jsonFormatter[T]{}
 }
 
-type templateFormatter[T any] struct {
-	tmpl *template.Template
+type jsonFormatter[T any] struct {
 }
 
-func (f templateFormatter[T]) Format(w io.Writer, it iterator.Iterator[T]) error {
+func (j jsonFormatter[T]) Format(w io.Writer, it iterator.Iterator[T]) error {
+	e := json.NewEncoder(w)
 	for {
 		t, ok := it.Next()
 		if !ok {
 			if err := it.Err(); err != nil {
 				return err
 			}
-			break
+			return nil
 		}
-		err := f.tmpl.Execute(w, t)
+		err := e.Encode(t)
 		if err != nil {
 			return err
 		}
-		fmt.Fprint(w, "\n")
 	}
-	return nil
 }

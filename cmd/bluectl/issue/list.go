@@ -32,7 +32,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/cli"
-	"github.com/unstablebuild/blue/cli/format"
+	"github.com/unstablebuild/blue/cli/cliformat"
 	"github.com/unstablebuild/blue/issue"
 	"github.com/unstablebuild/blue/iterator"
 )
@@ -127,7 +127,7 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 
 	switch strings.ToLower(s.format) {
 	case "json":
-		t := format.JSON[issue.Report]()
+		t := cliformat.JSON[issue.Report]()
 		return t.Format(os.Stdout, reports)
 	case "table":
 		type outIssue struct {
@@ -139,7 +139,7 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 			ClosedAt  string
 		}
 
-		table := format.Table[outIssue]([]string{"ID", "Subject", "Author", "Labels", "CreatedAt", "ClosedAt"})
+		table := cliformat.Table[outIssue]([]string{"ID", "Subject", "Author", "Labels", "CreatedAt", "ClosedAt"})
 		return table.Format(os.Stdout, iterator.Map[issue.Report, outIssue](reports,
 			func(report issue.Report) outIssue {
 				var labels []string
@@ -158,7 +158,7 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 				}
 			}))
 	default:
-		t, err := format.Template[issue.Report](s.format)
+		t, err := cliformat.Template[issue.Report](s.format)
 		if err == nil {
 			return t.Format(os.Stdout, reports)
 		}
