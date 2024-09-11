@@ -37,9 +37,9 @@ import (
 	multierr "github.com/ernestrc/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/document/docrpc"
+	"github.com/unstablebuild/blue/document/docrpc/docpb"
 	pproto "github.com/unstablebuild/blue/document/firstmover/proto"
-	"github.com/unstablebuild/blue/document/rpc"
-	"github.com/unstablebuild/blue/document/rpc/proto"
 	"github.com/unstablebuild/blue/logging"
 	"github.com/unstablebuild/blue/retry"
 	"google.golang.org/grpc"
@@ -267,7 +267,7 @@ func (s *Service) follow(ctx context.Context, addr net.Addr) (bool, error) {
 		return true, err
 	}
 
-	client := new(rpc.Client)
+	client := new(docrpc.Client)
 	client.Init(conn, s.cfg.Marshaler)
 
 	// wait until connection is ready to unlock API mutex
@@ -340,13 +340,13 @@ func (s *Service) setActiveAndUnlock(svc document.Service) {
 }
 
 func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bool, err error) {
-	server := rpc.NewServer(document.SyncWithLocker(s.svc, &s.mu), s.cfg.Marshaler)
+	server := docrpc.NewServer(document.SyncWithLocker(s.svc, &s.mu), s.cfg.Marshaler)
 	defer listener.Close()
 
 	gsrv := grpc.NewServer()
 	defer gsrv.Stop()
 
-	proto.RegisterDocumentStoreServer(gsrv, server)
+	docpb.RegisterDocumentStoreServer(gsrv, server)
 	pproto.RegisterPubSubServer(gsrv, s.pubsub)
 
 	done := make(chan error)

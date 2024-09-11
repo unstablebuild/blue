@@ -35,9 +35,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/document/doclog"
+	"github.com/unstablebuild/blue/document/docrpc"
+	"github.com/unstablebuild/blue/document/docrpc/docpb"
 	"github.com/unstablebuild/blue/document/firestore"
-	"github.com/unstablebuild/blue/document/rpc"
-	"github.com/unstablebuild/blue/document/rpc/proto"
 	"github.com/unstablebuild/blue/document/test"
 	"github.com/unstablebuild/blue/encoding"
 	"github.com/unstablebuild/blue/encoding/bson"
@@ -82,7 +82,7 @@ func TestFirestoreIntegration(t *testing.T) {
 				t.Cleanup(teardown)
 
 				opts := grpc.WithTransportCredentials(insecure.NewCredentials())
-				svc, err = rpc.NewClient(addr, marshaler, opts)
+				svc, err = docrpc.NewClient(addr, marshaler, opts)
 				require.NoError(t, err)
 				return svc
 			})
@@ -120,7 +120,8 @@ func TestFirestoreBinaryCompatibility(t *testing.T) {
 		t.Run(tcase.encoding, func(t *testing.T) {
 			t.Run("client create, firestore get", func(t *testing.T) {
 				firestore, client := makeFirestoreClientPair(t, marshaler)
-				require.NoError(t, client.Create(ctx, "1", testStruct{Id: "1", Content: "a", Integer: 1}))
+				require.NoError(t, client.Create(ctx, "1",
+					testStruct{Id: "1", Content: "a", Integer: 1}))
 
 				var out testStruct
 				require.NoError(t, firestore.Get(ctx, "1", &out))
@@ -131,7 +132,8 @@ func TestFirestoreBinaryCompatibility(t *testing.T) {
 
 			t.Run("firestore create, client get", func(t *testing.T) {
 				firestore, client := makeFirestoreClientPair(t, marshaler)
-				require.NoError(t, firestore.Create(ctx, "1", testStruct{Id: "1", Content: "a", Integer: 1}))
+				require.NoError(t, firestore.Create(ctx, "1",
+					testStruct{Id: "1", Content: "a", Integer: 1}))
 
 				var out testStruct
 				require.NoError(t, client.Get(ctx, "1", &out))
@@ -142,7 +144,8 @@ func TestFirestoreBinaryCompatibility(t *testing.T) {
 
 			t.Run("client create, firestore update, client get (string)", func(t *testing.T) {
 				firestore, client := makeFirestoreClientPair(t, marshaler)
-				require.NoError(t, client.Create(ctx, "1", testStruct{Id: "1", Content: "a", Integer: 1}))
+				require.NoError(t, client.Create(ctx, "1",
+					testStruct{Id: "1", Content: "a", Integer: 1}))
 
 				updates := make([]document.Update, 1)
 				updates[0].FieldPath = []string{"Content"}
@@ -158,7 +161,8 @@ func TestFirestoreBinaryCompatibility(t *testing.T) {
 
 			t.Run("client create, firestore update, firestore get (string)", func(t *testing.T) {
 				firestore, client := makeFirestoreClientPair(t, marshaler)
-				require.NoError(t, client.Create(ctx, "1", testStruct{Id: "1", Content: "a", Integer: 1}))
+				require.NoError(t, client.Create(ctx, "1",
+					testStruct{Id: "1", Content: "a", Integer: 1}))
 
 				updates := make([]document.Update, 1)
 				updates[0].FieldPath = []string{"Content"}
@@ -173,7 +177,8 @@ func TestFirestoreBinaryCompatibility(t *testing.T) {
 			})
 			t.Run("client create, firestore update, client get", func(t *testing.T) {
 				firestore, client := makeFirestoreClientPair(t, marshaler)
-				require.NoError(t, client.Create(ctx, "1", testStruct{Id: "1", Content: "a", Integer: 1}))
+				require.NoError(t, client.Create(ctx, "1",
+					testStruct{Id: "1", Content: "a", Integer: 1}))
 
 				updates := make([]document.Update, 1)
 				updates[0].FieldPath = []string{"Content"}
@@ -189,7 +194,8 @@ func TestFirestoreBinaryCompatibility(t *testing.T) {
 
 			t.Run("client create, firestore update, firestore get (integer)", func(t *testing.T) {
 				firestore, client := makeFirestoreClientPair(t, marshaler)
-				require.NoError(t, client.Create(ctx, "1", testStruct{Id: "1", Content: "a", Integer: 1}))
+				require.NoError(t, client.Create(ctx, "1",
+					testStruct{Id: "1", Content: "a", Integer: 1}))
 
 				updates := make([]document.Update, 1)
 				updates[0].FieldPath = []string{"Integer"}
@@ -204,7 +210,8 @@ func TestFirestoreBinaryCompatibility(t *testing.T) {
 			})
 			t.Run("firestore create, firestore update, client get (integer)", func(t *testing.T) {
 				firestore, client := makeFirestoreClientPair(t, marshaler)
-				require.NoError(t, firestore.Create(ctx, "1", testStruct{Id: "1", Content: "a", Integer: 1}))
+				require.NoError(t, firestore.Create(ctx, "1",
+					testStruct{Id: "1", Content: "a", Integer: 1}))
 
 				updates := make([]document.Update, 1)
 				updates[0].FieldPath = []string{"Integer"}
@@ -220,7 +227,8 @@ func TestFirestoreBinaryCompatibility(t *testing.T) {
 
 			t.Run("firestore create, firestore update, client get", func(t *testing.T) {
 				firestore, client := makeFirestoreClientPair(t, marshaler)
-				require.NoError(t, firestore.Create(ctx, "1", testStruct{Id: "1", Content: "a", Integer: 1}))
+				require.NoError(t, firestore.Create(ctx, "1",
+					testStruct{Id: "1", Content: "a", Integer: 1}))
 
 				updates := make([]document.Update, 1)
 				updates[0].FieldPath = []string{"Content"}
@@ -236,7 +244,8 @@ func TestFirestoreBinaryCompatibility(t *testing.T) {
 
 			t.Run("client create, firestore list", func(t *testing.T) {
 				firestore, client := makeFirestoreClientPair(t, marshaler)
-				require.NoError(t, client.Create(ctx, "1", testStruct{Id: "1", Content: "a", Integer: 1}))
+				require.NoError(t, client.Create(ctx, "1",
+					testStruct{Id: "1", Content: "a", Integer: 1}))
 
 				filters := make([]document.Filter, 1)
 				filters[0].FieldPath = []string{"Content"}
@@ -252,7 +261,8 @@ func TestFirestoreBinaryCompatibility(t *testing.T) {
 
 			t.Run("firestore create, client list", func(t *testing.T) {
 				firestore, client := makeFirestoreClientPair(t, marshaler)
-				require.NoError(t, firestore.Create(ctx, "1", testStruct{Id: "1", Content: "a", Integer: 1}))
+				require.NoError(t, firestore.Create(ctx,
+					"1", testStruct{Id: "1", Content: "a", Integer: 1}))
 
 				filters := make([]document.Filter, 1)
 				filters[0].FieldPath = []string{"Content"}
@@ -281,9 +291,9 @@ func runDatastoreServerOverListener(
 ) (net.Addr, func()) {
 	gsrv := grpc.NewServer(opts...)
 
-	srv := new(rpc.Server)
+	srv := new(docrpc.Server)
 	srv.Init(other, marshaler)
-	proto.RegisterDocumentStoreServer(gsrv, srv)
+	docpb.RegisterDocumentStoreServer(gsrv, srv)
 
 	lis, err := listener()
 	require.NoError(t, err)
@@ -336,7 +346,8 @@ func makeFirestoreClientPair(t *testing.T, marshaler encoding.Marshaler) (
 	addr, teardown := runDatastoreServerOverListener(t, dbWithLogs, tcpListener, marshaler)
 	t.Cleanup(teardown)
 
-	client, err := rpc.NewClient(addr, marshaler, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	client, err := docrpc.NewClient(addr, marshaler,
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 
 	return firestore, client

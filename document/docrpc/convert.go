@@ -21,13 +21,13 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package rpc
+package docrpc
 
 import (
 	"strings"
 
 	"github.com/unstablebuild/blue/document"
-	proto "github.com/unstablebuild/blue/document/rpc/proto"
+	"github.com/unstablebuild/blue/document/docrpc/docpb"
 	"github.com/unstablebuild/blue/encoding"
 )
 
@@ -35,14 +35,14 @@ import (
 const protoFieldKey = "X"
 
 func makeProtoUpdates(m encoding.Marshaler, updates []document.Update) (
-	ret []*proto.UpdateDocumentRequest_Field,
+	ret []*docpb.UpdateDocumentRequest_Field,
 ) {
 	slab := make(map[string]interface{})
 	for _, u := range updates {
 		// re-use make filter logic
 		f := document.Filter{Field: document.Field(u)}
 		pf := makeProtoFilter(m, slab, f)
-		pu := &proto.UpdateDocumentRequest_Field{
+		pu := &docpb.UpdateDocumentRequest_Field{
 			FieldPath: pf.FieldPath,
 			Data:      pf.Data,
 		}
@@ -52,13 +52,13 @@ func makeProtoUpdates(m encoding.Marshaler, updates []document.Update) (
 }
 
 func makeProtoPreconditions(m encoding.Marshaler, preconds ...document.Precondition) (
-	ret []*proto.UpdateDocumentRequest_Field,
+	ret []*docpb.UpdateDocumentRequest_Field,
 ) {
 	slab := make(map[string]interface{})
 	for _, u := range preconds {
 		f := document.Filter{Field: document.Field(u)}
 		pf := makeProtoFilter(m, slab, f)
-		pu := &proto.UpdateDocumentRequest_Field{
+		pu := &docpb.UpdateDocumentRequest_Field{
 			FieldPath: pf.FieldPath,
 			Data:      pf.Data,
 		}
@@ -67,7 +67,7 @@ func makeProtoPreconditions(m encoding.Marshaler, preconds ...document.Precondit
 	return
 }
 
-func makeModelUpdates(m encoding.Marshaler, updates []*proto.UpdateDocumentRequest_Field) (
+func makeModelUpdates(m encoding.Marshaler, updates []*docpb.UpdateDocumentRequest_Field) (
 	ret []document.Update, err error,
 ) {
 	fields, err := makeModelFields(m, updates)
@@ -80,7 +80,7 @@ func makeModelUpdates(m encoding.Marshaler, updates []*proto.UpdateDocumentReque
 	return
 }
 
-func makeModelPreconds(m encoding.Marshaler, preconds []*proto.UpdateDocumentRequest_Field) (
+func makeModelPreconds(m encoding.Marshaler, preconds []*docpb.UpdateDocumentRequest_Field) (
 	ret []document.Precondition, err error,
 ) {
 	fields, err := makeModelFields(m, preconds)
@@ -93,7 +93,7 @@ func makeModelPreconds(m encoding.Marshaler, preconds []*proto.UpdateDocumentReq
 	return
 }
 
-func makeModelFields(m encoding.Marshaler, fields []*proto.UpdateDocumentRequest_Field) (
+func makeModelFields(m encoding.Marshaler, fields []*docpb.UpdateDocumentRequest_Field) (
 	ret []document.Field, err error,
 ) {
 	var slab map[string]interface{}
@@ -101,7 +101,7 @@ func makeModelFields(m encoding.Marshaler, fields []*proto.UpdateDocumentRequest
 
 	for _, u := range fields {
 		// re-use make filter logic
-		pf := proto.ListDocumentRequest_Filter{
+		pf := docpb.ListDocumentRequest_Filter{
 			FieldPath: u.FieldPath,
 			Data:      u.Data,
 		}
@@ -118,7 +118,7 @@ func makeModelFields(m encoding.Marshaler, fields []*proto.UpdateDocumentRequest
 }
 
 func makeModelFilter(m encoding.Marshaler,
-	slab map[string]interface{}, pf *proto.ListDocumentRequest_Filter,
+	slab map[string]interface{}, pf *docpb.ListDocumentRequest_Filter,
 ) (document.Filter, error) {
 	err := document.SafeDecode(m, &slab, pf.Data)
 	if err != nil {
@@ -144,7 +144,7 @@ func makeModelFilter(m encoding.Marshaler,
 	}, nil
 }
 
-func makeModelFilters(m encoding.Marshaler, filters []*proto.ListDocumentRequest_Filter) (
+func makeModelFilters(m encoding.Marshaler, filters []*docpb.ListDocumentRequest_Filter) (
 	ret []document.Filter, err error,
 ) {
 	var slab map[string]interface{}
@@ -162,10 +162,10 @@ func makeModelFilters(m encoding.Marshaler, filters []*proto.ListDocumentRequest
 func makeProtoFilter(
 	m encoding.Marshaler,
 	slab map[string]interface{}, f document.Filter,
-) proto.ListDocumentRequest_Filter {
+) docpb.ListDocumentRequest_Filter {
 	slab[protoFieldKey] = f.Value
 
-	return proto.ListDocumentRequest_Filter{
+	return docpb.ListDocumentRequest_Filter{
 		FieldPath: f.FieldPath,
 		Data:      document.Encode(m, slab, false),
 		Operation: string(f.Op),
@@ -173,14 +173,14 @@ func makeProtoFilter(
 }
 
 func makeProtoFilters(m encoding.Marshaler, filters []document.Filter) (
-	ret []*proto.ListDocumentRequest_Filter, err error,
+	ret []*docpb.ListDocumentRequest_Filter, err error,
 ) {
 	slab := make(map[string]interface{})
 	for _, f := range filters {
 		if len(f.Field.FieldPath) == 0 {
 			panic("invalid List filter: empty zero-valued FieldPath")
 		}
-		pf := new(proto.ListDocumentRequest_Filter)
+		pf := new(docpb.ListDocumentRequest_Filter)
 		*pf = makeProtoFilter(m, slab, f)
 
 		ret = append(ret, pf)

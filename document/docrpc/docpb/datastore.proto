@@ -1,8 +1,8 @@
 syntax = "proto3";
-option go_package = "/proto";
+option go_package = "/docpb";
 
 package proto;
- 
+
 message CreateDocumentRequest {
 	string id = 1;
 	bytes data = 2;

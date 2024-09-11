@@ -21,7 +21,7 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package rpc
+package docrpc
 
 import (
 	"context"
@@ -31,7 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
-	proto "github.com/unstablebuild/blue/document/rpc/proto"
+	"github.com/unstablebuild/blue/document/docrpc/docpb"
 	documenttest "github.com/unstablebuild/blue/document/test"
 	"github.com/unstablebuild/blue/encoding/bson"
 	"google.golang.org/grpc"
@@ -56,7 +56,8 @@ func TestRPCDatastoreCustomServiceDesc(t *testing.T) {
 		}
 
 		addr, teardown := runDatastoreServerOverListener(t, cache,
-			tcpListener, marshaler, func(reg grpc.ServiceRegistrar, srv proto.DocumentStoreServer) {
+			tcpListener, marshaler,
+			func(reg grpc.ServiceRegistrar, srv docpb.DocumentStoreServer) {
 				RegisterCollectionDocumentService(reg, srv, collectionName)
 			}, opts...)
 
