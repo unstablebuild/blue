@@ -32,11 +32,11 @@ import (
 	"strings"
 	"testing"
 
-	gomock "github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/crypto"
 	"github.com/unstablebuild/blue/crypto/cryptotest"
+	gomock "go.uber.org/mock/gomock"
 )
 
 func makeReleaseContent(t *testing.T, content string) *os.File {
