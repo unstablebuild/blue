@@ -21,29 +21,29 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package yaml
+package docbson
 
 import (
-	"github.com/unstablebuild/blue/encoding"
-	"gopkg.in/yaml.v3"
+	"github.com/unstablebuild/blue/document/docmarshal"
+	"gopkg.in/mgo.v2/bson"
 )
 
-// Marshaler returns a YAML Marshaler.
-func Marshaler() encoding.Marshaler {
-	return yamlMarshaler{}
+// Marshaler returns a Marshaler backed by gopkg.in/mgo.v2/bson binary
+// marshaler implementation.
+func Marshaler() docmarshal.Marshaler {
+	return bsonMarshaler{}
 }
 
-type yamlMarshaler struct {
+type bsonMarshaler struct {
 }
 
-func (j yamlMarshaler) Marshal(in interface{}) ([]byte, error) {
-	return yaml.Marshal(in)
+func (b bsonMarshaler) Marshal(doc interface{}) ([]byte, error) {
+	return bson.Marshal(doc)
+}
+func (b bsonMarshaler) Unmarshal(data []byte, doc interface{}) error {
+	return bson.Unmarshal(data, doc)
 }
 
-func (j yamlMarshaler) Unmarshal(data []byte, to interface{}) error {
-	return yaml.Unmarshal(data, to)
-}
-
-func (j yamlMarshaler) DefaultLowerCase() bool {
+func (j bsonMarshaler) DefaultLowerCase() bool {
 	return true
 }

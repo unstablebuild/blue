@@ -27,14 +27,14 @@ import (
 	"strings"
 
 	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/document/docmarshal"
 	"github.com/unstablebuild/blue/document/docrpc/docpb"
-	"github.com/unstablebuild/blue/encoding"
 )
 
 // this is just a trick to be able to re-use encode functionality
 const protoFieldKey = "X"
 
-func makeProtoUpdates(m encoding.Marshaler, updates []document.Update) (
+func makeProtoUpdates(m docmarshal.Marshaler, updates []document.Update) (
 	ret []*docpb.UpdateDocumentRequest_Field,
 ) {
 	slab := make(map[string]interface{})
@@ -51,7 +51,7 @@ func makeProtoUpdates(m encoding.Marshaler, updates []document.Update) (
 	return
 }
 
-func makeProtoPreconditions(m encoding.Marshaler, preconds ...document.Precondition) (
+func makeProtoPreconditions(m docmarshal.Marshaler, preconds ...document.Precondition) (
 	ret []*docpb.UpdateDocumentRequest_Field,
 ) {
 	slab := make(map[string]interface{})
@@ -67,7 +67,7 @@ func makeProtoPreconditions(m encoding.Marshaler, preconds ...document.Precondit
 	return
 }
 
-func makeModelUpdates(m encoding.Marshaler, updates []*docpb.UpdateDocumentRequest_Field) (
+func makeModelUpdates(m docmarshal.Marshaler, updates []*docpb.UpdateDocumentRequest_Field) (
 	ret []document.Update, err error,
 ) {
 	fields, err := makeModelFields(m, updates)
@@ -80,7 +80,7 @@ func makeModelUpdates(m encoding.Marshaler, updates []*docpb.UpdateDocumentReque
 	return
 }
 
-func makeModelPreconds(m encoding.Marshaler, preconds []*docpb.UpdateDocumentRequest_Field) (
+func makeModelPreconds(m docmarshal.Marshaler, preconds []*docpb.UpdateDocumentRequest_Field) (
 	ret []document.Precondition, err error,
 ) {
 	fields, err := makeModelFields(m, preconds)
@@ -93,7 +93,7 @@ func makeModelPreconds(m encoding.Marshaler, preconds []*docpb.UpdateDocumentReq
 	return
 }
 
-func makeModelFields(m encoding.Marshaler, fields []*docpb.UpdateDocumentRequest_Field) (
+func makeModelFields(m docmarshal.Marshaler, fields []*docpb.UpdateDocumentRequest_Field) (
 	ret []document.Field, err error,
 ) {
 	var slab map[string]interface{}
@@ -117,7 +117,7 @@ func makeModelFields(m encoding.Marshaler, fields []*docpb.UpdateDocumentRequest
 	return
 }
 
-func makeModelFilter(m encoding.Marshaler,
+func makeModelFilter(m docmarshal.Marshaler,
 	slab map[string]interface{}, pf *docpb.ListDocumentRequest_Filter,
 ) (document.Filter, error) {
 	err := document.SafeDecode(m, &slab, pf.Data)
@@ -144,7 +144,7 @@ func makeModelFilter(m encoding.Marshaler,
 	}, nil
 }
 
-func makeModelFilters(m encoding.Marshaler, filters []*docpb.ListDocumentRequest_Filter) (
+func makeModelFilters(m docmarshal.Marshaler, filters []*docpb.ListDocumentRequest_Filter) (
 	ret []document.Filter, err error,
 ) {
 	var slab map[string]interface{}
@@ -160,7 +160,7 @@ func makeModelFilters(m encoding.Marshaler, filters []*docpb.ListDocumentRequest
 }
 
 func makeProtoFilter(
-	m encoding.Marshaler,
+	m docmarshal.Marshaler,
 	slab map[string]interface{}, f document.Filter,
 ) docpb.ListDocumentRequest_Filter {
 	slab[protoFieldKey] = f.Value
@@ -172,7 +172,7 @@ func makeProtoFilter(
 	}
 }
 
-func makeProtoFilters(m encoding.Marshaler, filters []document.Filter) (
+func makeProtoFilters(m docmarshal.Marshaler, filters []document.Filter) (
 	ret []*docpb.ListDocumentRequest_Filter, err error,
 ) {
 	slab := make(map[string]interface{})

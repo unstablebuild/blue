@@ -33,14 +33,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
-	"github.com/unstablebuild/blue/encoding/toml"
+	"github.com/unstablebuild/blue/document/docmarshal/doctoml"
 	"github.com/unstablebuild/blue/retry"
 )
 
 func makeLeaderFollowerPair(t *testing.T, nfollowers int) (*Service, []*Service) {
 	lockFile := makeTempLockFile(t)
 	cfg := testConfig()
-	cfg.Marshaler = toml.Marshaler()
+	cfg.Marshaler = doctoml.Marshaler()
 	svc := document.NewInMemoryServiceWithMarshaler(cfg.Marshaler)
 	leader := New(svc, lockFile, cfg)
 	// ensure leader is available

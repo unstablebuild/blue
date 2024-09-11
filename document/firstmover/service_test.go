@@ -32,18 +32,18 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/document/docmarshal"
+	"github.com/unstablebuild/blue/document/docmarshal/docbson"
+	"github.com/unstablebuild/blue/document/docmarshal/docjson"
+	"github.com/unstablebuild/blue/document/docmarshal/doctoml"
 	"github.com/unstablebuild/blue/document/doctest"
-	"github.com/unstablebuild/blue/encoding"
-	"github.com/unstablebuild/blue/encoding/bson"
-	"github.com/unstablebuild/blue/encoding/json"
-	"github.com/unstablebuild/blue/encoding/toml"
 )
 
 func TestServiceIntegration(t *testing.T) {
-	for name, _marshaler := range map[string]encoding.Marshaler{
-		"bson": bson.Marshaler(),
-		"json": json.Marshaler(),
-		"toml": toml.Marshaler(),
+	for name, _marshaler := range map[string]docmarshal.Marshaler{
+		"bson": docbson.Marshaler(),
+		"json": docjson.Marshaler(),
+		"toml": doctoml.Marshaler(),
 	} {
 		marshaler := _marshaler
 		t.Run(name, func(t *testing.T) {
@@ -79,7 +79,7 @@ func TestServiceIntegration(t *testing.T) {
 		doctest.TestDocumentServicePreconditions(t, func(t *testing.T) document.Service {
 			lockFile := makeTempLockFile(t)
 			cfg := testConfig()
-			cfg.Marshaler = bson.Marshaler()
+			cfg.Marshaler = docbson.Marshaler()
 			svc := document.NewInMemoryServiceWithMarshaler(cfg.Marshaler)
 			return New(svc, lockFile, cfg)
 		})
@@ -215,7 +215,7 @@ type testStruct struct {
 
 func testConfig() Config {
 	return Config{
-		Marshaler:                      bson.Marshaler(),
+		Marshaler:                      docbson.Marshaler(),
 		TransientFailureRecoverTimeout: 450 * time.Millisecond,
 		MethodRetryCadence:             20 * time.Millisecond,
 		ConnectRetryCadence:            50 * time.Millisecond,

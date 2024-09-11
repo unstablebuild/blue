@@ -31,12 +31,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/unstablebuild/blue/encoding"
+	"github.com/unstablebuild/blue/document/docmarshal"
 )
 
 // UpdateUpdatedAtField updates the default UpdatedAt field in the given document.
 // Deprecated: Use UpdateDefaultUpdatedAtField.
-func UpdateUpdatedAtField(marshaler encoding.Marshaler, doc any) any {
+func UpdateUpdatedAtField(marshaler docmarshal.Marshaler, doc any) any {
 	now := time.Now()
 	return UpdateDefaultUpdatedAtField(doc, now, marshaler.DefaultLowerCase())
 }
@@ -66,7 +66,7 @@ func UpdateDefaultUpdatedAtField(doc any, now time.Time, lowerCase bool) any {
 
 // UpdateCreatedAtField calls UpdateCreatedAtFieldTime with time.Now.
 // Deprecated: Use UpdateDefaultCreatedAtField.
-func UpdateCreatedAtField(marshaler encoding.Marshaler, doc any) any {
+func UpdateCreatedAtField(marshaler docmarshal.Marshaler, doc any) any {
 	now := time.Now()
 	return UpdateDefaultCreatedAtField(doc, now, marshaler.DefaultLowerCase())
 }
@@ -134,7 +134,7 @@ func UpdateDefaultCreatedAtField(doc any, now time.Time, lowerCase bool) any {
 
 // Encode encodes doc into a reversible format (via Decode)
 // and returns the data in bytes.
-func Encode(m encoding.Marshaler, doc any, addCreatedAt bool) []byte {
+func Encode(m docmarshal.Marshaler, doc any, addCreatedAt bool) []byte {
 	if addCreatedAt {
 		doc = UpdateCreatedAtField(m, doc)
 	} else {
@@ -150,7 +150,7 @@ func Encode(m encoding.Marshaler, doc any, addCreatedAt bool) []byte {
 
 // SafeDecode checks if the given interface would be decoded by Decode
 // and decodes it or otherwise returns an error.
-func SafeDecode(m encoding.Marshaler, rcv any, raw []byte) error {
+func SafeDecode(m docmarshal.Marshaler, rcv any, raw []byte) error {
 	if !IsEncodeable(rcv) {
 		return errors.New("receiver is not a pointer and not a map or is nil")
 	}
@@ -168,7 +168,7 @@ func IsEncodeable(doc any) bool {
 // Decode decotes raw into rcv and panics if there's an error decoding.
 // Use SafeDecode if you are not sure if the structure rcv is safe to be
 // encoded/decoded.
-func Decode(m encoding.Marshaler, rcv any, raw []byte) {
+func Decode(m docmarshal.Marshaler, rcv any, raw []byte) {
 	err := m.Unmarshal(raw, rcv)
 	if err != nil {
 		// this is a progammer error anyway so add more information
@@ -181,7 +181,7 @@ func Decode(m encoding.Marshaler, rcv any, raw []byte) {
 // It will uson bson to encode and decode the data so
 // it shouldn't be used by a document.Service that doesn't use
 // the suite of Decode/Encode functions in this package.
-func NewListIterator(m encoding.Marshaler, docs ...any) *ListIterator {
+func NewListIterator(m docmarshal.Marshaler, docs ...any) *ListIterator {
 	iter := &ListIterator{marshaler: m, docs: make([][]byte, 0)}
 	for _, data := range docs {
 		iter.Extend(nil, Encode(m, data, false))
@@ -192,7 +192,7 @@ func NewListIterator(m encoding.Marshaler, docs ...any) *ListIterator {
 // ListIterator satisfies an Iterator with an inmemory
 // list of documents.
 type ListIterator struct {
-	marshaler encoding.Marshaler
+	marshaler docmarshal.Marshaler
 	docs      [][]byte
 }
 
@@ -232,7 +232,7 @@ func (l *ListIterator) Extend(filters []Filter, v []byte) {
 }
 
 // UpdateProto updates proto with the given slice of updates.
-func UpdateProto(m encoding.Marshaler, updates []Update,
+func UpdateProto(m docmarshal.Marshaler, updates []Update,
 	proto map[string]any, preconds ...Precondition) error {
 	lowerCase := m.DefaultLowerCase()
 
@@ -437,7 +437,7 @@ func MatchFilter(proto map[string]any, f Filter) bool {
 }
 
 func MatchesAllFilters(
-	m encoding.Marshaler, proto map[string]any,
+	m docmarshal.Marshaler, proto map[string]any,
 	filters []Filter,
 ) bool {
 	for _, f := range filters {

@@ -34,15 +34,15 @@ import (
 	"strings"
 
 	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/document/docmarshal"
 	"github.com/unstablebuild/blue/document/docrpc/docpb"
-	"github.com/unstablebuild/blue/encoding"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 type Client struct {
-	marshaler encoding.Marshaler
+	marshaler docmarshal.Marshaler
 	cc        grpc.ClientConnInterface
 	pb        docpb.DocumentStoreClient
 }
@@ -50,7 +50,9 @@ type Client struct {
 // NewClient returns a grpc-based client that satisfies Service
 // by relaying operations to remote datastore server. See NewServer
 // for more details.
-func NewClient(addr net.Addr, m encoding.Marshaler, opts ...grpc.DialOption) (document.Service, error) {
+func NewClient(
+	addr net.Addr, m docmarshal.Marshaler, opts ...grpc.DialOption,
+) (document.Service, error) {
 	opts = append(opts, grpc.WithContextDialer(
 		func(ctx context.Context, _ string) (net.Conn, error) {
 			var d net.Dialer
@@ -80,7 +82,7 @@ func NewClient(addr net.Addr, m encoding.Marshaler, opts ...grpc.DialOption) (do
 	return ret, nil
 }
 
-func (c *Client) Init(cc grpc.ClientConnInterface, m encoding.Marshaler) {
+func (c *Client) Init(cc grpc.ClientConnInterface, m docmarshal.Marshaler) {
 	c.cc = cc
 	c.pb = docpb.NewDocumentStoreClient(cc)
 	c.marshaler = m
@@ -181,7 +183,7 @@ func (c *Client) Delete(
 }
 
 type rpcIterator struct {
-	marshaler encoding.Marshaler
+	marshaler docmarshal.Marshaler
 	cc        docpb.DocumentStore_ListClient
 	next      *docpb.ListDocumentResponse
 	nextErr   error

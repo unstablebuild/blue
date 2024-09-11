@@ -28,22 +28,22 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/unstablebuild/blue/document"
-	"github.com/unstablebuild/blue/encoding"
-	"github.com/unstablebuild/blue/encoding/bson"
-	"github.com/unstablebuild/blue/encoding/json"
-	"github.com/unstablebuild/blue/encoding/toml"
 	"github.com/stretchr/testify/require"
+	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/document/docmarshal"
+	"github.com/unstablebuild/blue/document/docmarshal/docbson"
+	"github.com/unstablebuild/blue/document/docmarshal/docjson"
+	"github.com/unstablebuild/blue/document/docmarshal/doctoml"
 )
 
 func TestPartitionService(t *testing.T) {
 	tsuite := []struct {
 		encoding  string
-		marshaler encoding.Marshaler
+		marshaler docmarshal.Marshaler
 	}{
-		{"bson", bson.Marshaler()},
-		{"json", json.Marshaler()},
-		{"toml", toml.Marshaler()},
+		{"bson", docbson.Marshaler()},
+		{"json", docjson.Marshaler()},
+		{"toml", doctoml.Marshaler()},
 	}
 	for _, tcase := range tsuite {
 		t.Run("a single, default partition", func(t *testing.T) {

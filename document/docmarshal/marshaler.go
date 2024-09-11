@@ -21,29 +21,14 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package bson
+package docmarshal
 
-import (
-	"github.com/unstablebuild/blue/encoding"
-	"gopkg.in/mgo.v2/bson"
-)
-
-// Marshaler returns a Marshaler backed by gopkg.in/mgo.v2/bson binary
-// marshaler implementation.
-func Marshaler() encoding.Marshaler {
-	return bsonMarshaler{}
-}
-
-type bsonMarshaler struct {
-}
-
-func (b bsonMarshaler) Marshal(doc interface{}) ([]byte, error) {
-	return bson.Marshal(doc)
-}
-func (b bsonMarshaler) Unmarshal(data []byte, doc interface{}) error {
-	return bson.Unmarshal(data, doc)
-}
-
-func (j bsonMarshaler) DefaultLowerCase() bool {
-	return true
+// Marshaler is a text or binary marshaler that can be used
+// by document.Service implementations to abstract document encoding.
+type Marshaler interface {
+	Marshal(in interface{}) ([]byte, error)
+	Unmarshal(data []byte, to interface{}) error
+	// DefaultLowerCase should return true if by default
+	// struct fields are encoded in lower case.
+	DefaultLowerCase() bool
 }

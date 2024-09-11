@@ -28,12 +28,12 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/unstablebuild/blue/encoding"
-	"github.com/unstablebuild/blue/encoding/bson"
+	"github.com/unstablebuild/blue/document/docmarshal"
+	"github.com/unstablebuild/blue/document/docmarshal/docbson"
 )
 
 type inMemoryService struct {
-	marshaler encoding.Marshaler
+	marshaler docmarshal.Marshaler
 	m         sync.Locker
 	storage   map[string][]byte
 }
@@ -41,10 +41,10 @@ type inMemoryService struct {
 // NewInMemoryService returns an instance of Service backed
 // by an in-memory map.
 func NewInMemoryService() DroppableService {
-	return NewInMemoryServiceWithMarshaler(bson.Marshaler())
+	return NewInMemoryServiceWithMarshaler(docbson.Marshaler())
 }
 
-func NewInMemoryServiceWithMarshaler(m encoding.Marshaler) DroppableService {
+func NewInMemoryServiceWithMarshaler(m docmarshal.Marshaler) DroppableService {
 	return &inMemoryService{
 		marshaler: m,
 		m:         new(sync.Mutex),

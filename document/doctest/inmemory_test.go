@@ -27,20 +27,20 @@ import (
 	"testing"
 
 	"github.com/unstablebuild/blue/document"
-	"github.com/unstablebuild/blue/encoding"
-	"github.com/unstablebuild/blue/encoding/bson"
-	"github.com/unstablebuild/blue/encoding/json"
-	"github.com/unstablebuild/blue/encoding/toml"
+	"github.com/unstablebuild/blue/document/docmarshal"
+	"github.com/unstablebuild/blue/document/docmarshal/docbson"
+	"github.com/unstablebuild/blue/document/docmarshal/docjson"
+	"github.com/unstablebuild/blue/document/docmarshal/doctoml"
 )
 
 func TestInMemoryService(t *testing.T) {
 	tsuite := []struct {
 		encoding  string
-		marshaler encoding.Marshaler
+		marshaler docmarshal.Marshaler
 	}{
-		{"bson", bson.Marshaler()},
-		{"json", json.Marshaler()},
-		{"toml", toml.Marshaler()},
+		{"bson", docbson.Marshaler()},
+		{"json", docjson.Marshaler()},
+		{"toml", doctoml.Marshaler()},
 		// NOTE: yaml passes all tests except the ones with encoding of
 		// numerical values. It should never be used as a storage format anyway.
 		// {"yaml", yaml.Marshaler()},

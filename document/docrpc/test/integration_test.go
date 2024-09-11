@@ -39,9 +39,9 @@ import (
 	"github.com/unstablebuild/blue/document/docrpc/docpb"
 	"github.com/unstablebuild/blue/document/doctest"
 	"github.com/unstablebuild/blue/document/firestore"
-	"github.com/unstablebuild/blue/encoding"
-	"github.com/unstablebuild/blue/encoding/bson"
-	"github.com/unstablebuild/blue/encoding/toml"
+	"github.com/unstablebuild/blue/document/docmarshal"
+	"github.com/unstablebuild/blue/document/docmarshal/docbson"
+	"github.com/unstablebuild/blue/document/docmarshal/doctoml"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -54,10 +54,10 @@ func TestFirestoreIntegration(t *testing.T) {
 
 	tsuite := []struct {
 		encoding  string
-		marshaler encoding.Marshaler
+		marshaler docmarshal.Marshaler
 	}{
-		{"toml", toml.Marshaler()},
-		{"bson", bson.Marshaler()},
+		{"toml", doctoml.Marshaler()},
+		{"bson", docbson.Marshaler()},
 		// NOTE: dates are stored as string, which then are not interpreted correctly
 		// as precondition or when json is used as a transport marshaler, in which case
 		// the storage unmarshaler doesn't know how to decode.
@@ -98,9 +98,9 @@ func TestFirestoreBinaryCompatibility(t *testing.T) {
 
 	tsuite := []struct {
 		encoding  string
-		marshaler encoding.Marshaler
+		marshaler docmarshal.Marshaler
 	}{
-		{"toml", toml.Marshaler()},
+		{"toml", doctoml.Marshaler()},
 		// NOTE: bson changes the case of struct keys when going through the rpc calls
 		// so it's not binary compatible with firestore.
 		// {"bson", bson.Marshaler()},
@@ -286,7 +286,7 @@ func tcpListener() (net.Listener, error) {
 func runDatastoreServerOverListener(
 	t *testing.T, other document.Service,
 	listener func() (net.Listener, error),
-	marshaler encoding.Marshaler,
+	marshaler docmarshal.Marshaler,
 	opts ...grpc.ServerOption,
 ) (net.Addr, func()) {
 	gsrv := grpc.NewServer(opts...)
@@ -333,7 +333,7 @@ func runFirestoreOrSkip(t *testing.T) func() {
 	}
 }
 
-func makeFirestoreClientPair(t *testing.T, marshaler encoding.Marshaler) (
+func makeFirestoreClientPair(t *testing.T, marshaler docmarshal.Marshaler) (
 	fir, cli document.Service,
 ) {
 	testProjectID := uuid.New().String()

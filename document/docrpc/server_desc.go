@@ -29,7 +29,7 @@ import (
 	"strings"
 
 	"github.com/unstablebuild/blue/document/docrpc/docpb"
-	"github.com/unstablebuild/blue/encoding"
+	"github.com/unstablebuild/blue/document/docmarshal"
 	"google.golang.org/grpc"
 )
 
@@ -94,7 +94,7 @@ func updateMethodInfoUnaryInterceptor(
 // enable multiple collection services registered in the same server. Server
 // should be registered with grpc via RegisterCollectionDocumentService.
 func (c *Client) InitWithCollection(
-	cc grpc.ClientConnInterface, m encoding.Marshaler, collection string,
+	cc grpc.ClientConnInterface, m docmarshal.Marshaler, collection string,
 ) {
 	c.cc = cc
 	c.pb = newDocumentStoreClient(cc, collection)
