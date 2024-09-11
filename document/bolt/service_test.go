@@ -32,11 +32,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
-	documenttest "github.com/unstablebuild/blue/document/test"
+	"github.com/unstablebuild/blue/document/doctest"
 )
 
 func TestBolt(t *testing.T) {
-	documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
+	doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 		f, err := os.CreateTemp("", "barnack_bolt_test")
 		require.NoError(t, err)
 		defer f.Close()
@@ -47,7 +47,7 @@ func TestBolt(t *testing.T) {
 		return store
 	})
 
-	documenttest.TestDocumentServicePreconditions(t, func(t *testing.T) document.Service {
+	doctest.TestDocumentServicePreconditions(t, func(t *testing.T) document.Service {
 		f, err := os.CreateTemp("", "preconds_bolt_test")
 		require.NoError(t, err)
 		defer f.Close()
@@ -67,8 +67,8 @@ func TestBolt(t *testing.T) {
 		store, err := New(f.Name(), "test")
 		require.NoError(t, err)
 
-		require.NoError(t, store.Set(ctx, "1", documenttest.Alice()))
-		require.NoError(t, store.Set(ctx, "2", documenttest.Alice()))
+		require.NoError(t, store.Set(ctx, "1", doctest.Alice()))
+		require.NoError(t, store.Set(ctx, "2", doctest.Alice()))
 
 		require.NoError(t, store.Drop(ctx))
 
@@ -91,8 +91,8 @@ func TestBolt(t *testing.T) {
 
 		one := "daas"
 		two := "postmates"
-		e1 := documenttest.Alice()
-		e2 := documenttest.Bob()
+		e1 := doctest.Alice()
+		e2 := doctest.Bob()
 
 		t.Run("is safe to use two instances of the service with same database file", func(t *testing.T) {
 			var wg sync.WaitGroup
@@ -117,8 +117,8 @@ func TestBolt(t *testing.T) {
 
 			wg.Wait()
 
-			var r1 documenttest.Segador
-			var r2 documenttest.Segador
+			var r1 doctest.Segador
+			var r2 doctest.Segador
 
 			wg.Add(2)
 			go func() {
@@ -147,7 +147,7 @@ func TestBolt(t *testing.T) {
 				it, err := store.List(ctx, nil)
 				require.NoError(t, err)
 
-				var r1 documenttest.Segador
+				var r1 doctest.Segador
 				require.True(t, it.HasNext())
 				assert.NoError(t, it.NextTo(&r1))
 				assert.False(t, it.HasNext())

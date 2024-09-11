@@ -32,7 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/document/docrpc/docpb"
-	documenttest "github.com/unstablebuild/blue/document/test"
+	"github.com/unstablebuild/blue/document/doctest"
 	"github.com/unstablebuild/blue/encoding"
 	"github.com/unstablebuild/blue/encoding/bson"
 	"github.com/unstablebuild/blue/encoding/json"
@@ -86,7 +86,7 @@ func testRPCDatastoreOverListener(
 ) {
 	teardowns := []func(){}
 
-	documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
+	doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 		cache := document.NewInMemoryServiceWithMarshaler(marshaler)
 		addr, teardown := runDatastoreServerOverListener(t, cache,
 			listener, marshaler, docpb.RegisterDocumentStoreServer)
@@ -197,7 +197,7 @@ func TestRPCInterop(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Run("writes by client/server are readable by underlying service", func(t *testing.T) {
-				documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
+				doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 					cache := document.NewInMemoryServiceWithMarshaler(marshaler)
 					addr, teardown := runDatastoreServer(t, cache, marshaler)
 					teardowns = append(teardowns, teardown)
@@ -211,7 +211,7 @@ func TestRPCInterop(t *testing.T) {
 			})
 
 			t.Run("writes by underlying service are readable by client/server", func(t *testing.T) {
-				documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
+				doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 					cache := document.NewInMemoryServiceWithMarshaler(marshaler)
 					addr, teardown := runDatastoreServer(t, cache, marshaler)
 					teardowns = append(teardowns, teardown)
@@ -225,7 +225,7 @@ func TestRPCInterop(t *testing.T) {
 			})
 
 			t.Run("single instance preconditions", func(t *testing.T) {
-				documenttest.TestDocumentServicePreconditions(t, func(t *testing.T) document.Service {
+				doctest.TestDocumentServicePreconditions(t, func(t *testing.T) document.Service {
 					cache := document.NewInMemoryServiceWithMarshaler(marshaler)
 					addr, teardown := runDatastoreServer(t, cache, marshaler)
 					teardowns = append(teardowns, teardown)
