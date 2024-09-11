@@ -49,32 +49,26 @@ func TestServiceIntegration(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Run("single instance assumes leader", func(t *testing.T) {
 				test.TestDocumentService(t, func(t *testing.T) document.Service {
-					f, err := os.CreateTemp("", "")
-					require.NoError(t, err)
-					require.NoError(t, f.Close())
-					require.NoError(t, os.Remove(f.Name()))
+					lockFile := makeTempLockFile(t)
 					cfg := testConfig()
 					cfg.Marshaler = marshaler
 					svc := document.NewInMemoryServiceWithMarshaler(marshaler)
-					return New(svc, f.Name(), cfg)
+					return New(svc, lockFile, cfg)
 				})
 			})
 
 			t.Run("two instances, seconds assumes follower", func(t *testing.T) {
 				test.TestDocumentService(t, func(t *testing.T) document.Service {
-					f, err := os.CreateTemp("", "")
-					require.NoError(t, err)
-					require.NoError(t, f.Close())
-					require.NoError(t, os.Remove(f.Name()))
+					lockFile := makeTempLockFile(t)
 					svc := document.NewInMemoryServiceWithMarshaler(marshaler)
 					cfg := testConfig()
 					cfg.Marshaler = marshaler
-					leader := New(svc, f.Name(), cfg)
+					leader := New(svc, lockFile, cfg)
 					// ensure leader is available
 					var temp testStruct
-					err = leader.Get(context.Background(), f.Name(), &temp)
+					err := leader.Get(context.Background(), lockFile, &temp)
 					require.Equal(t, document.ErrNotFound, err)
-					follower := New(svc, f.Name(), cfg)
+					follower := New(svc, lockFile, cfg)
 					return follower
 				})
 			})
@@ -83,14 +77,11 @@ func TestServiceIntegration(t *testing.T) {
 
 	t.Run("single instance preconditions (bson)", func(t *testing.T) {
 		test.TestDocumentServicePreconditions(t, func(t *testing.T) document.Service {
-			f, err := os.CreateTemp("", "")
-			require.NoError(t, err)
-			require.NoError(t, f.Close())
-			require.NoError(t, os.Remove(f.Name()))
+			lockFile := makeTempLockFile(t)
 			cfg := testConfig()
 			cfg.Marshaler = bson.Marshaler()
 			svc := document.NewInMemoryServiceWithMarshaler(cfg.Marshaler)
-			return New(svc, f.Name(), cfg)
+			return New(svc, lockFile, cfg)
 		})
 	})
 
@@ -107,19 +98,16 @@ func TestServiceIntegration(t *testing.T) {
 
 	t.Run("two instances, seconds assumes leader after leader dies", func(t *testing.T) {
 		test.TestDocumentService(t, func(t *testing.T) document.Service {
-			f, err := os.CreateTemp("", "")
-			require.NoError(t, err)
-			require.NoError(t, f.Close())
-			require.NoError(t, os.Remove(f.Name()))
+			lockFile := makeTempLockFile(t)
 			svc := document.NewInMemoryService()
-			leader := New(svc, f.Name(), testConfig())
+			leader := New(svc, lockFile, testConfig())
 			// ensure leader is available
-			err = leader.Set(context.Background(), f.Name(), &testStruct{A: "1234"})
+			err := leader.Set(context.Background(), lockFile, &testStruct{A: "1234"})
 			require.NoError(t, err)
-			follower := New(document.NewInMemoryService(), f.Name(), testConfig())
+			follower := New(document.NewInMemoryService(), lockFile, testConfig())
 			// ensure follow is available and using leader
 			var temp testStruct
-			err = follower.Get(context.Background(), f.Name(), &temp)
+			err = follower.Get(context.Background(), lockFile, &temp)
 			require.NoError(t, err)
 			require.Equal(t, "1234", temp.A)
 			leader.Close()
@@ -132,18 +120,15 @@ func TestServiceIntegration(t *testing.T) {
 			const n = 50
 			cfg := testConfig()
 
-			f, err := os.CreateTemp("", "")
-			require.NoError(t, err)
-			require.NoError(t, f.Close())
-			require.NoError(t, os.Remove(f.Name()))
+			lockFile := makeTempLockFile(t)
 			svc := document.NewInMemoryService()
 
 			instances := make([]*Service, 0, n)
 
 			// chances of returned follower to become leader are ~1/50
 			for i := 0; i < n-1; i++ {
-				instance := New(svc, f.Name(), cfg)
-				_ = instance.Get(context.Background(), f.Name(), nil)
+				instance := New(svc, lockFile, cfg)
+				_ = instance.Get(context.Background(), lockFile, nil)
 				instances = append(instances, instance)
 			}
 			ret := instances[len(instances)-1]
@@ -186,17 +171,14 @@ func TestCustomRetryableErrors(t *testing.T) {
 
 	for _, tcase := range tsuite {
 		t.Run(tcase.desc, func(t *testing.T) {
-			f, err := os.CreateTemp("", "")
-			require.NoError(t, err)
-			require.NoError(t, f.Close())
-			require.NoError(t, os.Remove(f.Name()))
+			lockFile := makeTempLockFile(t)
 			require.Error(t, tcase.methodError)
 			mock := newTestService(tcase.methodError)
 			cfg := testConfig()
 			cfg.CloseError = tcase.closeError
-			svc, doneFn := tcase.makeInstance(mock, f.Name(), cfg)
+			svc, doneFn := tcase.makeInstance(mock, lockFile, cfg)
 			defer doneFn()
-			err = svc.Set(context.Background(), "bluegrass", &testStruct{A: "1234"})
+			err := svc.Set(context.Background(), "bluegrass", &testStruct{A: "1234"})
 			if !tcase.wantSuccess {
 				require.Error(t, err)
 			} else {
@@ -287,4 +269,12 @@ func (t *testService) List(ctx context.Context, filters []document.Filter) (docu
 
 func (t *testService) Close() error {
 	return nil
+}
+
+func makeTempLockFile(t *testing.T) string {
+	f, err := os.CreateTemp("", "")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	require.NoError(t, os.Remove(f.Name()))
+	return f.Name()
 }
