@@ -21,25 +21,19 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package net
+package bluenet
 
-import (
-	"net"
-	"testing"
+import "context"
 
-	"golang.org/x/net/nettest"
-)
+// satisfy net.Error
+var _ error = &timeoutError{}
 
-func TestChanConn(t *testing.T) {
-	nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
-		addr1, addr2 := &net.UDPAddr{Port: 1}, &net.UDPAddr{Port: 2}
-		ch1, ch2 := make(chan ReadResult), make(chan ReadResult)
-		c1 = ChanConn(addr1, addr2, ch1, ch2)
-		c2 = ChanConn(addr2, addr1, ch2, ch1)
-		stop = func() {
-			_ = c1.Close()
-			_ = c2.Close()
-		}
-		return
-	})
+type timeoutError struct{}
+
+func (e *timeoutError) Error() string   { return "i/o timeout" }
+func (e *timeoutError) Timeout() bool   { return true }
+func (e *timeoutError) Temporary() bool { return true }
+
+func (e *timeoutError) Is(err error) bool {
+	return err == context.DeadlineExceeded
 }

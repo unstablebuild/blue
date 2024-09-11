@@ -21,19 +21,41 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package net
+package bluenet
 
-import "context"
+import (
+	"net"
+	"os"
+	"testing"
 
-// satisfy net.Error
-var _ error = &timeoutError{}
+	"golang.org/x/net/nettest"
+)
 
-type timeoutError struct{}
-
-func (e *timeoutError) Error() string   { return "i/o timeout" }
-func (e *timeoutError) Timeout() bool   { return true }
-func (e *timeoutError) Temporary() bool { return true }
-
-func (e *timeoutError) Is(err error) bool {
-	return err == context.DeadlineExceeded
+func TestPipeConn(t *testing.T) {
+	nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
+		var r1, w1, r2, w2 *os.File
+		r1, w2, err = os.Pipe()
+		if err != nil {
+			return
+		}
+		r2, w1, err = os.Pipe()
+		if err != nil {
+			return
+		}
+		c1, err = PipeConn(r1, w1)
+		if err != nil {
+			return
+		}
+		c2, err = PipeConn(r2, w2)
+		if err != nil {
+			return
+		}
+		stop = func() {
+			_ = r1.Close()
+			_ = r2.Close()
+			_ = w1.Close()
+			_ = w2.Close()
+		}
+		return
+	})
 }
