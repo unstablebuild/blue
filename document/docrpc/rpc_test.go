@@ -21,7 +21,7 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package rpc
+package docrpc
 
 import (
 	"context"
@@ -31,7 +31,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
-	proto "github.com/unstablebuild/blue/document/rpc/proto"
+	"github.com/unstablebuild/blue/document/docrpc/docpb"
 	documenttest "github.com/unstablebuild/blue/document/test"
 	"github.com/unstablebuild/blue/encoding"
 	"github.com/unstablebuild/blue/encoding/bson"
@@ -49,7 +49,7 @@ func runDatastoreServerOverListener(
 	t *testing.T, other document.Service,
 	listener func() (net.Listener, error),
 	marshaler encoding.Marshaler,
-	register func(grpc.ServiceRegistrar, proto.DocumentStoreServer),
+	register func(grpc.ServiceRegistrar, docpb.DocumentStoreServer),
 	opts ...grpc.ServerOption,
 ) (net.Addr, func()) {
 	gsrv := grpc.NewServer(opts...)
@@ -77,7 +77,7 @@ func runDatastoreServer(
 	t *testing.T, other document.Service, marshaler encoding.Marshaler,
 ) (net.Addr, func()) {
 	return runDatastoreServerOverListener(t, other, tcpListener, marshaler,
-		proto.RegisterDocumentStoreServer)
+		docpb.RegisterDocumentStoreServer)
 }
 
 func testRPCDatastoreOverListener(
@@ -89,7 +89,7 @@ func testRPCDatastoreOverListener(
 	documenttest.TestDocumentService(t, func(t *testing.T) document.Service {
 		cache := document.NewInMemoryServiceWithMarshaler(marshaler)
 		addr, teardown := runDatastoreServerOverListener(t, cache,
-			listener, marshaler, proto.RegisterDocumentStoreServer)
+			listener, marshaler, docpb.RegisterDocumentStoreServer)
 		teardowns = append(teardowns, teardown)
 
 		store, err := NewClient(addr, marshaler,

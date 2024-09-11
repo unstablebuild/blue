@@ -21,6 +21,6 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package rpc
+package docrpc
 
-//go:generate protoc proto/datastore.proto --go_out=. --go-grpc_out=. --go_opt=Mproto/datastore.proto=/proto
+//go:generate protoc docpb/datastore.proto --go_out=. --go-grpc_out=. --go_opt=Mdocpb/datastore.proto=/docpb

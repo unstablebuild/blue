@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.28.1
 // 	protoc        v5.27.1
-// source: proto/datastore.proto
+// source: docpb/datastore.proto
 
-package proto
+package docpb
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -32,7 +32,7 @@ type CreateDocumentRequest struct {
 func (x *CreateDocumentRequest) Reset() {
 	*x = CreateDocumentRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_datastore_proto_msgTypes[0]
+		mi := &file_docpb_datastore_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -45,7 +45,7 @@ func (x *CreateDocumentRequest) String() string {
 func (*CreateDocumentRequest) ProtoMessage() {}
 
 func (x *CreateDocumentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_datastore_proto_msgTypes[0]
+	mi := &file_docpb_datastore_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58,7 +58,7 @@ func (x *CreateDocumentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDocumentRequest.ProtoReflect.Descriptor instead.
 func (*CreateDocumentRequest) Descriptor() ([]byte, []int) {
-	return file_proto_datastore_proto_rawDescGZIP(), []int{0}
+	return file_docpb_datastore_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *CreateDocumentRequest) GetId() string {
@@ -87,7 +87,7 @@ type SetDocumentRequest struct {
 func (x *SetDocumentRequest) Reset() {
 	*x = SetDocumentRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_datastore_proto_msgTypes[1]
+		mi := &file_docpb_datastore_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -100,7 +100,7 @@ func (x *SetDocumentRequest) String() string {
 func (*SetDocumentRequest) ProtoMessage() {}
 
 func (x *SetDocumentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_datastore_proto_msgTypes[1]
+	mi := &file_docpb_datastore_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -113,7 +113,7 @@ func (x *SetDocumentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetDocumentRequest.ProtoReflect.Descriptor instead.
 func (*SetDocumentRequest) Descriptor() ([]byte, []int) {
-	return file_proto_datastore_proto_rawDescGZIP(), []int{1}
+	return file_docpb_datastore_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *SetDocumentRequest) GetId() string {
@@ -143,7 +143,7 @@ type UpdateDocumentRequest struct {
 func (x *UpdateDocumentRequest) Reset() {
 	*x = UpdateDocumentRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_datastore_proto_msgTypes[2]
+		mi := &file_docpb_datastore_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -156,7 +156,7 @@ func (x *UpdateDocumentRequest) String() string {
 func (*UpdateDocumentRequest) ProtoMessage() {}
 
 func (x *UpdateDocumentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_datastore_proto_msgTypes[2]
+	mi := &file_docpb_datastore_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -169,7 +169,7 @@ func (x *UpdateDocumentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateDocumentRequest.ProtoReflect.Descriptor instead.
 func (*UpdateDocumentRequest) Descriptor() ([]byte, []int) {
-	return file_proto_datastore_proto_rawDescGZIP(), []int{2}
+	return file_docpb_datastore_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *UpdateDocumentRequest) GetId() string {
@@ -204,7 +204,7 @@ type GetDocumentRequest struct {
 func (x *GetDocumentRequest) Reset() {
 	*x = GetDocumentRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_datastore_proto_msgTypes[3]
+		mi := &file_docpb_datastore_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -217,7 +217,7 @@ func (x *GetDocumentRequest) String() string {
 func (*GetDocumentRequest) ProtoMessage() {}
 
 func (x *GetDocumentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_datastore_proto_msgTypes[3]
+	mi := &file_docpb_datastore_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -230,7 +230,7 @@ func (x *GetDocumentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDocumentRequest.ProtoReflect.Descriptor instead.
 func (*GetDocumentRequest) Descriptor() ([]byte, []int) {
-	return file_proto_datastore_proto_rawDescGZIP(), []int{3}
+	return file_docpb_datastore_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GetDocumentRequest) GetId() string {
@@ -251,7 +251,7 @@ type DeleteDocumentRequest struct {
 func (x *DeleteDocumentRequest) Reset() {
 	*x = DeleteDocumentRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_datastore_proto_msgTypes[4]
+		mi := &file_docpb_datastore_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -264,7 +264,7 @@ func (x *DeleteDocumentRequest) String() string {
 func (*DeleteDocumentRequest) ProtoMessage() {}
 
 func (x *DeleteDocumentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_datastore_proto_msgTypes[4]
+	mi := &file_docpb_datastore_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -277,7 +277,7 @@ func (x *DeleteDocumentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteDocumentRequest.ProtoReflect.Descriptor instead.
 func (*DeleteDocumentRequest) Descriptor() ([]byte, []int) {
-	return file_proto_datastore_proto_rawDescGZIP(), []int{4}
+	return file_docpb_datastore_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *DeleteDocumentRequest) GetId() string {
@@ -298,7 +298,7 @@ type ListDocumentRequest struct {
 func (x *ListDocumentRequest) Reset() {
 	*x = ListDocumentRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_datastore_proto_msgTypes[5]
+		mi := &file_docpb_datastore_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -311,7 +311,7 @@ func (x *ListDocumentRequest) String() string {
 func (*ListDocumentRequest) ProtoMessage() {}
 
 func (x *ListDocumentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_datastore_proto_msgTypes[5]
+	mi := &file_docpb_datastore_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -324,7 +324,7 @@ func (x *ListDocumentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDocumentRequest.ProtoReflect.Descriptor instead.
 func (*ListDocumentRequest) Descriptor() ([]byte, []int) {
-	return file_proto_datastore_proto_rawDescGZIP(), []int{5}
+	return file_docpb_datastore_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ListDocumentRequest) GetFilters() []*ListDocumentRequest_Filter {
@@ -343,7 +343,7 @@ type DocumentResponse struct {
 func (x *DocumentResponse) Reset() {
 	*x = DocumentResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_datastore_proto_msgTypes[6]
+		mi := &file_docpb_datastore_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -356,7 +356,7 @@ func (x *DocumentResponse) String() string {
 func (*DocumentResponse) ProtoMessage() {}
 
 func (x *DocumentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_datastore_proto_msgTypes[6]
+	mi := &file_docpb_datastore_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -369,7 +369,7 @@ func (x *DocumentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DocumentResponse.ProtoReflect.Descriptor instead.
 func (*DocumentResponse) Descriptor() ([]byte, []int) {
-	return file_proto_datastore_proto_rawDescGZIP(), []int{6}
+	return file_docpb_datastore_proto_rawDescGZIP(), []int{6}
 }
 
 type GetDocumentResponse struct {
@@ -384,7 +384,7 @@ type GetDocumentResponse struct {
 func (x *GetDocumentResponse) Reset() {
 	*x = GetDocumentResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_datastore_proto_msgTypes[7]
+		mi := &file_docpb_datastore_proto_msgTypes[7]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -397,7 +397,7 @@ func (x *GetDocumentResponse) String() string {
 func (*GetDocumentResponse) ProtoMessage() {}
 
 func (x *GetDocumentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_datastore_proto_msgTypes[7]
+	mi := &file_docpb_datastore_proto_msgTypes[7]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -410,7 +410,7 @@ func (x *GetDocumentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDocumentResponse.ProtoReflect.Descriptor instead.
 func (*GetDocumentResponse) Descriptor() ([]byte, []int) {
-	return file_proto_datastore_proto_rawDescGZIP(), []int{7}
+	return file_docpb_datastore_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetDocumentResponse) GetData() []byte {
@@ -439,7 +439,7 @@ type ListDocumentResponse struct {
 func (x *ListDocumentResponse) Reset() {
 	*x = ListDocumentResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_datastore_proto_msgTypes[8]
+		mi := &file_docpb_datastore_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -452,7 +452,7 @@ func (x *ListDocumentResponse) String() string {
 func (*ListDocumentResponse) ProtoMessage() {}
 
 func (x *ListDocumentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_datastore_proto_msgTypes[8]
+	mi := &file_docpb_datastore_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -465,7 +465,7 @@ func (x *ListDocumentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDocumentResponse.ProtoReflect.Descriptor instead.
 func (*ListDocumentResponse) Descriptor() ([]byte, []int) {
-	return file_proto_datastore_proto_rawDescGZIP(), []int{8}
+	return file_docpb_datastore_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListDocumentResponse) GetData() []byte {
@@ -493,7 +493,7 @@ type CreateDocumentResponse struct {
 func (x *CreateDocumentResponse) Reset() {
 	*x = CreateDocumentResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_datastore_proto_msgTypes[9]
+		mi := &file_docpb_datastore_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -506,7 +506,7 @@ func (x *CreateDocumentResponse) String() string {
 func (*CreateDocumentResponse) ProtoMessage() {}
 
 func (x *CreateDocumentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_datastore_proto_msgTypes[9]
+	mi := &file_docpb_datastore_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -519,7 +519,7 @@ func (x *CreateDocumentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDocumentResponse.ProtoReflect.Descriptor instead.
 func (*CreateDocumentResponse) Descriptor() ([]byte, []int) {
-	return file_proto_datastore_proto_rawDescGZIP(), []int{9}
+	return file_docpb_datastore_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CreateDocumentResponse) GetAlreadyExists() bool {
@@ -541,7 +541,7 @@ type UpdateDocumentResponse struct {
 func (x *UpdateDocumentResponse) Reset() {
 	*x = UpdateDocumentResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_datastore_proto_msgTypes[10]
+		mi := &file_docpb_datastore_proto_msgTypes[10]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -554,7 +554,7 @@ func (x *UpdateDocumentResponse) String() string {
 func (*UpdateDocumentResponse) ProtoMessage() {}
 
 func (x *UpdateDocumentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_datastore_proto_msgTypes[10]
+	mi := &file_docpb_datastore_proto_msgTypes[10]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -567,7 +567,7 @@ func (x *UpdateDocumentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateDocumentResponse.ProtoReflect.Descriptor instead.
 func (*UpdateDocumentResponse) Descriptor() ([]byte, []int) {
-	return file_proto_datastore_proto_rawDescGZIP(), []int{10}
+	return file_docpb_datastore_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *UpdateDocumentResponse) GetNotFound() bool {
@@ -596,7 +596,7 @@ type UpdateDocumentRequest_Field struct {
 func (x *UpdateDocumentRequest_Field) Reset() {
 	*x = UpdateDocumentRequest_Field{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_datastore_proto_msgTypes[11]
+		mi := &file_docpb_datastore_proto_msgTypes[11]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -609,7 +609,7 @@ func (x *UpdateDocumentRequest_Field) String() string {
 func (*UpdateDocumentRequest_Field) ProtoMessage() {}
 
 func (x *UpdateDocumentRequest_Field) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_datastore_proto_msgTypes[11]
+	mi := &file_docpb_datastore_proto_msgTypes[11]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -622,7 +622,7 @@ func (x *UpdateDocumentRequest_Field) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateDocumentRequest_Field.ProtoReflect.Descriptor instead.
 func (*UpdateDocumentRequest_Field) Descriptor() ([]byte, []int) {
-	return file_proto_datastore_proto_rawDescGZIP(), []int{2, 0}
+	return file_docpb_datastore_proto_rawDescGZIP(), []int{2, 0}
 }
 
 func (x *UpdateDocumentRequest_Field) GetFieldPath() []string {
@@ -652,7 +652,7 @@ type ListDocumentRequest_Filter struct {
 func (x *ListDocumentRequest_Filter) Reset() {
 	*x = ListDocumentRequest_Filter{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_datastore_proto_msgTypes[12]
+		mi := &file_docpb_datastore_proto_msgTypes[12]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -665,7 +665,7 @@ func (x *ListDocumentRequest_Filter) String() string {
 func (*ListDocumentRequest_Filter) ProtoMessage() {}
 
 func (x *ListDocumentRequest_Filter) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_datastore_proto_msgTypes[12]
+	mi := &file_docpb_datastore_proto_msgTypes[12]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -678,7 +678,7 @@ func (x *ListDocumentRequest_Filter) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDocumentRequest_Filter.ProtoReflect.Descriptor instead.
 func (*ListDocumentRequest_Filter) Descriptor() ([]byte, []int) {
-	return file_proto_datastore_proto_rawDescGZIP(), []int{5, 0}
+	return file_docpb_datastore_proto_rawDescGZIP(), []int{5, 0}
 }
 
 func (x *ListDocumentRequest_Filter) GetFieldPath() []string {
@@ -702,10 +702,10 @@ func (x *ListDocumentRequest_Filter) GetOperation() string {
 	return ""
 }
 
-var File_proto_datastore_proto protoreflect.FileDescriptor
+var File_docpb_datastore_proto protoreflect.FileDescriptor
 
-var file_proto_datastore_proto_rawDesc = []byte{
-	0x0a, 0x15, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x64, 0x61, 0x74, 0x61, 0x73, 0x74, 0x6f, 0x72,
+var file_docpb_datastore_proto_rawDesc = []byte{
+	0x0a, 0x15, 0x64, 0x6f, 0x63, 0x70, 0x62, 0x2f, 0x64, 0x61, 0x74, 0x61, 0x73, 0x74, 0x6f, 0x72,
 	0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x05, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0x3b,
 	0x0a, 0x15, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x44, 0x6f, 0x63, 0x75, 0x6d, 0x65, 0x6e, 0x74,
 	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20,
@@ -791,24 +791,24 @@ var file_proto_datastore_proto_rawDesc = []byte{
 	0x6f, 0x74, 0x6f, 0x2e, 0x4c, 0x69, 0x73, 0x74, 0x44, 0x6f, 0x63, 0x75, 0x6d, 0x65, 0x6e, 0x74,
 	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1b, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e,
 	0x4c, 0x69, 0x73, 0x74, 0x44, 0x6f, 0x63, 0x75, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x30, 0x01, 0x42, 0x08, 0x5a, 0x06, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x6f, 0x6e, 0x73, 0x65, 0x30, 0x01, 0x42, 0x08, 0x5a, 0x06, 0x2f, 0x64, 0x6f, 0x63, 0x70, 0x62,
 	0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
-	file_proto_datastore_proto_rawDescOnce sync.Once
-	file_proto_datastore_proto_rawDescData = file_proto_datastore_proto_rawDesc
+	file_docpb_datastore_proto_rawDescOnce sync.Once
+	file_docpb_datastore_proto_rawDescData = file_docpb_datastore_proto_rawDesc
 )
 
-func file_proto_datastore_proto_rawDescGZIP() []byte {
-	file_proto_datastore_proto_rawDescOnce.Do(func() {
-		file_proto_datastore_proto_rawDescData = protoimpl.X.CompressGZIP(file_proto_datastore_proto_rawDescData)
+func file_docpb_datastore_proto_rawDescGZIP() []byte {
+	file_docpb_datastore_proto_rawDescOnce.Do(func() {
+		file_docpb_datastore_proto_rawDescData = protoimpl.X.CompressGZIP(file_docpb_datastore_proto_rawDescData)
 	})
-	return file_proto_datastore_proto_rawDescData
+	return file_docpb_datastore_proto_rawDescData
 }
 
-var file_proto_datastore_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
-var file_proto_datastore_proto_goTypes = []interface{}{
+var file_docpb_datastore_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_docpb_datastore_proto_goTypes = []interface{}{
 	(*CreateDocumentRequest)(nil),       // 0: proto.CreateDocumentRequest
 	(*SetDocumentRequest)(nil),          // 1: proto.SetDocumentRequest
 	(*UpdateDocumentRequest)(nil),       // 2: proto.UpdateDocumentRequest
@@ -823,7 +823,7 @@ var file_proto_datastore_proto_goTypes = []interface{}{
 	(*UpdateDocumentRequest_Field)(nil), // 11: proto.UpdateDocumentRequest.Field
 	(*ListDocumentRequest_Filter)(nil),  // 12: proto.ListDocumentRequest.Filter
 }
-var file_proto_datastore_proto_depIdxs = []int32{
+var file_docpb_datastore_proto_depIdxs = []int32{
 	11, // 0: proto.UpdateDocumentRequest.updates:type_name -> proto.UpdateDocumentRequest.Field
 	11, // 1: proto.UpdateDocumentRequest.preconditions:type_name -> proto.UpdateDocumentRequest.Field
 	12, // 2: proto.ListDocumentRequest.filters:type_name -> proto.ListDocumentRequest.Filter
@@ -846,13 +846,13 @@ var file_proto_datastore_proto_depIdxs = []int32{
 	0,  // [0:3] is the sub-list for field type_name
 }
 
-func init() { file_proto_datastore_proto_init() }
-func file_proto_datastore_proto_init() {
-	if File_proto_datastore_proto != nil {
+func init() { file_docpb_datastore_proto_init() }
+func file_docpb_datastore_proto_init() {
+	if File_docpb_datastore_proto != nil {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_proto_datastore_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_docpb_datastore_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*CreateDocumentRequest); i {
 			case 0:
 				return &v.state
@@ -864,7 +864,7 @@ func file_proto_datastore_proto_init() {
 				return nil
 			}
 		}
-		file_proto_datastore_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_docpb_datastore_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*SetDocumentRequest); i {
 			case 0:
 				return &v.state
@@ -876,7 +876,7 @@ func file_proto_datastore_proto_init() {
 				return nil
 			}
 		}
-		file_proto_datastore_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+		file_docpb_datastore_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*UpdateDocumentRequest); i {
 			case 0:
 				return &v.state
@@ -888,7 +888,7 @@ func file_proto_datastore_proto_init() {
 				return nil
 			}
 		}
-		file_proto_datastore_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+		file_docpb_datastore_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetDocumentRequest); i {
 			case 0:
 				return &v.state
@@ -900,7 +900,7 @@ func file_proto_datastore_proto_init() {
 				return nil
 			}
 		}
-		file_proto_datastore_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+		file_docpb_datastore_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*DeleteDocumentRequest); i {
 			case 0:
 				return &v.state
@@ -912,7 +912,7 @@ func file_proto_datastore_proto_init() {
 				return nil
 			}
 		}
-		file_proto_datastore_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+		file_docpb_datastore_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ListDocumentRequest); i {
 			case 0:
 				return &v.state
@@ -924,7 +924,7 @@ func file_proto_datastore_proto_init() {
 				return nil
 			}
 		}
-		file_proto_datastore_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+		file_docpb_datastore_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*DocumentResponse); i {
 			case 0:
 				return &v.state
@@ -936,7 +936,7 @@ func file_proto_datastore_proto_init() {
 				return nil
 			}
 		}
-		file_proto_datastore_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+		file_docpb_datastore_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetDocumentResponse); i {
 			case 0:
 				return &v.state
@@ -948,7 +948,7 @@ func file_proto_datastore_proto_init() {
 				return nil
 			}
 		}
-		file_proto_datastore_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+		file_docpb_datastore_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ListDocumentResponse); i {
 			case 0:
 				return &v.state
@@ -960,7 +960,7 @@ func file_proto_datastore_proto_init() {
 				return nil
 			}
 		}
-		file_proto_datastore_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+		file_docpb_datastore_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*CreateDocumentResponse); i {
 			case 0:
 				return &v.state
@@ -972,7 +972,7 @@ func file_proto_datastore_proto_init() {
 				return nil
 			}
 		}
-		file_proto_datastore_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+		file_docpb_datastore_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*UpdateDocumentResponse); i {
 			case 0:
 				return &v.state
@@ -984,7 +984,7 @@ func file_proto_datastore_proto_init() {
 				return nil
 			}
 		}
-		file_proto_datastore_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+		file_docpb_datastore_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*UpdateDocumentRequest_Field); i {
 			case 0:
 				return &v.state
@@ -996,7 +996,7 @@ func file_proto_datastore_proto_init() {
 				return nil
 			}
 		}
-		file_proto_datastore_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+		file_docpb_datastore_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ListDocumentRequest_Filter); i {
 			case 0:
 				return &v.state
@@ -1013,18 +1013,18 @@ func file_proto_datastore_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: file_proto_datastore_proto_rawDesc,
+			RawDescriptor: file_docpb_datastore_proto_rawDesc,
 			NumEnums:      0,
 			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_proto_datastore_proto_goTypes,
-		DependencyIndexes: file_proto_datastore_proto_depIdxs,
-		MessageInfos:      file_proto_datastore_proto_msgTypes,
+		GoTypes:           file_docpb_datastore_proto_goTypes,
+		DependencyIndexes: file_docpb_datastore_proto_depIdxs,
+		MessageInfos:      file_docpb_datastore_proto_msgTypes,
 	}.Build()
-	File_proto_datastore_proto = out.File
-	file_proto_datastore_proto_rawDesc = nil
-	file_proto_datastore_proto_goTypes = nil
-	file_proto_datastore_proto_depIdxs = nil
+	File_docpb_datastore_proto = out.File
+	file_docpb_datastore_proto_rawDesc = nil
+	file_docpb_datastore_proto_goTypes = nil
+	file_docpb_datastore_proto_depIdxs = nil
 }

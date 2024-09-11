@@ -21,14 +21,14 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package rpc
+package docrpc
 
 import (
 	"context"
 	"fmt"
 	"strings"
 
-	proto "github.com/unstablebuild/blue/document/rpc/proto"
+	"github.com/unstablebuild/blue/document/docrpc/docpb"
 	"github.com/unstablebuild/blue/encoding"
 	"google.golang.org/grpc"
 )
@@ -38,9 +38,9 @@ import (
 // collection. Client.InitWithCollection should be used on the client side to talk
 // to a service registered via this function.
 func RegisterCollectionDocumentService(
-	registrar grpc.ServiceRegistrar, srv proto.DocumentStoreServer, collection string,
+	registrar grpc.ServiceRegistrar, srv docpb.DocumentStoreServer, collection string,
 ) {
-	desc := proto.DocumentStore_ServiceDesc
+	desc := docpb.DocumentStore_ServiceDesc
 	desc.ServiceName = fmt.Sprintf("proto.DocumentStore.%s", collection)
 	var newMethods []grpc.MethodDesc
 	for _, method := range desc.Methods {
@@ -89,10 +89,13 @@ func updateMethodInfoUnaryInterceptor(
 	}
 }
 
-// InitWithCollection initializes this Client with the given grpc connection, encoding marhshaler,
-// and uses collection to suffix the service descriptor to enable multiple collection services
-// registered in the same server. Server should be registered with grpc via RegisterCollectionDocumentService.
-func (c *Client) InitWithCollection(cc grpc.ClientConnInterface, m encoding.Marshaler, collection string) {
+// InitWithCollection initializes this Client with the given grpc connection,
+// encoding marhshaler, and uses collection to suffix the service descriptor to
+// enable multiple collection services registered in the same server. Server
+// should be registered with grpc via RegisterCollectionDocumentService.
+func (c *Client) InitWithCollection(
+	cc grpc.ClientConnInterface, m encoding.Marshaler, collection string,
+) {
 	c.cc = cc
 	c.pb = newDocumentStoreClient(cc, collection)
 	c.marshaler = m
@@ -103,14 +106,16 @@ type documentStoreClient struct {
 	collection string
 }
 
-func newDocumentStoreClient(cc grpc.ClientConnInterface, collection string) proto.DocumentStoreClient {
+func newDocumentStoreClient(
+	cc grpc.ClientConnInterface, collection string,
+) docpb.DocumentStoreClient {
 	return &documentStoreClient{cc, collection}
 }
 
 func (c *documentStoreClient) Create(
-	ctx context.Context, in *proto.CreateDocumentRequest, opts ...grpc.CallOption,
-) (*proto.CreateDocumentResponse, error) {
-	out := new(proto.CreateDocumentResponse)
+	ctx context.Context, in *docpb.CreateDocumentRequest, opts ...grpc.CallOption,
+) (*docpb.CreateDocumentResponse, error) {
+	out := new(docpb.CreateDocumentResponse)
 	err := c.cc.Invoke(ctx,
 		fmt.Sprintf("/proto.DocumentStore.%s/Create", c.collection), in, out, opts...)
 	if err != nil {
@@ -120,9 +125,9 @@ func (c *documentStoreClient) Create(
 }
 
 func (c *documentStoreClient) Set(
-	ctx context.Context, in *proto.SetDocumentRequest, opts ...grpc.CallOption,
-) (*proto.DocumentResponse, error) {
-	out := new(proto.DocumentResponse)
+	ctx context.Context, in *docpb.SetDocumentRequest, opts ...grpc.CallOption,
+) (*docpb.DocumentResponse, error) {
+	out := new(docpb.DocumentResponse)
 	err := c.cc.Invoke(ctx,
 		fmt.Sprintf("/proto.DocumentStore.%s/Set", c.collection), in, out, opts...)
 	if err != nil {
@@ -132,9 +137,9 @@ func (c *documentStoreClient) Set(
 }
 
 func (c *documentStoreClient) Update(
-	ctx context.Context, in *proto.UpdateDocumentRequest, opts ...grpc.CallOption,
-) (*proto.UpdateDocumentResponse, error) {
-	out := new(proto.UpdateDocumentResponse)
+	ctx context.Context, in *docpb.UpdateDocumentRequest, opts ...grpc.CallOption,
+) (*docpb.UpdateDocumentResponse, error) {
+	out := new(docpb.UpdateDocumentResponse)
 	err := c.cc.Invoke(ctx,
 		fmt.Sprintf("/proto.DocumentStore.%s/Update", c.collection), in, out, opts...)
 	if err != nil {
@@ -144,9 +149,9 @@ func (c *documentStoreClient) Update(
 }
 
 func (c *documentStoreClient) Get(
-	ctx context.Context, in *proto.GetDocumentRequest, opts ...grpc.CallOption,
-) (*proto.GetDocumentResponse, error) {
-	out := new(proto.GetDocumentResponse)
+	ctx context.Context, in *docpb.GetDocumentRequest, opts ...grpc.CallOption,
+) (*docpb.GetDocumentResponse, error) {
+	out := new(docpb.GetDocumentResponse)
 	err := c.cc.Invoke(ctx,
 		fmt.Sprintf("/proto.DocumentStore.%s/Get", c.collection), in, out, opts...)
 	if err != nil {
@@ -156,9 +161,9 @@ func (c *documentStoreClient) Get(
 }
 
 func (c *documentStoreClient) Delete(
-	ctx context.Context, in *proto.DeleteDocumentRequest, opts ...grpc.CallOption,
-) (*proto.DocumentResponse, error) {
-	out := new(proto.DocumentResponse)
+	ctx context.Context, in *docpb.DeleteDocumentRequest, opts ...grpc.CallOption,
+) (*docpb.DocumentResponse, error) {
+	out := new(docpb.DocumentResponse)
 	err := c.cc.Invoke(ctx,
 		fmt.Sprintf("/proto.DocumentStore.%s/Delete", c.collection), in, out, opts...)
 	if err != nil {
@@ -168,9 +173,9 @@ func (c *documentStoreClient) Delete(
 }
 
 func (c *documentStoreClient) List(
-	ctx context.Context, in *proto.ListDocumentRequest, opts ...grpc.CallOption,
-) (proto.DocumentStore_ListClient, error) {
-	stream, err := c.cc.NewStream(ctx, &proto.DocumentStore_ServiceDesc.Streams[0],
+	ctx context.Context, in *docpb.ListDocumentRequest, opts ...grpc.CallOption,
+) (docpb.DocumentStore_ListClient, error) {
+	stream, err := c.cc.NewStream(ctx, &docpb.DocumentStore_ServiceDesc.Streams[0],
 		fmt.Sprintf("/proto.DocumentStore.%s/List", c.collection), opts...)
 	if err != nil {
 		return nil, err
@@ -189,8 +194,8 @@ type documentStoreListClient struct {
 	grpc.ClientStream
 }
 
-func (x *documentStoreListClient) Recv() (*proto.ListDocumentResponse, error) {
-	m := new(proto.ListDocumentResponse)
+func (x *documentStoreListClient) Recv() (*docpb.ListDocumentResponse, error) {
+	m := new(docpb.ListDocumentResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}

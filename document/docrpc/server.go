@@ -21,14 +21,14 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package rpc
+package docrpc
 
 import (
 	"context"
 	"errors"
 
 	"github.com/unstablebuild/blue/document"
-	proto "github.com/unstablebuild/blue/document/rpc/proto"
+	"github.com/unstablebuild/blue/document/docrpc/docpb"
 	"github.com/unstablebuild/blue/encoding"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -38,7 +38,7 @@ import (
 type Server struct {
 	marshaler encoding.Marshaler
 	other     document.Service
-	proto.UnimplementedDocumentStoreServer
+	docpb.UnimplementedDocumentStoreServer
 }
 
 // NewServer allocates storage for a new Server and initializes it.
@@ -55,8 +55,8 @@ func (s *Server) Init(other document.Service, m encoding.Marshaler) {
 
 // Create satisfies proto.DocumentStoreServer
 func (s *Server) Create(
-	ctx context.Context, req *proto.CreateDocumentRequest,
-) (res *proto.CreateDocumentResponse, err error) {
+	ctx context.Context, req *docpb.CreateDocumentRequest,
+) (res *docpb.CreateDocumentResponse, err error) {
 	id := req.GetId()
 	data := req.GetData()
 
@@ -70,7 +70,7 @@ func (s *Server) Create(
 	if err != nil {
 		if err == document.ErrAlreadyExists {
 			err = nil
-			res = &proto.CreateDocumentResponse{
+			res = &docpb.CreateDocumentResponse{
 				AlreadyExists: true,
 			}
 		}
@@ -80,14 +80,14 @@ func (s *Server) Create(
 		return
 	}
 
-	res = &proto.CreateDocumentResponse{}
+	res = &docpb.CreateDocumentResponse{}
 	return
 }
 
 // Set satisfies proto.DocumentStoreServer
 func (s *Server) Set(
-	ctx context.Context, req *proto.SetDocumentRequest,
-) (res *proto.DocumentResponse, err error) {
+	ctx context.Context, req *docpb.SetDocumentRequest,
+) (res *docpb.DocumentResponse, err error) {
 	id := req.GetId()
 	data := req.GetData()
 
@@ -101,14 +101,14 @@ func (s *Server) Set(
 	if err == document.ErrPermissionDenied {
 		err = status.Error(codes.PermissionDenied, "")
 	}
-	res = new(proto.DocumentResponse)
+	res = new(docpb.DocumentResponse)
 	return
 }
 
 // Update satisfies proto.DocumentStoreServer
 func (s *Server) Update(
-	ctx context.Context, req *proto.UpdateDocumentRequest,
-) (*proto.UpdateDocumentResponse, error) {
+	ctx context.Context, req *docpb.UpdateDocumentRequest,
+) (*docpb.UpdateDocumentResponse, error) {
 	updates, err := makeModelUpdates(s.marshaler, req.GetUpdates())
 	if err != nil {
 		return nil, err
@@ -127,28 +127,28 @@ func (s *Server) Update(
 	if err != nil {
 		switch err {
 		case document.ErrNotFound:
-			return &proto.UpdateDocumentResponse{NotFound: true}, nil
+			return &docpb.UpdateDocumentResponse{NotFound: true}, nil
 		case document.ErrPreconditionFailed:
-			return &proto.UpdateDocumentResponse{PreconditionFailed: true}, nil
+			return &docpb.UpdateDocumentResponse{PreconditionFailed: true}, nil
 		case document.ErrPermissionDenied:
 			return nil, status.Error(codes.PermissionDenied, "")
 		}
 		return nil, err
 	}
-	return new(proto.UpdateDocumentResponse), nil
+	return new(docpb.UpdateDocumentResponse), nil
 }
 
 // Get satisfies proto.DocumentStoreServer
 func (s *Server) Get(
-	ctx context.Context, req *proto.GetDocumentRequest,
-) (res *proto.GetDocumentResponse, err error) {
+	ctx context.Context, req *docpb.GetDocumentRequest,
+) (res *docpb.GetDocumentResponse, err error) {
 	id := req.GetId()
 
 	var pr map[string]interface{}
 	err = s.other.Get(ctx, id, &pr)
 	if err != nil {
 		if err == document.ErrNotFound {
-			res = &proto.GetDocumentResponse{NotFound: true}
+			res = &docpb.GetDocumentResponse{NotFound: true}
 			err = nil
 		}
 		if err == document.ErrPermissionDenied {
@@ -157,7 +157,7 @@ func (s *Server) Get(
 		return
 	}
 
-	res = &proto.GetDocumentResponse{
+	res = &docpb.GetDocumentResponse{
 		Data: document.Encode(s.marshaler, pr, false),
 	}
 	return
@@ -165,23 +165,23 @@ func (s *Server) Get(
 
 // Delete satisfies proto.DocumentStoreServer
 func (s *Server) Delete(
-	ctx context.Context, req *proto.DeleteDocumentRequest,
-) (res *proto.DocumentResponse, err error) {
+	ctx context.Context, req *docpb.DeleteDocumentRequest,
+) (res *docpb.DocumentResponse, err error) {
 	id := req.GetId()
 
 	err = s.other.Delete(ctx, id)
 	if err == document.ErrPermissionDenied {
 		err = status.Error(codes.PermissionDenied, "")
 	}
-	res = new(proto.DocumentResponse)
+	res = new(docpb.DocumentResponse)
 	return
 }
 
-func (s *Server) streamList(list proto.DocumentStore_ListServer, it document.Iterator) (err error) {
+func (s *Server) streamList(list docpb.DocumentStore_ListServer, it document.Iterator) (err error) {
 	for it.HasNext() {
 		var pr map[string]interface{}
 		err = it.NextTo(&pr)
-		res := proto.ListDocumentResponse{}
+		res := docpb.ListDocumentResponse{}
 		if err != nil {
 			res.Error = err.Error()
 		} else {
@@ -200,7 +200,7 @@ func (s *Server) streamList(list proto.DocumentStore_ListServer, it document.Ite
 
 // List satisfies proto.DocumentStoreServer
 func (s *Server) List(
-	req *proto.ListDocumentRequest, list proto.DocumentStore_ListServer,
+	req *docpb.ListDocumentRequest, list docpb.DocumentStore_ListServer,
 ) error {
 	ctx := context.Background()
 	filters, err := makeModelFilters(s.marshaler, req.GetFilters())

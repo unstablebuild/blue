@@ -21,7 +21,7 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package rpc
+package docrpc
 
 import (
 	"context"
@@ -34,7 +34,7 @@ import (
 	"strings"
 
 	"github.com/unstablebuild/blue/document"
-	proto "github.com/unstablebuild/blue/document/rpc/proto"
+	"github.com/unstablebuild/blue/document/docrpc/docpb"
 	"github.com/unstablebuild/blue/encoding"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -44,7 +44,7 @@ import (
 type Client struct {
 	marshaler encoding.Marshaler
 	cc        grpc.ClientConnInterface
-	pb        proto.DocumentStoreClient
+	pb        docpb.DocumentStoreClient
 }
 
 // NewClient returns a grpc-based client that satisfies Service
@@ -82,7 +82,7 @@ func NewClient(addr net.Addr, m encoding.Marshaler, opts ...grpc.DialOption) (do
 
 func (c *Client) Init(cc grpc.ClientConnInterface, m encoding.Marshaler) {
 	c.cc = cc
-	c.pb = proto.NewDocumentStoreClient(cc)
+	c.pb = docpb.NewDocumentStoreClient(cc)
 	c.marshaler = m
 }
 
@@ -94,7 +94,7 @@ func (c *Client) Create(
 		return err
 	}
 
-	req := proto.CreateDocumentRequest{Id: ID, Data: bytes}
+	req := docpb.CreateDocumentRequest{Id: ID, Data: bytes}
 	res, err := c.pb.Create(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
@@ -114,7 +114,7 @@ func (c *Client) Set(
 		return err
 	}
 
-	req := proto.SetDocumentRequest{Id: ID, Data: bytes}
+	req := docpb.SetDocumentRequest{Id: ID, Data: bytes}
 	_, err = c.pb.Set(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
@@ -132,7 +132,7 @@ func (c *Client) Update(
 	}
 	u := makeProtoUpdates(c.marshaler, updates)
 	p := makeProtoPreconditions(c.marshaler, preconds...)
-	req := proto.UpdateDocumentRequest{Id: ID, Updates: u, Preconditions: p}
+	req := docpb.UpdateDocumentRequest{Id: ID, Updates: u, Preconditions: p}
 	res, err := c.pb.Update(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
@@ -150,7 +150,7 @@ func (c *Client) Update(
 func (c *Client) Get(
 	ctx context.Context, ID string, doc interface{},
 ) error {
-	req := proto.GetDocumentRequest{Id: ID}
+	req := docpb.GetDocumentRequest{Id: ID}
 	res, err := c.pb.Get(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
@@ -171,7 +171,7 @@ func (c *Client) Get(
 func (c *Client) Delete(
 	ctx context.Context, ID string,
 ) error {
-	req := proto.DeleteDocumentRequest{Id: ID}
+	req := docpb.DeleteDocumentRequest{Id: ID}
 	_, err := c.pb.Delete(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
@@ -182,8 +182,8 @@ func (c *Client) Delete(
 
 type rpcIterator struct {
 	marshaler encoding.Marshaler
-	cc        proto.DocumentStore_ListClient
-	next      *proto.ListDocumentResponse
+	cc        docpb.DocumentStore_ListClient
+	next      *docpb.ListDocumentResponse
 	nextErr   error
 }
 
@@ -192,7 +192,7 @@ func (l *rpcIterator) HasNext() bool {
 		return true
 	}
 
-	m := new(proto.ListDocumentResponse)
+	m := new(docpb.ListDocumentResponse)
 	l.nextErr = l.cc.RecvMsg(m)
 	if l.nextErr == io.EOF {
 		return false
@@ -243,7 +243,7 @@ func (c *Client) List(
 	if err != nil {
 		return nil, err
 	}
-	req := proto.ListDocumentRequest{Filters: f}
+	req := docpb.ListDocumentRequest{Filters: f}
 	res, err := c.pb.List(ctx, &req)
 	runtime.KeepAlive(c)
 	if err != nil {
