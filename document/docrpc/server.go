@@ -28,27 +28,27 @@ import (
 	"errors"
 
 	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/document/docmarshal"
 	"github.com/unstablebuild/blue/document/docrpc/docpb"
-	"github.com/unstablebuild/blue/encoding"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // Server wraps another document.Service and exposes it through a grpc interface.
 type Server struct {
-	marshaler encoding.Marshaler
+	marshaler docmarshal.Marshaler
 	other     document.Service
 	docpb.UnimplementedDocumentStoreServer
 }
 
 // NewServer allocates storage for a new Server and initializes it.
-func NewServer(other document.Service, m encoding.Marshaler) *Server {
+func NewServer(other document.Service, m docmarshal.Marshaler) *Server {
 	ret := new(Server)
 	ret.Init(other, m)
 	return ret
 }
 
-func (s *Server) Init(other document.Service, m encoding.Marshaler) {
+func (s *Server) Init(other document.Service, m docmarshal.Marshaler) {
 	s.other = other
 	s.marshaler = m
 }

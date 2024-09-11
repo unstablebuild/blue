@@ -26,13 +26,13 @@ package firstmover
 import (
 	"time"
 
-	"github.com/unstablebuild/blue/encoding"
-	"github.com/unstablebuild/blue/encoding/bson"
+	"github.com/unstablebuild/blue/document/docmarshal"
+	"github.com/unstablebuild/blue/document/docmarshal/docbson"
 )
 
 // Config holds configuration for a firstmover document.Service
 type Config struct {
-	Marshaler encoding.Marshaler
+	Marshaler docmarshal.Marshaler
 	// TransientFailureRecoverTimeout is the timeout until a grpc
 	// transient connection failure is considered unrecoverable..
 	TransientFailureRecoverTimeout time.Duration
@@ -56,7 +56,7 @@ type Config struct {
 // DefaultConfig returns a sane Config.
 func DefaultConfig() Config {
 	return Config{
-		Marshaler:                      bson.Marshaler(),
+		Marshaler:                      docbson.Marshaler(),
 		TransientFailureRecoverTimeout: 1 * time.Second,
 		MethodRetryCadence:             20 * time.Millisecond,
 		ConnectRetryCadence:            50 * time.Millisecond,

@@ -31,8 +31,8 @@ import (
 	"time"
 
 	"github.com/unstablebuild/blue/document"
-	"github.com/unstablebuild/blue/encoding"
-	"github.com/unstablebuild/blue/encoding/bson"
+	"github.com/unstablebuild/blue/document/docmarshal"
+	"github.com/unstablebuild/blue/document/docmarshal/docbson"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -53,7 +53,7 @@ var (
 // It additionally provides a method to efficiently delete all
 // contents of a collection: DeleteAll.
 type Store struct {
-	marshaler encoding.Marshaler
+	marshaler docmarshal.Marshaler
 	db        *bolt.DB
 	collID    []byte
 }
@@ -85,7 +85,7 @@ func New(dbPath string, collectionID string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.marshaler = bson.Marshaler()
+	s.marshaler = docbson.Marshaler()
 	return s, nil
 }
 
@@ -178,7 +178,7 @@ func (s *Store) Update(
 			return err
 		}
 
-		err = document.UpdateProto(bson.Marshaler(), updates, doc, preconds...)
+		err = document.UpdateProto(docbson.Marshaler(), updates, doc, preconds...)
 		if err != nil {
 			return err
 		}

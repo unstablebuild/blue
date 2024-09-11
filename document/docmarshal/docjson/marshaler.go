@@ -21,37 +21,30 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package toml
+package docjson
 
 import (
-	"bytes"
+	"encoding/json"
 
-	"github.com/BurntSushi/toml"
-	"github.com/unstablebuild/blue/encoding"
+	"github.com/unstablebuild/blue/document/docmarshal"
 )
 
-// Marshaler returns a TOML Marshaler.
-func Marshaler() encoding.Marshaler {
-	return tomlMarshaler{}
+// Marshaler returns a JSON Marshaler.
+func Marshaler() docmarshal.Marshaler {
+	return jsonMarshaler{}
 }
 
-type tomlMarshaler struct {
+type jsonMarshaler struct {
 }
 
-func (j tomlMarshaler) Marshal(in interface{}) ([]byte, error) {
-	var buf bytes.Buffer
-	err := toml.NewEncoder(&buf).Encode(in)
-	if err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+func (j jsonMarshaler) Marshal(in interface{}) ([]byte, error) {
+	return json.Marshal(in)
 }
 
-func (j tomlMarshaler) Unmarshal(data []byte, to interface{}) error {
-	_, err := toml.NewDecoder(bytes.NewReader(data)).Decode(to)
-	return err
+func (j jsonMarshaler) Unmarshal(data []byte, to interface{}) error {
+	return json.Unmarshal(data, to)
 }
 
-func (j tomlMarshaler) DefaultLowerCase() bool {
+func (j jsonMarshaler) DefaultLowerCase() bool {
 	return false
 }

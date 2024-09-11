@@ -31,12 +31,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/document/docmarshal"
+	"github.com/unstablebuild/blue/document/docmarshal/docbson"
+	"github.com/unstablebuild/blue/document/docmarshal/docjson"
+	"github.com/unstablebuild/blue/document/docmarshal/doctoml"
 	"github.com/unstablebuild/blue/document/docrpc/docpb"
 	"github.com/unstablebuild/blue/document/doctest"
-	"github.com/unstablebuild/blue/encoding"
-	"github.com/unstablebuild/blue/encoding/bson"
-	"github.com/unstablebuild/blue/encoding/json"
-	"github.com/unstablebuild/blue/encoding/toml"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -48,7 +48,7 @@ func tcpListener() (net.Listener, error) {
 func runDatastoreServerOverListener(
 	t *testing.T, other document.Service,
 	listener func() (net.Listener, error),
-	marshaler encoding.Marshaler,
+	marshaler docmarshal.Marshaler,
 	register func(grpc.ServiceRegistrar, docpb.DocumentStoreServer),
 	opts ...grpc.ServerOption,
 ) (net.Addr, func()) {
@@ -74,7 +74,7 @@ func runDatastoreServerOverListener(
 }
 
 func runDatastoreServer(
-	t *testing.T, other document.Service, marshaler encoding.Marshaler,
+	t *testing.T, other document.Service, marshaler docmarshal.Marshaler,
 ) (net.Addr, func()) {
 	return runDatastoreServerOverListener(t, other, tcpListener, marshaler,
 		docpb.RegisterDocumentStoreServer)
@@ -82,7 +82,7 @@ func runDatastoreServer(
 
 func testRPCDatastoreOverListener(
 	t *testing.T, listener func() (net.Listener, error),
-	marshaler encoding.Marshaler,
+	marshaler docmarshal.Marshaler,
 ) {
 	teardowns := []func(){}
 
@@ -132,11 +132,11 @@ func tempUnixListener() (net.Listener, error) {
 
 func TestRPC(t *testing.T) {
 	t.Run("over TCP", func(t *testing.T) {
-		testRPCDatastoreOverListener(t, tcpListener, bson.Marshaler())
+		testRPCDatastoreOverListener(t, tcpListener, docbson.Marshaler())
 	})
 
 	t.Run("over Unix domain sockets", func(t *testing.T) {
-		testRPCDatastoreOverListener(t, tempUnixListener, bson.Marshaler())
+		testRPCDatastoreOverListener(t, tempUnixListener, docbson.Marshaler())
 	})
 }
 
@@ -168,7 +168,9 @@ func (h interopHelper) Delete(ctx context.Context, ID string) error {
 	return h.write.Delete(ctx, ID)
 }
 
-func (h interopHelper) List(ctx context.Context, filters []document.Filter) (document.Iterator, error) {
+func (h interopHelper) List(
+	ctx context.Context, filters []document.Filter,
+) (document.Iterator, error) {
 	return h.read.List(ctx, filters)
 }
 
@@ -190,10 +192,10 @@ func TestRPCInterop(t *testing.T) {
 		}
 	})
 
-	for name, marshaler := range map[string]encoding.Marshaler{
-		"bson": bson.Marshaler(),
-		"toml": toml.Marshaler(),
-		"json": json.Marshaler(),
+	for name, marshaler := range map[string]docmarshal.Marshaler{
+		"bson": docbson.Marshaler(),
+		"toml": doctoml.Marshaler(),
+		"json": docjson.Marshaler(),
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Run("writes by client/server are readable by underlying service", func(t *testing.T) {

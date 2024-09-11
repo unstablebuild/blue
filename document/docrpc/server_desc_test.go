@@ -31,9 +31,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/document/docmarshal/docbson"
 	"github.com/unstablebuild/blue/document/docrpc/docpb"
 	"github.com/unstablebuild/blue/document/doctest"
-	"github.com/unstablebuild/blue/encoding/bson"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -41,7 +41,7 @@ import (
 func TestRPCDatastoreCustomServiceDesc(t *testing.T) {
 	doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 		collectionName := "myCollection"
-		marshaler := bson.Marshaler()
+		marshaler := docbson.Marshaler()
 		cache := document.NewInMemoryServiceWithMarshaler(marshaler)
 
 		opts := []grpc.ServerOption{

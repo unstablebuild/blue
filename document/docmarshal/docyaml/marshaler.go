@@ -21,14 +21,29 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package encoding
+package docyaml
 
-// Marshaler is a text or binary marshaler that can be used
-// by document.Service implementations to abstract document encoding.
-type Marshaler interface {
-	Marshal(in interface{}) ([]byte, error)
-	Unmarshal(data []byte, to interface{}) error
-	// DefaultLowerCase should return true if by default
-	// struct fields are encoded in lower case.
-	DefaultLowerCase() bool
+import (
+	"github.com/unstablebuild/blue/document/docmarshal"
+	"gopkg.in/yaml.v3"
+)
+
+// Marshaler returns a YAML Marshaler.
+func Marshaler() docmarshal.Marshaler {
+	return yamlMarshaler{}
+}
+
+type yamlMarshaler struct {
+}
+
+func (j yamlMarshaler) Marshal(in interface{}) ([]byte, error) {
+	return yaml.Marshal(in)
+}
+
+func (j yamlMarshaler) Unmarshal(data []byte, to interface{}) error {
+	return yaml.Unmarshal(data, to)
+}
+
+func (j yamlMarshaler) DefaultLowerCase() bool {
+	return true
 }
