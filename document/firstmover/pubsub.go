@@ -32,14 +32,14 @@ import (
 	"github.com/ernestrc/go-multierror"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
-	"github.com/unstablebuild/blue/document/firstmover/proto"
+	"github.com/unstablebuild/blue/document/firstmover/pubsubpb"
 	"github.com/unstablebuild/blue/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 type pubsub struct {
-	proto.UnimplementedPubSubServer
+	pubsubpb.UnimplementedPubSubServer
 	mu       sync.Mutex
 	leader   bool
 	id       string
@@ -51,18 +51,18 @@ type pubsub struct {
 	leaderConn  *grpc.ClientConn
 
 	// leader and follower
-	client        proto.PubSubClient
-	clientStreams map[string]proto.PubSub_ReceiveClient // stream cache
+	client        pubsubpb.PubSubClient
+	clientStreams map[string]pubsubpb.PubSub_ReceiveClient // stream cache
 }
 
 type subscriber struct {
 	errors chan error
-	stream proto.PubSub_ReceiveServer
+	stream pubsubpb.PubSub_ReceiveServer
 }
 
 func (p *pubsub) initCommon() {
 	p.mu.Lock()
-	p.clientStreams = make(map[string]proto.PubSub_ReceiveClient)
+	p.clientStreams = make(map[string]pubsubpb.PubSub_ReceiveClient)
 	p.subscribers = make(map[string][]subscriber)
 	p.id = uuid.New().String()
 	p.ctx, p.cancelFn = context.WithCancel(context.Background())
@@ -98,7 +98,7 @@ func (p *pubsub) initLeader(
 		return fmt.Errorf("dial leader server: %v", err)
 	}
 
-	p.client = proto.NewPubSubClient(conn)
+	p.client = pubsubpb.NewPubSubClient(conn)
 	p.leaderConn = conn
 	p.log(log.DebugLevel, "initialized pubsub instance as leader")
 	return nil
@@ -108,7 +108,7 @@ func (p *pubsub) initFollower(conn grpc.ClientConnInterface) {
 	_ = p.Close()
 	p.initCommon()
 	p.leader = false
-	p.client = proto.NewPubSubClient(conn)
+	p.client = pubsubpb.NewPubSubClient(conn)
 	p.log(log.DebugLevel, "initialized pubsub instance as follower")
 }
 
@@ -116,7 +116,7 @@ func (p *pubsub) publish(
 	ctx context.Context,
 	topic string, msg []byte,
 ) error {
-	req := proto.PublishRequest{
+	req := pubsubpb.PublishRequest{
 		Topic:  topic,
 		Data:   msg,
 		Sender: p.id,
@@ -132,14 +132,14 @@ func (p *pubsub) publish(
 
 func (p *pubsub) subscribe(
 	ctx context.Context, topic string,
-) (proto.PubSub_ReceiveClient, error) {
+) (pubsubpb.PubSub_ReceiveClient, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	stream, ok := p.clientStreams[topic]
 	// if topic stream doesn't exist, create a new one
 	if !ok {
-		req := proto.ReceiveRequest{
+		req := pubsubpb.ReceiveRequest{
 			Topic: topic,
 		}
 		var err error
@@ -177,8 +177,8 @@ func (p *pubsub) receive(
 }
 
 func (p *pubsub) Publish(
-	ctx context.Context, req *proto.PublishRequest,
-) (resp *proto.PublishResponse, err error) {
+	ctx context.Context, req *pubsubpb.PublishRequest,
+) (resp *pubsubpb.PublishResponse, err error) {
 	topic := req.GetTopic()
 	msg := req.GetData()
 
@@ -190,7 +190,7 @@ func (p *pubsub) Publish(
 		topic, len(subscribers))
 
 	for _, sub := range subscribers {
-		var req proto.ReceiveResponse
+		var req pubsubpb.ReceiveResponse
 		req.Data = msg
 		if serr := sub.stream.Send(&req); serr != nil {
 			// cancel offending stream, but also return
@@ -209,11 +209,11 @@ func (p *pubsub) Publish(
 	if err != nil {
 		return nil, err
 	}
-	return new(proto.PublishResponse), nil
+	return new(pubsubpb.PublishResponse), nil
 }
 
 func (p *pubsub) Receive(
-	req *proto.ReceiveRequest, srv proto.PubSub_ReceiveServer,
+	req *pubsubpb.ReceiveRequest, srv pubsubpb.PubSub_ReceiveServer,
 ) error {
 	topic := req.GetTopic()
 	errors := make(chan error)

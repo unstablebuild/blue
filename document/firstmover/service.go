@@ -39,7 +39,7 @@ import (
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/document/docrpc"
 	"github.com/unstablebuild/blue/document/docrpc/docpb"
-	pproto "github.com/unstablebuild/blue/document/firstmover/proto"
+	"github.com/unstablebuild/blue/document/firstmover/pubsubpb"
 	"github.com/unstablebuild/blue/logging"
 	"github.com/unstablebuild/blue/retry"
 	"google.golang.org/grpc"
@@ -362,7 +362,7 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 	defer gsrv.Stop()
 
 	docpb.RegisterDocumentStoreServer(gsrv, server)
-	pproto.RegisterPubSubServer(gsrv, s.pubsub)
+	pubsubpb.RegisterPubSubServer(gsrv, s.pubsub)
 
 	done := make(chan error)
 	ready := make(chan struct{})
