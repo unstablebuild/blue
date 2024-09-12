@@ -130,10 +130,12 @@ func (p *pubsub) publish(
 	return nil
 }
 
-func (p *pubsub) receive(
+func (p *pubsub) subscribe(
 	ctx context.Context, topic string,
-) ([]byte, error) {
+) (proto.PubSub_ReceiveClient, error) {
 	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	stream, ok := p.clientStreams[topic]
 	// if topic stream doesn't exist, create a new one
 	if !ok {
@@ -143,12 +145,21 @@ func (p *pubsub) receive(
 		var err error
 		stream, err = p.client.Receive(ctx, &req)
 		if err != nil {
-			p.mu.Unlock()
 			return nil, fmt.Errorf("rpc receive: %w", err)
 		}
 		p.clientStreams[topic] = stream
 	}
-	p.mu.Unlock()
+
+	return stream, nil
+}
+
+func (p *pubsub) receive(
+	ctx context.Context, topic string,
+) ([]byte, error) {
+	stream, err := p.subscribe(ctx, topic)
+	if err != nil {
+		return nil, fmt.Errorf("subscribe: %w", err)
+	}
 
 	for {
 		p.log(log.TraceLevel, "client is waiting to receive a message on stream %p", stream)

@@ -193,6 +193,20 @@ func (s *Service) Publish(
 	})
 }
 
+// Subscribe creates a subscription created to the given topic,
+// ensuring that future messages published are buffered for the next calls
+// to Receive.
+func (s *Service) Subscribe(
+	ctx context.Context, topic string,
+) error {
+	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		_, err := s.pubsub.subscribe(ctx, topic)
+		return s.isRetriableError(err), err
+	})
+}
+
 // Receive returns the next message published to the given topic,
 // or blocks until a message is available.
 //
