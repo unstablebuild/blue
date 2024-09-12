@@ -440,7 +440,11 @@ func (s *Service) leadOrFollow() {
 			return true, err
 		}
 
+		// depending on whether the error is a bind error or other we need to
+		// wrap syscall errors and their os counterparts
 		if !errors.Is(err, syscall.EADDRINUSE) && // address already in use
+			!errors.Is(err, os.ErrExist) && // file already exists
+			!errors.Is(err, os.ErrInvalid) && // socket already bound to an address
 			!errors.Is(err, syscall.EINVAL) { // socket already bound to an address
 			s.log(log.WarnLevel, "Unexpected error while trying to "+
 				"acquire lock %q: %v", s.lockFile, err)
