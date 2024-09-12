@@ -77,6 +77,7 @@ func (s *secretList) Run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	defer packages.Close()
 
 	switch strings.ToLower(s.format) {
 	case "json":

@@ -40,5 +40,5 @@ func Filter[T any](it Iterator[T], fn func(T) bool) Iterator[T] {
 			}
 			return
 		}
-	})
+	}, it.Close)
 }

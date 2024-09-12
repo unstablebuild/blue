@@ -23,6 +23,8 @@
 
 package iterator
 
+import "io"
+
 // Iterator provides a convenient interface for iterating over
 // chunks of structured or unstructured data such as
 // a file of newline-delimited lines of text or a set of datastore documents.
@@ -37,6 +39,8 @@ type Iterator[T any] interface {
 	// Err returns the first error or an aggreation of the errors
 	// encountered by the Iterator.
 	Err() error
+
+	io.Closer
 }
 
 // Empty returns an empty iterator.

@@ -35,5 +35,5 @@ func Map[T any, V any](it Iterator[T], fn func(T) V) Iterator[V] {
 		}
 		ret = fn(t)
 		return
-	})
+	}, it.Close)
 }

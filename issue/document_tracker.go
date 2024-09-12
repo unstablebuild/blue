@@ -109,6 +109,9 @@ func (d *documentTracker) fetchLastIssueNumber(ctx context.Context, pkg string) 
 	// trying to sort limit 1. It would require adding sorting capability to document.Service.List.
 	// It only happens once the service is started.
 	it, err := d.ListPackageReports(ctx, pkg, nil)
+	defer func() {
+		_ = it.Close()
+	}()
 	if err != nil {
 		return 0, fmt.Errorf("fetch last issue number: %v", err)
 	}
