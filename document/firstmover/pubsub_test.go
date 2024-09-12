@@ -66,7 +66,11 @@ func publishAndReceive(t *testing.T, sender, receiver *Service, n int) {
 	for i := 0; i < n; i++ {
 		go func(i int) {
 			defer done.Done()
+			actualErr[i] = receiver.Subscribe(ctx, strconv.Itoa(i))
 			ready.Done()
+			if actualErr[i] != nil {
+				return
+			}
 			actualMsg[i], actualErr[i] = receiver.Receive(
 				ctx, strconv.Itoa(i))
 		}(i)
@@ -75,7 +79,6 @@ func publishAndReceive(t *testing.T, sender, receiver *Service, n int) {
 	ready.Wait()
 	// unfortunately it's impossible to truly hook into the internal stream Recv
 	// and know for sure that there's an actual subscriber ready for that
-	time.Sleep(400 * time.Millisecond)
 	for i := 0; i < n; i++ {
 		err := sender.Publish(ctx, strconv.Itoa(i), []byte(strconv.Itoa(i)))
 		require.NoError(t, err)
