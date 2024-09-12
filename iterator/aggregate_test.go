@@ -25,9 +25,12 @@ package iterator
 
 import (
 	"errors"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAggregate(t *testing.T) {
@@ -35,7 +38,7 @@ func TestAggregate(t *testing.T) {
 		description string
 		it          []Iterator[int]
 		expectRes   []int
-		expectErr   error
+		expectErr   string
 	}{
 		{
 			description: "no iterators returns empty iterator",
@@ -58,7 +61,7 @@ func TestAggregate(t *testing.T) {
 				Error[int](errors.New("oops")),
 				FromSlice[int]([]int{9}),
 			},
-			expectErr: errors.New("oops"),
+			expectErr: "oops",
 		},
 		{
 			description: "returns last iterator error",
@@ -67,7 +70,7 @@ func TestAggregate(t *testing.T) {
 				Error[int](errors.New("oops")),
 			},
 			expectRes: []int{9},
-			expectErr: errors.New("oops"),
+			expectErr: "oops",
 		},
 		{
 			description: "continues calling fn until iterator is exhausted",
@@ -88,7 +91,72 @@ func TestAggregate(t *testing.T) {
 				return append(ret, i), nil
 			})
 			assert.Equal(t, test.expectRes, actualRes)
-			assert.Equal(t, test.expectErr, actualErr)
+			if test.expectErr != "" {
+				require.Error(t, actualErr)
+				assert.True(t, strings.Contains(actualErr.Error(), test.expectErr))
+			} else {
+				assert.NoError(t, actualErr)
+			}
 		})
 	}
+
+	t.Run("Close is called as iterators are consumed", func(t *testing.T) {
+		var (
+			it1Closed bool
+			it2Closed bool
+		)
+		var i int
+		it1 := FromFunc[string](func() (string, bool, error) { return "1", i < 1, nil },
+			func() error {
+				it1Closed = true
+				return nil
+			})
+		it2 := FromFunc[string](func() (string, bool, error) { return "2", i < 2, nil },
+			func() error {
+				it2Closed = true
+				return nil
+			})
+		actualResIt := Aggregate[string](it1, it2)
+		for ; i < 2; i++ {
+			n, ok := actualResIt.Next()
+			require.True(t, ok, i)
+			assert.Equal(t, strconv.Itoa(i+1), n, i)
+		}
+
+		_, ok := actualResIt.Next()
+		require.False(t, ok)
+
+		assert.True(t, it1Closed)
+		assert.True(t, it2Closed)
+
+		it1Closed = false
+		it2Closed = false
+		require.NoError(t, actualResIt.Close())
+
+		assert.False(t, it1Closed)
+		assert.False(t, it2Closed)
+	})
+
+	t.Run("Close calls Close on all all iterators", func(t *testing.T) {
+		var (
+			it1Closed bool
+			it2Closed bool
+		)
+		it1 := FromFunc[string](func() (string, bool, error) { return "1", true, nil },
+			func() error {
+				it1Closed = true
+				return nil
+			})
+		it2 := FromFunc[string](func() (string, bool, error) { return "2", true, nil },
+			func() error {
+				it2Closed = true
+				return nil
+			})
+		actualResIt := Aggregate[string](it1, it2)
+
+		require.NoError(t, actualResIt.Close())
+
+		assert.True(t, it1Closed)
+		assert.True(t, it2Closed)
+	})
 }

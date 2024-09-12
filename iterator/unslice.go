@@ -51,3 +51,7 @@ func (u *unslice[T]) Next() (ret T, ok bool) {
 func (u *unslice[T]) Err() error {
 	return u.it.Err()
 }
+
+func (u *unslice[T]) Close() error {
+	return u.it.Close()
+}

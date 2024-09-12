@@ -23,6 +23,8 @@
 
 package iterator
 
+import "github.com/ernestrc/go-multierror"
+
 // Aggregate combines multiple iterators of T into one single iterator of T.
 // If its is nil or empty, this method safely returns an empty iterator.
 func Aggregate[T any](its ...Iterator[T]) Iterator[T] {
@@ -43,14 +45,28 @@ func (a *aggregate[T]) Next() (ret T, ok bool) {
 		if ok {
 			return
 		}
-		a.err = a.its[0].Err()
-		a.its = a.its[1:]
+		if ierr := a.its[0].Err(); ierr != nil {
+			a.err = multierror.Append(a.err, ierr)
+		}
+		if cerr := a.its[0].Close(); cerr != nil {
+			a.err = multierror.Append(a.err, cerr)
+		}
 		if a.err != nil {
 			return
 		}
+		a.its = a.its[1:]
 	}
 }
 
 func (a *aggregate[T]) Err() error {
 	return a.err
+}
+
+func (a *aggregate[T]) Close() (ret error) {
+	for _, it := range a.its {
+		if err := it.Close(); err != nil {
+			ret = multierror.Append(ret, err)
+		}
+	}
+	return
 }

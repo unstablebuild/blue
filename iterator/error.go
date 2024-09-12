@@ -40,3 +40,7 @@ func (e errorIt[T]) Next() (ret T, ok bool) {
 func (e errorIt[T]) Err() error {
 	return e.err
 }
+
+func (e errorIt[T]) Close() error {
+	return nil
+}

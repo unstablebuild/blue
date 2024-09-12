@@ -33,8 +33,8 @@ import (
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
-	"github.com/unstablebuild/blue/iterator"
 	"github.com/ernestrc/go-multierror"
+	"github.com/unstablebuild/blue/iterator"
 	giterator "google.golang.org/api/iterator"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -302,6 +302,10 @@ func (i *versionsIterator) Next() (Secret, bool) {
 
 func (i *versionsIterator) Err() error {
 	return i.err
+}
+
+func (i *versionsIterator) Close() error {
+	return nil
 }
 
 func protoTimeToStd(ts *timestamppb.Timestamp) time.Time {

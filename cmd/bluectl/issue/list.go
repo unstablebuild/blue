@@ -124,6 +124,7 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 	log.Debugf("received reports: %#v", reports)
 
 	reports = &filterDuplicatesIterator{it: reports, seen: make(map[string]struct{})}
+	defer reports.Close()
 
 	switch strings.ToLower(s.format) {
 	case "json":
@@ -179,6 +180,10 @@ type filterDuplicatesIterator struct {
 
 func (it *filterDuplicatesIterator) Err() error {
 	return it.it.Err()
+}
+
+func (it *filterDuplicatesIterator) Close() error {
+	return it.it.Close()
 }
 
 func (it *filterDuplicatesIterator) Next() (issue.Report, bool) {
