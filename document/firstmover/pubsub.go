@@ -100,7 +100,7 @@ func (p *pubsub) initLeader(
 
 	p.client = proto.NewPubSubClient(conn)
 	p.leaderConn = conn
-	p.log(log.InfoLevel, "initialized pubsub instance as leader")
+	p.log(log.DebugLevel, "initialized pubsub instance as leader")
 	return nil
 }
 
