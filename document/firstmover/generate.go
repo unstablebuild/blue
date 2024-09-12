@@ -23,4 +23,4 @@
 
 package firstmover
 
-//go:generate protoc proto/pubsub.proto --go_out=. --go-grpc_out=. --go_opt=Mproto/pubsub.proto=/proto
+//go:generate protoc pubsubpb/pubsub.proto --go_out=. --go-grpc_out=. --go_opt=Mpubsubpb/pubsub.proto=/pubsubpb
