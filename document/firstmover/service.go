@@ -29,11 +29,13 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 
+	"github.com/ernestrc/go-multierror"
 	multierr "github.com/ernestrc/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/document"
@@ -429,8 +431,19 @@ func (s *Service) leadOrFollow() {
 			return true, err
 		}
 
-		if !errors.Is(err, syscall.EADDRINUSE) && !errors.Is(err, syscall.EEXIST) {
-			s.log(log.WarnLevel, "Unexpected error while trying to acquire lock %q: %v", s.lockFile, err)
+		if errors.Is(err, syscall.ENOENT) { // a component of the path does not exist
+			mkdirErr := os.MkdirAll(filepath.Dir(s.lockFile), 0766)
+			if mkdirErr != nil {
+				s.log(log.WarnLevel, "create lock dir: %v", mkdirErr)
+				return false, multierror.Append(err, mkdirErr)
+			}
+			return true, err
+		}
+
+		if !errors.Is(err, syscall.EADDRINUSE) && // address already in use
+			!errors.Is(err, syscall.EINVAL) { // socket already bound to an address
+			s.log(log.WarnLevel, "Unexpected error while trying to "+
+				"acquire lock %q: %v", s.lockFile, err)
 			return false, err
 		}
 

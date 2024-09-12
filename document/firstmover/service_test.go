@@ -27,6 +27,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -74,6 +75,19 @@ func TestServiceIntegration(t *testing.T) {
 			})
 		})
 	}
+
+	t.Run("single instance with lock path on non-existent folder "+
+		"attempts to create directory structure", func(t *testing.T) {
+		doctest.TestDocumentService(t, func(t *testing.T) document.Service {
+			lockFile := makeTempLockFile(t)
+			lockFileDir := filepath.Join(filepath.Dir(lockFile), "newDir", "otherDir", "moreDirs")
+			lockFile = filepath.Join(lockFileDir, ".lock")
+			cfg := testConfig()
+			cfg.Marshaler = docbson.Marshaler()
+			svc := document.NewInMemoryServiceWithMarshaler(cfg.Marshaler)
+			return New(svc, lockFile, cfg)
+		})
+	})
 
 	t.Run("single instance preconditions (bson)", func(t *testing.T) {
 		doctest.TestDocumentServicePreconditions(t, func(t *testing.T) document.Service {
