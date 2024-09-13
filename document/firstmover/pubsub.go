@@ -35,16 +35,21 @@ import (
 	"github.com/unstablebuild/blue/document/firstmover/pubsubpb"
 	"github.com/unstablebuild/blue/logging"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 type pubsub struct {
 	pubsubpb.UnimplementedPubSubServer
-	mu       sync.Mutex
-	leader   bool
+	mu       sync.Locker
 	id       string
 	ctx      context.Context
 	cancelFn func()
+	readyCtx context.Context
+	ready    func()
+	closed   bool
 
 	// leader only
 	subscribers map[string][]subscriber
@@ -60,13 +65,16 @@ type subscriber struct {
 	stream pubsubpb.PubSub_ReceiveServer
 }
 
-func (p *pubsub) initCommon() {
-	p.mu.Lock()
+func (p *pubsub) init() {
+	p.readyCtx, p.ready = context.WithCancel(context.Background())
+}
+
+func (p *pubsub) reset() {
 	p.clientStreams = make(map[string]pubsubpb.PubSub_ReceiveClient)
 	p.subscribers = make(map[string][]subscriber)
 	p.id = uuid.New().String()
 	p.ctx, p.cancelFn = context.WithCancel(context.Background())
-	p.mu.Unlock()
+	p.closed = false
 }
 
 // initLeader assumes this pubsub server has already been registered.
@@ -77,8 +85,8 @@ func (p *pubsub) initLeader(
 	ctx context.Context, srv *grpc.Server, listener net.Listener,
 ) error {
 	_ = p.Close()
-	p.initCommon()
-	p.leader = true
+	p.reset()
+	p.ready()
 
 	// to massively simplify streams implementation,
 	// publish/subscribe as a leader also act as a client of the pubsub server.
@@ -106,8 +114,7 @@ func (p *pubsub) initLeader(
 
 func (p *pubsub) initFollower(conn grpc.ClientConnInterface) {
 	_ = p.Close()
-	p.initCommon()
-	p.leader = false
+	p.reset()
 	p.client = pubsubpb.NewPubSubClient(conn)
 	p.log(log.DebugLevel, "initialized pubsub instance as follower")
 }
@@ -116,15 +123,18 @@ func (p *pubsub) publish(
 	ctx context.Context,
 	topic string, msg []byte,
 ) error {
+	p.mu.Lock()
+	client := p.client
+	p.mu.Unlock()
 	req := pubsubpb.PublishRequest{
 		Topic:  topic,
 		Data:   msg,
 		Sender: p.id,
 	}
 	p.log(log.TraceLevel, "client is publishing message")
-	_, err := p.client.Publish(ctx, &req)
+	_, err := client.Publish(ctx, &req)
 	if err != nil {
-		return fmt.Errorf("rpc publish: %w", err)
+		return err
 	}
 
 	return nil
@@ -134,8 +144,6 @@ func (p *pubsub) subscribe(
 	ctx context.Context, topic string,
 ) (pubsubpb.PubSub_ReceiveClient, error) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	stream, ok := p.clientStreams[topic]
 	// if topic stream doesn't exist, create a new one
 	if !ok {
@@ -145,9 +153,20 @@ func (p *pubsub) subscribe(
 		var err error
 		stream, err = p.client.Receive(ctx, &req)
 		if err != nil {
-			return nil, fmt.Errorf("rpc receive: %w", err)
+			return nil, err
 		}
 		p.clientStreams[topic] = stream
+		p.mu.Unlock()
+		// blocks until server has sent header and so
+		// connection is fully established
+		md, err := stream.Header()
+		if err != nil {
+			return nil, err
+		}
+
+		p.log(log.DebugLevel, "subscribed to topic %s, metadata: %+v", topic, md)
+	} else {
+		p.mu.Unlock()
 	}
 
 	return stream, nil
@@ -158,14 +177,14 @@ func (p *pubsub) receive(
 ) ([]byte, error) {
 	stream, err := p.subscribe(ctx, topic)
 	if err != nil {
-		return nil, fmt.Errorf("subscribe: %w", err)
+		return nil, err
 	}
 
 	for {
 		p.log(log.TraceLevel, "client is waiting to receive a message on stream %p", stream)
 		msg, err := stream.Recv()
 		if err != nil {
-			return nil, fmt.Errorf("stream receive: %w", err)
+			return nil, err
 		}
 		// when we publish as a leader, we should not receive
 		// these messages on the next call to Receive.
@@ -179,12 +198,18 @@ func (p *pubsub) receive(
 func (p *pubsub) Publish(
 	ctx context.Context, req *pubsubpb.PublishRequest,
 ) (resp *pubsubpb.PublishResponse, err error) {
+	<-p.readyCtx.Done()
+
 	topic := req.GetTopic()
 	msg := req.GetData()
 
 	p.mu.Lock()
 	subscribers := p.subscribers[topic]
+	closed := p.closed
 	p.mu.Unlock()
+	if closed {
+		return nil, status.Errorf(codes.Aborted, "closed")
+	}
 
 	p.log(log.TraceLevel, "server is broadcasting message for topic %q: subscribers: %d",
 		topic, len(subscribers))
@@ -215,9 +240,15 @@ func (p *pubsub) Publish(
 func (p *pubsub) Receive(
 	req *pubsubpb.ReceiveRequest, srv pubsubpb.PubSub_ReceiveServer,
 ) error {
+	<-p.readyCtx.Done()
+
 	topic := req.GetTopic()
 	errors := make(chan error)
 	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return status.Errorf(codes.Aborted, "closed")
+	}
 	p.subscribers[topic] = append(p.subscribers[topic],
 		subscriber{
 			errors: errors,
@@ -225,6 +256,16 @@ func (p *pubsub) Receive(
 		},
 	)
 	p.mu.Unlock()
+
+	// header is waited upon by client to guarantee that
+	// the subscriber will be found, if Receive is followed by fast
+	// subsequent calls to Publish.
+	md := metadata.New(make(map[string]string))
+	md.Append("ID", p.id)
+	err := srv.SendHeader(md)
+	if err != nil {
+		return fmt.Errorf("rpc send header: %w", err)
+	}
 
 	// remove ch when this receive stream is done
 	defer func() {
@@ -251,9 +292,6 @@ func (p *pubsub) Receive(
 }
 
 func (p *pubsub) Close() (err error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	if p.cancelFn != nil {
 		p.cancelFn()
 	}
@@ -264,6 +302,7 @@ func (p *pubsub) Close() (err error) {
 
 	p.subscribers = nil
 	p.clientStreams = nil
+	p.closed = true
 
 	return err
 }
