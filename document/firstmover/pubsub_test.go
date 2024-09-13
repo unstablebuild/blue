@@ -176,7 +176,7 @@ func TestPubSub(t *testing.T) {
 	})
 
 	t.Run("extreme concurrency of leaders and followers", func(t *testing.T) {
-		const n, m = 10, 50
+		const n, m = 100, 50
 		cfg := testConfig()
 
 		lockFile := makeTempLockFile(t)
@@ -184,12 +184,11 @@ func TestPubSub(t *testing.T) {
 
 		instances := make([]*Service, 0, n)
 
-		// chances of returned follower to become leader are ~1/50
 		for i := 0; i < n-1; i++ {
 			instance := New(svc, lockFile, cfg)
 			// override strategy so we guarantee that we do not hit the limit
 			instance.retryStrategy = retry.CombinedStrategy(
-				retry.SequentialStrategy(10*time.Millisecond),
+				retry.SequentialStrategy(2*time.Millisecond),
 				retry.LimitStrategy(m*2),
 			)
 			_ = instance.Get(context.Background(), lockFile, nil)
@@ -199,7 +198,7 @@ func TestPubSub(t *testing.T) {
 		instance2 := instances[len(instances)-2]
 
 		go func() {
-			time.Sleep(400 * time.Millisecond)
+			// kill leaders at a cadence manageable by the retry strategy above
 			for i := 0; i < n-2; i++ { // always leave two fully operating
 				time.Sleep(cfg.DialTimeout + cfg.ConnectRetryCadence)
 				for _, instance := range instances {

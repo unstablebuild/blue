@@ -99,7 +99,8 @@ func (s *Service) Init(svc document.Service, lockFile string, cfg Config) {
 	}
 	s.svc = svc
 	s.lockFile = lockFile
-	s.pubsub = new(pubsub) // un-initialized
+	s.pubsub = new(pubsub)
+	s.pubsub.mu = &s.mu
 
 	s.cfg = cfg
 	s.maxFollowFailures = int(cfg.TimeToCoup / (cfg.DialTimeout + cfg.ConnectRetryCadence))
@@ -188,8 +189,6 @@ func (s *Service) Publish(
 	ctx context.Context, topic string, msg []byte,
 ) error {
 	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
-		s.mu.Lock()
-		defer s.mu.Unlock()
 		err := s.pubsub.publish(ctx, topic, msg)
 		return s.isRetriableError(err), err
 	})
@@ -202,8 +201,6 @@ func (s *Service) Subscribe(
 	ctx context.Context, topic string,
 ) error {
 	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
-		s.mu.Lock()
-		defer s.mu.Unlock()
 		_, err := s.pubsub.subscribe(ctx, topic)
 		return s.isRetriableError(err), err
 	})
@@ -218,10 +215,7 @@ func (s *Service) Receive(
 	ctx context.Context, topic string,
 ) (data []byte, err error) {
 	err = retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
-		s.mu.Lock()
-		pubsub := s.pubsub
-		s.mu.Unlock()
-		data, err = pubsub.receive(ctx, topic)
+		data, err = s.pubsub.receive(ctx, topic)
 		return s.isRetriableError(err), err
 	})
 	return
@@ -294,8 +288,9 @@ loop:
 		switch state {
 		case connectivity.Ready:
 			s.followFailures = 0 // reset
-			// set active svc and unlock API
+			s.pubsub.init()
 			s.pubsub.initFollower(conn)
+			// set active svc and unlock API
 			s.setActiveAndUnlock(client)
 			s.log(log.DebugLevel, "Successfully connected to leader. Unlocking API...")
 			break loop
@@ -363,6 +358,7 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 	gsrv := grpc.NewServer()
 	defer gsrv.Stop()
 
+	s.pubsub.init()
 	docpb.RegisterDocumentStoreServer(gsrv, server)
 	pubsubpb.RegisterPubSubServer(gsrv, s.pubsub)
 
@@ -477,24 +473,26 @@ func (s *Service) leadOrFollow() {
 	case <-quitCh:
 	default:
 		s.log(log.ErrorLevel, "Unexpectedly stopped retrying: %v", err)
+		s.mu.Unlock() // unblock API as we 're not trying to reconnect again
 	}
 }
 
 func (s *Service) isRetriableError(err error) bool {
 	// for readibility's sake, do not coalesce all branches into a boolean value
-	if err == nil || s.svc == s.active {
+	if err == nil {
 		return false
 	}
 
 	stat := status.Convert(err)
-	if s.cfg.CloseError != nil && strings.Contains(stat.Message(), s.cfg.CloseError.Error()) {
+	if s.svc != s.active && s.cfg.CloseError != nil &&
+		strings.Contains(stat.Message(), s.cfg.CloseError.Error()) {
 		return true
 	}
 
 	c := stat.Code()
 	return strings.Contains(stat.Message(), "connection error") ||
 		strings.Contains(stat.Message(), "EOF") ||
-		c == codes.Unavailable || c == codes.DeadlineExceeded
+		c == codes.Unavailable || c == codes.DeadlineExceeded || c == codes.Aborted
 }
 
 // if last error is a document.Err*, then return that rather than any other transient errors.

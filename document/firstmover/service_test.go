@@ -129,6 +129,29 @@ func TestServiceIntegration(t *testing.T) {
 		})
 	})
 
+	t.Run("remove leader lock, seconds assumes leader after leader is unresponsive", func(t *testing.T) {
+		doctest.TestDocumentService(t, func(t *testing.T) document.Service {
+			lockFile := makeTempLockFile(t)
+			svc := document.NewInMemoryService()
+			leader := New(svc, lockFile, testConfig())
+			// ensure leader is available
+			err := leader.Set(context.Background(), "dragonballz", &testStruct{A: "1234"})
+			require.NoError(t, err)
+			follower := New(document.NewInMemoryService(), lockFile, testConfig())
+			// ensure follow is available and using leader
+			var temp testStruct
+			err = follower.Get(context.Background(), "dragonballz", &temp)
+			require.NoError(t, err)
+			require.Equal(t, "1234", temp.A)
+			err = follower.Delete(context.Background(), "dragonballz")
+			require.NoError(t, err)
+
+			// remove lock
+			os.Remove(lockFile)
+			return follower
+		})
+	})
+
 	t.Run("multiple instances", func(t *testing.T) {
 		doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 			const n = 50
