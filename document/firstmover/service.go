@@ -201,7 +201,7 @@ func (s *Service) Subscribe(
 	ctx context.Context, topic string,
 ) error {
 	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
-		_, err := s.pubsub.subscribe(ctx, topic)
+		_, err := s.pubsub.subscribe(ctx, topic, true)
 		return s.isRetriableError(err), err
 	})
 }
