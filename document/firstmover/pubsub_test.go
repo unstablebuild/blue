@@ -92,6 +92,39 @@ func publishAndReceive(t *testing.T, sender, receiver *Service, n int) {
 }
 
 func TestPubSub(t *testing.T) {
+	t.Run("Close called more than once doesn't block or panic", func(t *testing.T) {
+		svc, _ := makeLeaderFollowerPair(t, 0)
+		assert.NotPanics(t, func() {
+			require.NoError(t, svc.Close())
+			require.NoError(t, svc.Close())
+			require.NoError(t, svc.Close())
+		})
+	})
+
+	t.Run("leader subscribe more than once returns an error ", func(t *testing.T) {
+		leader, followers := makeLeaderFollowerPair(t, 1)
+		require.NoError(t, leader.Subscribe(context.Background(), "coffee"))
+		require.Error(t, leader.Subscribe(context.Background(), "coffee"))
+		t.Cleanup(func() {
+			_ = leader.Close()
+			for _, follower := range followers {
+				_ = follower.Close()
+			}
+		})
+	})
+
+	t.Run("follower subscribe more than once returns an error ", func(t *testing.T) {
+		leader, followers := makeLeaderFollowerPair(t, 1)
+		require.NoError(t, followers[0].Subscribe(context.Background(), "coffee"))
+		require.Error(t, followers[0].Subscribe(context.Background(), "coffee"))
+		t.Cleanup(func() {
+			_ = leader.Close()
+			for _, follower := range followers {
+				_ = follower.Close()
+			}
+		})
+	})
+
 	t.Run("leader is able to publish to a topic and "+
 		"follower receive a message from a topic", func(t *testing.T) {
 		leader, follower := makeLeaderFollowerPair(t, 1)

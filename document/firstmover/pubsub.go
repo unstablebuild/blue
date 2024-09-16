@@ -25,6 +25,7 @@ package firstmover
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -142,6 +143,7 @@ func (p *pubsub) publish(
 
 func (p *pubsub) subscribe(
 	ctx context.Context, topic string,
+	excl bool,
 ) (pubsubpb.PubSub_ReceiveClient, error) {
 	p.mu.Lock()
 	stream, ok := p.clientStreams[topic]
@@ -167,6 +169,9 @@ func (p *pubsub) subscribe(
 		p.log(log.DebugLevel, "subscribed to topic %s, metadata: %+v", topic, md)
 	} else {
 		p.mu.Unlock()
+		if excl {
+			return nil, errors.New("this client is already subscribed to this topic")
+		}
 	}
 
 	return stream, nil
@@ -175,7 +180,7 @@ func (p *pubsub) subscribe(
 func (p *pubsub) receive(
 	ctx context.Context, topic string,
 ) ([]byte, error) {
-	stream, err := p.subscribe(ctx, topic)
+	stream, err := p.subscribe(ctx, topic, false)
 	if err != nil {
 		return nil, err
 	}
