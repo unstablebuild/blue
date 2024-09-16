@@ -53,12 +53,16 @@ type pubsub struct {
 	closed   bool
 
 	// leader only
-	subscribers map[string][]subscriber
-	leaderConn  *grpc.ClientConn
+	subscribers    map[string][]subscriber
+	leaderConn     *grpc.ClientConn
+	leaderListener net.Listener
+
+	// follower only
+	followerConn *grpc.ClientConn
 
 	// leader and follower
 	client        pubsubpb.PubSubClient
-	clientStreams map[string]pubsubpb.PubSub_ReceiveClient // stream cache
+	clientStreams map[string]chan msgError // stream cache
 }
 
 type subscriber struct {
@@ -71,7 +75,7 @@ func (p *pubsub) init() {
 }
 
 func (p *pubsub) reset() {
-	p.clientStreams = make(map[string]pubsubpb.PubSub_ReceiveClient)
+	p.clientStreams = make(map[string]chan msgError)
 	p.subscribers = make(map[string][]subscriber)
 	p.id = uuid.New().String()
 	p.ctx, p.cancelFn = context.WithCancel(context.Background())
@@ -109,14 +113,16 @@ func (p *pubsub) initLeader(
 
 	p.client = pubsubpb.NewPubSubClient(conn)
 	p.leaderConn = conn
+	p.leaderListener = listener
 	p.log(log.DebugLevel, "initialized pubsub instance as leader")
 	return nil
 }
 
-func (p *pubsub) initFollower(conn grpc.ClientConnInterface) {
+func (p *pubsub) initFollower(conn *grpc.ClientConn) {
 	_ = p.Close()
 	p.reset()
 	p.client = pubsubpb.NewPubSubClient(conn)
+	p.followerConn = conn
 	p.log(log.DebugLevel, "initialized pubsub instance as follower")
 }
 
@@ -141,38 +147,76 @@ func (p *pubsub) publish(
 	return nil
 }
 
+type msgError struct {
+	msg *pubsubpb.ReceiveResponse
+	err error
+}
+
 func (p *pubsub) subscribe(
 	ctx context.Context, topic string,
 	excl bool,
-) (pubsubpb.PubSub_ReceiveClient, error) {
+) (chan msgError, error) {
 	p.mu.Lock()
 	stream, ok := p.clientStreams[topic]
-	// if topic stream doesn't exist, create a new one
-	if !ok {
-		req := pubsubpb.ReceiveRequest{
-			Topic: topic,
-		}
-		var err error
-		stream, err = p.client.Receive(ctx, &req)
-		if err != nil {
-			return nil, err
-		}
-		p.clientStreams[topic] = stream
-		p.mu.Unlock()
-		// blocks until server has sent header and so
-		// connection is fully established
-		md, err := stream.Header()
-		if err != nil {
-			return nil, err
-		}
-
-		p.log(log.DebugLevel, "subscribed to topic %s, metadata: %+v", topic, md)
-	} else {
+	if ok {
 		p.mu.Unlock()
 		if excl {
 			return nil, errors.New("this client is already subscribed to this topic")
 		}
+		return stream, nil
 	}
+
+	// if topic stream doesn't exist, create a new one
+	req := pubsubpb.ReceiveRequest{
+		Topic: topic,
+	}
+	srv, err := p.client.Receive(ctx, &req)
+	if err != nil {
+		p.mu.Unlock()
+		return nil, err
+	}
+	stream = make(chan msgError)
+	p.clientStreams[topic] = stream
+	p.mu.Unlock()
+	// blocks until server has sent header and so
+	// connection is fully established
+	md, err := srv.Header()
+	if err != nil {
+		return nil, err
+	}
+
+	p.log(log.DebugLevel, "subscribed to topic %s, metadata: %+v", topic, md)
+
+	// stream messages until until srv stream is done,
+	// broken or pubsub is closed
+	go func() {
+		defer func() {
+			p.mu.Lock()
+			defer p.mu.Unlock()
+
+			if s, ok := p.clientStreams[topic]; ok && s == stream {
+				// allow re-connect
+				delete(p.clientStreams, topic)
+			}
+			close(stream)
+		}()
+
+		for {
+			msg, err := srv.Recv()
+			select {
+			case stream <- msgError{msg: msg, err: err}:
+			case <-p.ctx.Done():
+				return
+				// do not use the passed context for streaming, as it should only
+				// be used for subscribing.
+				//case <-ctx.Done():
+				//return
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
 
 	return stream, nil
 }
@@ -187,16 +231,27 @@ func (p *pubsub) receive(
 
 	for {
 		p.log(log.TraceLevel, "client is waiting to receive a message on stream %p", stream)
-		msg, err := stream.Recv()
-		if err != nil {
-			return nil, err
+		var msgErr msgError
+		var ok bool
+		select {
+		case msgErr, ok = <-stream:
+		case <-p.ctx.Done():
+			return nil, p.ctx.Err()
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		if !ok {
+			return nil, errors.New("closed stream")
+		}
+		if msgErr.err != nil {
+			return nil, msgErr.err
 		}
 		// when we publish as a leader, we should not receive
 		// these messages on the next call to Receive.
-		if msg.GetSender() == p.id {
+		if msgErr.msg.GetSender() == p.id {
 			continue
 		}
-		return msg.GetData(), nil
+		return msgErr.msg.GetData(), nil
 	}
 }
 
@@ -297,12 +352,31 @@ func (p *pubsub) Receive(
 }
 
 func (p *pubsub) Close() (err error) {
+	if p.closed {
+		return
+	}
+
 	if p.cancelFn != nil {
-		p.cancelFn()
+		defer p.cancelFn()
 	}
 
 	if p.leaderConn != nil {
-		err = p.leaderConn.Close()
+		if cerr := p.leaderConn.Close(); err != nil {
+			err = multierror.Append(err, cerr)
+		}
+		p.leaderConn = nil
+	}
+	if p.leaderListener != nil {
+		if cerr := p.leaderListener.Close(); err != nil {
+			err = multierror.Append(err, cerr)
+		}
+		p.leaderListener = nil
+	}
+	if p.followerConn != nil {
+		if cerr := p.followerConn.Close(); err != nil {
+			err = multierror.Append(err, cerr)
+		}
+		p.followerConn = nil
 	}
 
 	p.subscribers = nil
