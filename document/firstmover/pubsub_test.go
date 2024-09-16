@@ -25,6 +25,7 @@ package firstmover
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"sync"
 	"testing"
@@ -206,6 +207,58 @@ func TestPubSub(t *testing.T) {
 
 		assert.NoError(t, follower1.Close())
 		assert.NoError(t, follower2.Close())
+	})
+
+	t.Run("any node is able to publish to multiple nodes", func(t *testing.T) {
+		suite := []struct {
+			indexPub int
+			n        int
+		}{
+			{0, 2},
+			{1, 2},
+			{0, 3},
+			{1, 3},
+			{2, 3},
+			{0, 5},
+			{1, 5},
+			{2, 5},
+			{3, 5},
+			{4, 5},
+			{0, 100},
+			{50, 100},
+			{99, 100},
+		}
+		for _, test := range suite {
+			desc := fmt.Sprintf("%d node is able to publish to the rest of nodes (n=%d)",
+				test.indexPub, test.n)
+			t.Run(desc, func(t *testing.T) {
+				leader, followers := makeLeaderFollowerPair(t, test.n)
+				nodes := append(followers, leader)
+				ctx := context.Background()
+				topic := "1234"
+
+				publisher := nodes[test.indexPub]
+				rest := make([]*Service, 0)
+				rest = append(rest, nodes[:test.indexPub]...)
+				rest = append(rest, nodes[test.indexPub+1:]...)
+
+				for _, node := range rest {
+					require.NoError(t, node.Subscribe(ctx, topic))
+				}
+
+				require.NoError(t, publisher.Publish(ctx, topic, []byte("block")))
+
+				for _, node := range rest {
+					data, err := node.Receive(ctx, topic)
+					require.NoError(t, err)
+					assert.Equal(t, "block", string(data))
+				}
+
+				for _, node := range nodes {
+					assert.NoError(t, node.Close())
+				}
+			})
+		}
 	})
 
 	t.Run("extreme concurrency of leaders and followers", func(t *testing.T) {
