@@ -25,6 +25,7 @@ package firstmover
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -259,6 +260,110 @@ func TestPubSub(t *testing.T) {
 				}
 			})
 		}
+	})
+
+	t.Run("receive after Close should not block, and instead return an error", func(t *testing.T) {
+		leader, followers := makeLeaderFollowerPair(t, 5)
+		nodes := append(followers, leader)
+		ctx := context.Background()
+		topic := "1234"
+
+		indexPub := 1
+		publisher := nodes[indexPub]
+		rest := make([]*Service, 0)
+		rest = append(rest, nodes[:indexPub]...)
+		rest = append(rest, nodes[indexPub+1:]...)
+
+		for _, node := range rest {
+			require.NoError(t, node.Subscribe(ctx, topic))
+		}
+
+		require.NoError(t, publisher.Publish(ctx, topic, []byte("block")))
+
+		for _, node := range nodes[2:] { // 0 is last receiver, 1 is publisher
+			assert.NoError(t, node.Close())
+			_, err := node.Receive(ctx, topic)
+			require.Error(t, err)
+
+			// double close is no-op
+			assert.NoError(t, node.Close())
+		}
+
+		data, err := nodes[0].Receive(ctx, topic)
+		require.NoError(t, err)
+		assert.Equal(t, "block", string(data))
+
+		assert.NoError(t, nodes[0].Close())
+	})
+
+	t.Run("leader/follower Receive times out, no subscribe", func(t *testing.T) {
+		leader, followers := makeLeaderFollowerPair(t, 1)
+		topic := "1234"
+
+		ctx := context.Background()
+		for _, node := range []*Service{leader, followers[0]} {
+			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			_, err := node.Receive(ctx, topic)
+			require.Error(t, err)
+			require.True(t, errors.Is(err, context.DeadlineExceeded), err)
+			cancel()
+		}
+
+		assert.NoError(t, leader.Close())
+		assert.NoError(t, followers[0].Close())
+	})
+
+	t.Run("leader/follower Receive times out, prior Subscribe", func(t *testing.T) {
+		leader, followers := makeLeaderFollowerPair(t, 1)
+		topic := "1234"
+
+		ctx := context.Background()
+		for _, node := range []*Service{leader, followers[0]} {
+			err := node.Subscribe(ctx, topic)
+			require.NoError(t, err)
+
+			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			_, err = node.Receive(ctx, topic)
+			require.Error(t, err)
+			require.True(t, errors.Is(err, context.DeadlineExceeded), err)
+			cancel()
+		}
+
+		assert.NoError(t, leader.Close())
+		assert.NoError(t, followers[0].Close())
+	})
+
+	t.Run("leader/follower Receive times out, then publish, then receive succeeds", func(t *testing.T) {
+		leader, followers := makeLeaderFollowerPair(t, 1)
+		topic := "1234"
+
+		nodes := []*Service{leader, followers[0]}
+		ctx := context.Background()
+		for i, node := range nodes {
+			err := node.Subscribe(ctx, topic)
+			require.NoError(t, err)
+
+			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			_, err = node.Receive(ctx, topic)
+			require.Error(t, err)
+			require.True(t, errors.Is(err, context.DeadlineExceeded), err)
+			cancel()
+
+			var publisher *Service
+			if i == 0 {
+				publisher = nodes[1]
+			} else {
+				publisher = nodes[0]
+			}
+			require.NoError(t, publisher.Publish(context.Background(), topic, []byte("block")))
+
+			data, err := node.Receive(context.Background(), topic)
+			require.NoError(t, err)
+			assert.Equal(t, "block", string(data))
+		}
+
+		assert.NoError(t, leader.Close())
+		assert.NoError(t, followers[0].Close())
 	})
 
 	t.Run("extreme concurrency of leaders and followers", func(t *testing.T) {
