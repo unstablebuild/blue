@@ -68,6 +68,8 @@ type Service struct {
 	mu       sync.Mutex
 	svc      document.Service
 	lockFile string
+	readyCtx context.Context
+	ready    func()
 
 	cfg                  Config
 	maxFollowFailures    int
@@ -101,6 +103,7 @@ func (s *Service) Init(svc document.Service, lockFile string, cfg Config) {
 	s.lockFile = lockFile
 	s.pubsub = new(pubsub)
 	s.pubsub.mu = &s.mu
+	s.readyCtx, s.ready = context.WithCancel(context.Background())
 
 	s.cfg = cfg
 	s.maxFollowFailures = int(cfg.TimeToCoup / (cfg.DialTimeout + cfg.ConnectRetryCadence))
@@ -113,26 +116,29 @@ func (s *Service) Init(svc document.Service, lockFile string, cfg Config) {
 	s.quitCh = make(chan struct{})
 	s.closeWaitCh = make(chan struct{})
 
-	s.mu.Lock()
 	go s.leadOrFollow()
 }
 
 // Create satisfies document.Service.
 func (s *Service) Create(ctx context.Context, ID string, doc interface{}) error {
+	<-s.readyCtx.Done()
 	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
-		defer s.mu.Unlock()
-		err := s.active.Create(ctx, ID, doc)
+		active := s.active
+		s.mu.Unlock()
+		err := active.Create(ctx, ID, doc)
 		return s.isRetriableError(err), err
 	})
 }
 
 // Set satisfies document.Service.
 func (s *Service) Set(ctx context.Context, ID string, doc interface{}) error {
+	<-s.readyCtx.Done()
 	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
-		defer s.mu.Unlock()
-		err := s.active.Set(ctx, ID, doc)
+		active := s.active
+		s.mu.Unlock()
+		err := active.Set(ctx, ID, doc)
 		return s.isRetriableError(err), err
 	})
 }
@@ -142,30 +148,36 @@ func (s *Service) Update(
 	ctx context.Context, ID string, updates []document.Update,
 	preconds ...document.Precondition,
 ) error {
+	<-s.readyCtx.Done()
 	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
-		defer s.mu.Unlock()
-		err := s.active.Update(ctx, ID, updates, preconds...)
+		active := s.active
+		s.mu.Unlock()
+		err := active.Update(ctx, ID, updates, preconds...)
 		return s.isRetriableError(err), err
 	})
 }
 
 // Get satisfies document.Service.
 func (s *Service) Get(ctx context.Context, ID string, doc interface{}) error {
+	<-s.readyCtx.Done()
 	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
-		defer s.mu.Unlock()
-		err := s.active.Get(ctx, ID, doc)
+		active := s.active
+		s.mu.Unlock()
+		err := active.Get(ctx, ID, doc)
 		return s.isRetriableError(err), err
 	})
 }
 
 // Delete satisfies document.Service.
 func (s *Service) Delete(ctx context.Context, ID string) error {
+	<-s.readyCtx.Done()
 	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
-		defer s.mu.Unlock()
-		err := s.active.Delete(ctx, ID)
+		active := s.active
+		s.mu.Unlock()
+		err := active.Delete(ctx, ID)
 		return s.isRetriableError(err), err
 	})
 }
@@ -174,10 +186,12 @@ func (s *Service) Delete(ctx context.Context, ID string) error {
 func (s *Service) List(ctx context.Context, filters []document.Filter) (
 	it document.Iterator, err error,
 ) {
+	<-s.readyCtx.Done()
 	err = retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
-		defer s.mu.Unlock()
-		it, err = s.active.List(ctx, filters)
+		active := s.active
+		s.mu.Unlock()
+		it, err = active.List(ctx, filters)
 		return s.isRetriableError(err), err
 	})
 	return
@@ -188,6 +202,7 @@ func (s *Service) List(ctx context.Context, filters []document.Filter) (
 func (s *Service) Publish(
 	ctx context.Context, topic string, msg []byte,
 ) error {
+	<-s.readyCtx.Done()
 	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		err := s.pubsub.publish(ctx, topic, msg)
 		return s.isRetriableError(err), err
@@ -200,8 +215,9 @@ func (s *Service) Publish(
 func (s *Service) Subscribe(
 	ctx context.Context, topic string,
 ) error {
+	<-s.readyCtx.Done()
 	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
-		_, err := s.pubsub.subscribe(ctx, topic, true)
+		_, _, err := s.pubsub.subscribe(ctx, topic, true)
 		return s.isRetriableError(err), err
 	})
 }
@@ -214,6 +230,7 @@ func (s *Service) Subscribe(
 func (s *Service) Receive(
 	ctx context.Context, topic string,
 ) (data []byte, err error) {
+	<-s.readyCtx.Done()
 	err = retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
 		data, err = s.pubsub.receive(ctx, topic)
 		return s.isRetriableError(err), err
@@ -230,7 +247,7 @@ func (s *Service) Close() (ret error) {
 	}
 	s.closed = true
 	close(s.quitCh)
-	if s.active != s.svc {
+	if s.active != s.svc && s.active != nil {
 		if err := s.active.Close(); err != nil {
 			ret = multierr.Append(ret, err)
 		}
@@ -250,6 +267,7 @@ func (s *Service) Close() (ret error) {
 
 // IsLeader returns whether this instance is the leader of the system.
 func (s *Service) IsLeader() bool {
+	<-s.readyCtx.Done()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.svc == s.active
@@ -287,11 +305,13 @@ loop:
 		state := conn.GetState()
 		switch state {
 		case connectivity.Ready:
+			s.mu.Lock()
 			s.followFailures = 0 // reset
 			s.pubsub.init()
 			s.pubsub.initFollower(conn)
 			// set active svc and unlock API
 			s.setActiveAndUnlock(client)
+			s.mu.Unlock()
 			s.log(log.DebugLevel, "Successfully connected to leader. Unlocking API...")
 			break loop
 		case connectivity.Connecting, connectivity.Idle:
@@ -328,7 +348,6 @@ loop:
 			cancelFn()
 			if !didChange {
 				s.log(log.ErrorLevel, "failed to recover from TransientFailure. Reassessing lead/follow position")
-				s.mu.Lock() // prevent API calls from making progress while we re-connect
 				return true, errors.New("timed out waiting for transient failure to recover")
 			}
 		case connectivity.Shutdown:
@@ -337,7 +356,6 @@ loop:
 				return false, nil
 			default:
 				s.log(log.ErrorLevel, "connection state is Shutdown")
-				s.mu.Lock() // same as above
 				return true, errors.New("grpc connection state = shutdown")
 			}
 		default:
@@ -347,8 +365,8 @@ loop:
 }
 
 func (s *Service) setActiveAndUnlock(svc document.Service) {
+	s.ready()
 	s.active = svc
-	s.mu.Unlock()
 }
 
 func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bool, err error) {
@@ -380,19 +398,21 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 		return true, ctx.Err()
 	}
 
+	s.mu.Lock()
 	if err := s.pubsub.initLeader(ctx, gsrv, listener); err != nil {
+		s.mu.Unlock()
 		return false, fmt.Errorf("set pubsub leader: %w", err)
 	}
 
 	// set active svc and unlock API
 	s.log(log.DebugLevel, "Successfully assumed position of leader. Unlocking API...")
 	s.setActiveAndUnlock(s.svc)
+	s.mu.Unlock()
 
 	select {
 	case <-quitCh:
 		return false, nil
 	case err := <-done:
-		s.mu.Lock()
 		return false, err
 	}
 }
@@ -473,7 +493,6 @@ func (s *Service) leadOrFollow() {
 	case <-quitCh:
 	default:
 		s.log(log.ErrorLevel, "Unexpectedly stopped retrying: %v", err)
-		s.mu.Unlock() // unblock API as we 're not trying to reconnect again
 	}
 }
 
@@ -483,16 +502,24 @@ func (s *Service) isRetriableError(err error) bool {
 		return false
 	}
 
-	stat := status.Convert(err)
-	if s.svc != s.active && s.cfg.CloseError != nil &&
-		strings.Contains(stat.Message(), s.cfg.CloseError.Error()) {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
 
+	s.mu.Lock()
+	isLeader := s.svc == s.active
+	s.mu.Unlock()
+	if !isLeader && s.cfg.CloseError != nil &&
+		strings.Contains(err.Error(), s.cfg.CloseError.Error()) {
+		return true
+	}
+
+	stat := status.Convert(err)
 	c := stat.Code()
 	return strings.Contains(stat.Message(), "connection error") ||
 		strings.Contains(stat.Message(), "EOF") ||
-		c == codes.Unavailable || c == codes.DeadlineExceeded || c == codes.Aborted
+		c == codes.Unavailable || c == codes.DeadlineExceeded || c == codes.Aborted ||
+		c == codes.Canceled
 }
 
 // if last error is a document.Err*, then return that rather than any other transient errors.
