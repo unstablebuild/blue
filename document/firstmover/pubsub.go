@@ -71,6 +71,7 @@ type subscriber struct {
 }
 
 func (p *pubsub) init() {
+	p.cancelFn = func() {}
 	p.readyCtx, p.ready = context.WithCancel(context.Background())
 }
 
@@ -78,6 +79,7 @@ func (p *pubsub) reset() {
 	p.clientStreams = make(map[string]chan msgError)
 	p.subscribers = make(map[string][]subscriber)
 	p.id = uuid.New().String()
+	p.cancelFn()
 	p.ctx, p.cancelFn = context.WithCancel(context.Background())
 	p.closed = false
 }
@@ -155,15 +157,16 @@ type msgError struct {
 func (p *pubsub) subscribe(
 	ctx context.Context, topic string,
 	excl bool,
-) (chan msgError, error) {
+) (context.Context, chan msgError, error) {
 	p.mu.Lock()
+	quitCtx := p.ctx
 	stream, ok := p.clientStreams[topic]
 	if ok {
 		p.mu.Unlock()
 		if excl {
-			return nil, errors.New("this client is already subscribed to this topic")
+			return quitCtx, nil, errors.New("this client is already subscribed to this topic")
 		}
-		return stream, nil
+		return quitCtx, stream, nil
 	}
 
 	// if topic stream doesn't exist, create a new one
@@ -173,7 +176,7 @@ func (p *pubsub) subscribe(
 	srv, err := p.client.Receive(ctx, &req)
 	if err != nil {
 		p.mu.Unlock()
-		return nil, err
+		return quitCtx, nil, err
 	}
 	stream = make(chan msgError)
 	p.clientStreams[topic] = stream
@@ -182,7 +185,7 @@ func (p *pubsub) subscribe(
 	// connection is fully established
 	md, err := srv.Header()
 	if err != nil {
-		return nil, err
+		return quitCtx, nil, err
 	}
 
 	p.log(log.DebugLevel, "subscribed to topic %s, metadata: %+v", topic, md)
@@ -205,7 +208,7 @@ func (p *pubsub) subscribe(
 			msg, err := srv.Recv()
 			select {
 			case stream <- msgError{msg: msg, err: err}:
-			case <-p.ctx.Done():
+			case <-quitCtx.Done():
 				return
 				// do not use the passed context for streaming, as it should only
 				// be used for subscribing.
@@ -218,13 +221,13 @@ func (p *pubsub) subscribe(
 		}
 	}()
 
-	return stream, nil
+	return quitCtx, stream, nil
 }
 
 func (p *pubsub) receive(
 	ctx context.Context, topic string,
 ) ([]byte, error) {
-	stream, err := p.subscribe(ctx, topic, false)
+	quitCtx, stream, err := p.subscribe(ctx, topic, false)
 	if err != nil {
 		return nil, err
 	}
@@ -235,8 +238,8 @@ func (p *pubsub) receive(
 		var ok bool
 		select {
 		case msgErr, ok = <-stream:
-		case <-p.ctx.Done():
-			return nil, p.ctx.Err()
+		case <-quitCtx.Done():
+			return nil, quitCtx.Err()
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
@@ -265,28 +268,34 @@ func (p *pubsub) Publish(
 
 	p.mu.Lock()
 	subscribers := p.subscribers[topic]
-	closed := p.closed
-	p.mu.Unlock()
-	if closed {
+	if p.closed {
+		p.mu.Unlock()
 		return nil, status.Errorf(codes.Aborted, "closed")
 	}
 
 	p.log(log.TraceLevel, "server is broadcasting message for topic %q: subscribers: %d",
 		topic, len(subscribers))
 
+	var wg sync.WaitGroup
+	wg.Add(len(subscribers))
 	for _, sub := range subscribers {
-		var req pubsubpb.ReceiveResponse
-		req.Data = msg
-		if serr := sub.stream.Send(&req); serr != nil {
-			// cancel offending stream, but also return
-			// an error to this rpc so we provide at least once semantics
-			select {
-			case sub.errors <- fmt.Errorf("stream send: %w", serr):
-			default:
+		go func(sub subscriber) {
+			defer wg.Done()
+			var req pubsubpb.ReceiveResponse
+			req.Data = msg
+			if serr := sub.stream.Send(&req); serr != nil {
+				// cancel offending stream, but also return
+				// an error to this rpc so we provide at least once semantics
+				select {
+				case sub.errors <- fmt.Errorf("stream send: %w", serr):
+				default:
+				}
+				err = multierror.Append(err, serr)
 			}
-			err = multierror.Append(err, serr)
-		}
+		}(sub)
 	}
+	p.mu.Unlock()
+	wg.Wait()
 
 	p.log(log.TraceLevel, "server is done broadcasting message for topic %q to %d subscribers",
 		topic, len(subscribers))
@@ -315,6 +324,7 @@ func (p *pubsub) Receive(
 			stream: srv,
 		},
 	)
+	quitCtx := p.ctx
 	p.mu.Unlock()
 
 	// header is waited upon by client to guarantee that
@@ -344,8 +354,8 @@ func (p *pubsub) Receive(
 	select {
 	case err := <-errors:
 		return err
-	case <-p.ctx.Done():
-		return p.ctx.Err()
+	case <-quitCtx.Done():
+		return quitCtx.Err()
 	case <-srv.Context().Done():
 		return nil
 	}
