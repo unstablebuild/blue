@@ -366,6 +366,29 @@ func TestPubSub(t *testing.T) {
 		assert.NoError(t, followers[0].Close())
 	})
 
+	t.Run("client re-connect", func(t *testing.T) {
+		leader, followers := makeLeaderFollowerPair(t, 2)
+		topic := "1234"
+
+		ctx := context.Background()
+		err := followers[0].Subscribe(ctx, topic)
+		require.NoError(t, err)
+
+		err = followers[1].Subscribe(ctx, topic)
+		require.NoError(t, err)
+
+		require.NoError(t, leader.Close())
+
+		require.NoError(t, followers[1].Publish(context.Background(), topic, []byte("block")))
+
+		data, err := followers[0].Receive(context.Background(), topic)
+		require.NoError(t, err)
+		assert.Equal(t, "block", string(data))
+
+		assert.NoError(t, followers[0].Close())
+		assert.NoError(t, followers[1].Close())
+	})
+
 	t.Run("extreme concurrency of leaders and followers", func(t *testing.T) {
 		const n, m = 100, 50
 		cfg := testConfig()

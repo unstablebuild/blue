@@ -42,6 +42,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// important it's not 0 to not lose messages
+// when re-connecting to another leader
+const clientStreamBuffer = 100
+
 type pubsub struct {
 	pubsubpb.UnimplementedPubSubServer
 	mu       sync.Locker
@@ -140,7 +144,7 @@ func (p *pubsub) publish(
 		Data:   msg,
 		Sender: p.id,
 	}
-	p.log(log.TraceLevel, "client is publishing message")
+	p.log(log.TraceLevel, "client is publishing message to topic %q", topic)
 	_, err := client.Publish(ctx, &req)
 	if err != nil {
 		return err
@@ -178,7 +182,7 @@ func (p *pubsub) subscribe(
 		p.mu.Unlock()
 		return quitCtx, nil, err
 	}
-	stream = make(chan msgError)
+	stream = make(chan msgError, clientStreamBuffer)
 	p.clientStreams[topic] = stream
 	p.mu.Unlock()
 	// blocks until server has sent header and so
@@ -206,8 +210,12 @@ func (p *pubsub) subscribe(
 
 		for {
 			msg, err := srv.Recv()
+			p.log(log.TraceLevel, "client stream Recv returned: %v, %v", msg, err)
 			select {
 			case stream <- msgError{msg: msg, err: err}:
+				if msg != nil {
+					p.log(log.TraceLevel, "client stream Recv succesfully buffered: %v", msg)
+				}
 			case <-quitCtx.Done():
 				return
 				// do not use the passed context for streaming, as it should only
@@ -233,7 +241,7 @@ func (p *pubsub) receive(
 	}
 
 	for {
-		p.log(log.TraceLevel, "client is waiting to receive a message on stream %p", stream)
+		p.log(log.TraceLevel, "client is waiting to receive a message for topic %q", topic)
 		var msgErr msgError
 		var ok bool
 		select {
@@ -260,7 +268,7 @@ func (p *pubsub) receive(
 
 func (p *pubsub) Publish(
 	ctx context.Context, req *pubsubpb.PublishRequest,
-) (resp *pubsubpb.PublishResponse, err error) {
+) (*pubsubpb.PublishResponse, error) {
 	<-p.readyCtx.Done()
 
 	topic := req.GetTopic()
@@ -276,10 +284,11 @@ func (p *pubsub) Publish(
 	p.log(log.TraceLevel, "server is broadcasting message for topic %q: subscribers: %d",
 		topic, len(subscribers))
 
+	errors := make([]error, len(subscribers))
 	var wg sync.WaitGroup
 	wg.Add(len(subscribers))
-	for _, sub := range subscribers {
-		go func(sub subscriber) {
+	for i, sub := range subscribers {
+		go func(sub subscriber, i int) {
 			defer wg.Done()
 			var req pubsubpb.ReceiveResponse
 			req.Data = msg
@@ -290,9 +299,9 @@ func (p *pubsub) Publish(
 				case sub.errors <- fmt.Errorf("stream send: %w", serr):
 				default:
 				}
-				err = multierror.Append(err, serr)
+				errors[i] = serr
 			}
-		}(sub)
+		}(sub, i)
 	}
 	p.mu.Unlock()
 	wg.Wait()
@@ -300,6 +309,12 @@ func (p *pubsub) Publish(
 	p.log(log.TraceLevel, "server is done broadcasting message for topic %q to %d subscribers",
 		topic, len(subscribers))
 
+	var err error
+	for _, rerr := range errors {
+		if rerr != nil {
+			err = multierror.Append(err, rerr)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}

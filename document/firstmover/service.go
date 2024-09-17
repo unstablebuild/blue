@@ -78,9 +78,9 @@ type Service struct {
 
 	closed      bool
 	quitCh      chan struct{}
-	closeWaitCh chan struct{}
 
 	followFailures int
+	subscriptions  map[string][][]byte
 	active         document.Service
 }
 
@@ -101,6 +101,7 @@ func (s *Service) Init(svc document.Service, lockFile string, cfg Config) {
 	}
 	s.svc = svc
 	s.lockFile = lockFile
+	s.subscriptions = make(map[string][][]byte)
 	s.pubsub = new(pubsub)
 	s.pubsub.mu = &s.mu
 	s.readyCtx, s.ready = context.WithCancel(context.Background())
@@ -114,7 +115,6 @@ func (s *Service) Init(svc document.Service, lockFile string, cfg Config) {
 	s.connectRetryStrategy = retry.SequentialStrategy(cfg.ConnectRetryCadence)
 
 	s.quitCh = make(chan struct{})
-	s.closeWaitCh = make(chan struct{})
 
 	go s.leadOrFollow()
 }
@@ -248,9 +248,14 @@ func (s *Service) Close() (ret error) {
 	s.closed = true
 	close(s.quitCh)
 	if s.active != s.svc && s.active != nil {
-		if err := s.active.Close(); err != nil {
-			ret = multierr.Append(ret, err)
-		}
+		// it's possible that Close on a follower was called after
+		// we purposely shutdown connection due to leader also closing.
+		_ = s.active.Close()
+	} else if s.active == s.svc && s.active != nil { // leader
+		s.mu.Unlock()
+		// best effort
+		_ = s.pubsub.publish(context.Background(), internalTopic, internalMessageBye)
+		s.mu.Lock()
 	}
 	if err := s.svc.Close(); err != nil {
 		ret = multierr.Append(ret, err)
@@ -259,9 +264,6 @@ func (s *Service) Close() (ret error) {
 	if err := s.pubsub.Close(); err != nil {
 		ret = multierr.Append(ret, err)
 	}
-	// wait until we're sure that lock has been removed
-	// if we're the leader
-	<-s.closeWaitCh
 	return
 }
 
@@ -272,6 +274,15 @@ func (s *Service) IsLeader() bool {
 	defer s.mu.Unlock()
 	return s.svc == s.active
 }
+
+const (
+	internalTopic            = "__XXpubsubintXX__"
+	internalMessageByeString = "BYE"
+)
+
+var (
+	internalMessageBye = []byte(internalMessageByeString)
+)
 
 func (s *Service) follow(ctx context.Context, addr net.Addr) (bool, error) {
 	quitCh := s.quitCh
@@ -311,7 +322,10 @@ loop:
 			s.pubsub.initFollower(conn)
 			// set active svc and unlock API
 			s.setActiveAndUnlock(client)
+			subscriptions := s.subscriptions
 			s.mu.Unlock()
+			s.resubscribe(ctx, subscriptions)
+			s.monitorLeader(ctx, conn)
 			s.log(log.DebugLevel, "Successfully connected to leader. Unlocking API...")
 			break loop
 		case connectivity.Connecting, connectivity.Idle:
@@ -355,13 +369,69 @@ loop:
 			case <-quitCh:
 				return false, nil
 			default:
-				s.log(log.ErrorLevel, "connection state is Shutdown")
+				s.log(log.DebugLevel, "connection state is Shutdown")
 				return true, errors.New("grpc connection state = shutdown")
 			}
 		default:
 			panic(fmt.Sprintf("unknown connection state: %v", state))
 		}
 	}
+}
+
+func (s *Service) resubscribe(ctx context.Context, subscriptions map[string][][]byte) {
+	for topic, buffered := range subscriptions {
+		_, stream, err := s.pubsub.subscribe(ctx, topic, false)
+		if err != nil {
+			s.log(log.WarnLevel, "resubscribe to %q: %v", topic, err)
+			continue
+		}
+		for i := 0; i < len(buffered); i++ {
+			stream <- msgError{msg: &pubsubpb.ReceiveResponse{Data: buffered[i]}}
+		}
+		s.log(log.DebugLevel, "resubscribe: re-published %d messages from topic %q",
+			len(buffered), topic)
+	}
+	s.subscriptions = make(map[string][][]byte)
+}
+
+func (s *Service) monitorLeader(ctx context.Context, conn *grpc.ClientConn) {
+	if _, _, err := s.pubsub.subscribe(ctx, internalTopic, false); err != nil {
+		s.log(log.WarnLevel, "monitor leader: subscribe to internal bookkeeping topic: %v", err)
+		return
+	}
+
+	go func() {
+		for {
+			data, err := s.pubsub.receive(ctx, internalTopic)
+			if err != nil {
+				// connection to leader died for expected or unexpected
+				// reasons that are hard to determine from here. Do not log.
+				return
+			}
+			if string(data) == internalMessageByeString {
+				s.mu.Lock()
+				// collect buffered messages and subscriptions
+				// before killing connection and resetting pubsub instance.
+				for topic, stream := range s.pubsub.clientStreams {
+					var msgs [][]byte
+					for len(stream) > 0 {
+						msg := <-stream
+						msgs = append(msgs, msg.msg.GetData())
+					}
+					s.subscriptions[topic] = append(s.subscriptions[topic], msgs...)
+				}
+				s.log(log.DebugLevel, "leader is signaling close, recovered %+v", s.subscriptions)
+				s.mu.Unlock()
+				err := conn.Close()
+				if err != nil {
+					s.log(log.WarnLevel, "force close connection to leader: %v", err)
+				}
+			} else {
+				s.log(log.WarnLevel, "received unknown message from internal topic: %v",
+					string(data))
+			}
+		}
+	}()
 }
 
 func (s *Service) setActiveAndUnlock(svc document.Service) {
@@ -376,7 +446,9 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 	gsrv := grpc.NewServer()
 	defer gsrv.Stop()
 
+	s.mu.Lock()
 	s.pubsub.init()
+	s.mu.Unlock()
 	docpb.RegisterDocumentStoreServer(gsrv, server)
 	pubsubpb.RegisterPubSubServer(gsrv, s.pubsub)
 
@@ -407,10 +479,15 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 	// set active svc and unlock API
 	s.log(log.DebugLevel, "Successfully assumed position of leader. Unlocking API...")
 	s.setActiveAndUnlock(s.svc)
+	subscriptions := s.subscriptions
 	s.mu.Unlock()
 
+	s.resubscribe(ctx, subscriptions)
 	select {
 	case <-quitCh:
+		// if we clean quit, then remove lockFile to speed
+		// up follower recovery.
+		_ = os.Remove(s.lockFile)
 		return false, nil
 	case err := <-done:
 		return false, err
@@ -427,7 +504,6 @@ func (s *Service) log(level log.Level, msg string, args ...interface{}) {
 
 func (s *Service) leadOrFollow() {
 	quitCh := s.quitCh
-	defer close(s.closeWaitCh)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
