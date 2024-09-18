@@ -47,6 +47,15 @@ type RawStream interface {
 	RecvMsg(m interface{}) error
 }
 
+// ValueStream abstract an arbitrary value stream. See Stream for differences.
+type ValueStream[T any] interface {
+	// Recv blocks until it receives a message into m or the stream is
+	// done. It returns io.EOF when the stream completes successfully. On
+	// any other error, the stream is aborted and the error contains the RPC
+	// status.
+	Recv() (T, error)
+}
+
 // FromStream takes a Stream, tipically genereated via protoc, and
 // returns an Iterator of T. The iterator stops when its Close function is returned or
 // the underlying stream returns io.EOF or other error. Only non io.EOF errors
@@ -59,9 +68,25 @@ type RawStream interface {
 func FromStream[T any](
 	ctx context.Context, cancel func(), stream Stream[T],
 ) Iterator[*T] {
+	return FromValueStream[*T](ctx, cancel, stream)
+}
+
+// FromRawStream works similar to FromStream, but takes a raw grpc.ClientStream,
+// so it's inherently less safe than using FromStream.
+func FromRawStream[T any](
+	ctx context.Context, cancel func(), stream RawStream,
+) Iterator[*T] {
+	return FromStream[T](ctx, cancel, rawStreamAdapter[T]{stream})
+}
+
+// FromValueStream works similar to FromStream, but expects a ValueStream.
+// See ValueStream for more details.
+func FromValueStream[T any](
+	ctx context.Context, cancel func(), stream ValueStream[T],
+) Iterator[T] {
 	var closed atomic.Bool
 	type msg struct {
-		data *T
+		data T
 		err  error
 	}
 
@@ -78,7 +103,7 @@ func FromStream[T any](
 		}
 	}()
 
-	return FromFunc(func(ctx context.Context) (ret *T, ok bool, err error) {
+	return FromFunc(func(ctx context.Context) (ret T, ok bool, err error) {
 		var m msg
 		select {
 		case m, ok = <-ch:
@@ -103,19 +128,11 @@ func FromStream[T any](
 	})
 }
 
-// FromRawStream works similar to FromStream, but takes a raw grpc.ClientStream,
-// so it's inherently less safe than using FromStream.
-func FromRawStream[T any](
-	ctx context.Context, cancel func(), stream RawStream,
-) Iterator[*T] {
-	return FromStream[T](ctx, cancel, streamAdapter[T]{stream})
-}
-
-type streamAdapter[T any] struct {
+type rawStreamAdapter[T any] struct {
 	s RawStream
 }
 
-func (r streamAdapter[T]) Recv() (*T, error) {
+func (r rawStreamAdapter[T]) Recv() (*T, error) {
 	ret := new(T)
 	err := r.s.RecvMsg(ret)
 	return ret, err
