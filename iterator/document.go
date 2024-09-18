@@ -36,6 +36,7 @@ func FromDocumentIterator[T any](it document.Iterator) Iterator[T] {
 		err  error
 	}
 	ch := make(chan msg)
+	quitCh := make(chan struct{})
 	go func() {
 		defer close(ch) // signal ok = false below
 		var err error
@@ -45,7 +46,11 @@ func FromDocumentIterator[T any](it document.Iterator) Iterator[T] {
 				return
 			}
 			err = it.NextTo(&data)
-			ch <- msg{data: data, err: err}
+			select {
+			case ch <- msg{data: data, err: err}:
+			case <-quitCh:
+				return
+			}
 		}
 	}()
 	return FromFunc(func(ctx context.Context) (ret T, ok bool, err error) {
@@ -60,6 +65,9 @@ func FromDocumentIterator[T any](it document.Iterator) Iterator[T] {
 			return
 		}
 	}, func() error {
-		return it.Close()
+		close(quitCh)
+		err := it.Close()
+		<-ch // wait for goroutine to be done
+		return err
 	})
 }

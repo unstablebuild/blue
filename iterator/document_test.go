@@ -37,9 +37,9 @@ import (
 )
 
 func TestDocumentIterator(t *testing.T) {
-	goleak.VerifyNone(t)
-
 	t.Run("unblocks Next if context is canceled", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
 			time.Sleep(50 * time.Millisecond)
@@ -50,27 +50,48 @@ func TestDocumentIterator(t *testing.T) {
 		_, ok := it.Next(ctx)
 		assert.False(t, ok)
 		assert.Error(t, it.Err())
+		require.NoError(t, it.Close())
 	})
 
 	t.Run("exhausts underlying document iterator", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
 		type bob struct {
 			X string
 		}
 		a, b, c := bob{X: "a"}, bob{X: "b"}, bob{X: "c"}
 		dit := document.NewListIterator(docjson.Marshaler(), a, b, c)
+		it := FromDocumentIterator[bob](dit)
 		actual, err := Reduce(context.Background(),
-			FromDocumentIterator[bob](dit), func(ret []bob, t bob) ([]bob, error) {
+			it, func(ret []bob, t bob) ([]bob, error) {
 				return append(ret, t), nil
 			})
 		require.NoError(t, err)
 		assert.EqualValues(t, []bob{a, b, c}, actual)
+		require.NoError(t, it.Close())
 	})
 
 	t.Run("bubbles up underlying document iterator errors", func(t *testing.T) {
-		dit := FromDocumentIterator[string](&errorDocumentIterator{})
-		_, ok := dit.Next(context.Background())
+		defer goleak.VerifyNone(t)
+
+		it := FromDocumentIterator[string](&errorDocumentIterator{})
+		_, ok := it.Next(context.Background())
 		assert.False(t, ok)
-		assert.EqualError(t, dit.Err(), "1 error occurred: kaboom")
+		assert.EqualError(t, it.Err(), "1 error occurred: kaboom")
+		require.NoError(t, it.Close())
+	})
+
+	t.Run("does not leak goroutine if data was read, "+
+		"but Close was called before Next", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		type bob struct {
+			X string
+		}
+		a := bob{X: "a"}
+		dit := document.NewListIterator(docjson.Marshaler(), a)
+		it := FromDocumentIterator[bob](dit)
+		require.NoError(t, it.Close())
 	})
 }
 
