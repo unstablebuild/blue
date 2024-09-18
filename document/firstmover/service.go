@@ -59,7 +59,9 @@ import (
 // If the leader is closed after this Service connects to it,
 // or it stops responding for more than a specificed timeout,
 // all running Services returned will race to re-acquire the lock and
-// act as the new leader.
+// act as the new leader. Any pending iterators returned by List
+// will fail, and clients of this document.Service are encouraged
+// to do their own retries on List operations.
 //
 // This Service also exposes pub/sub capabilities with at least once
 // semantics.
