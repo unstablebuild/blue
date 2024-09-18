@@ -104,16 +104,6 @@ type Service interface {
 
 	// The List operation returns a page of all documents in the collection.
 	// To return a subset of the collection, you can provide a set of filters.
-	//
-	// `cursor` represents the first item that this operation will evaluate.
-	// If cursor is nil, then the start of the collection is assumed. Use
-	// the value that was returned for nextCursor in the previous operation
-	// to list the next set of documents. More data is available until nextCursor
-	// is nil.
-	//
-	// The limit of documents returned is controled with the size of docs.
-	// When nextCursor is nil, the returned n is used to determine how many
-	// documents were marshaled into docs.
 	List(ctx context.Context, filters []Filter) (Iterator, error)
 
 	io.Closer
