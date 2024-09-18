@@ -489,15 +489,11 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 	s.resubscribe(ctx, subscriptions)
 	select {
 	case <-quitCh:
-		// if we clean quit, then remove lockFile to speed
-		// up follower recovery.
-		_ = os.Remove(s.lockFile)
 		return false, nil
 	case err := <-done:
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if s.closed {
-			_ = os.Remove(s.lockFile)
 			return false, nil
 		}
 		return false, err
