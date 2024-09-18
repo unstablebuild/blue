@@ -76,8 +76,8 @@ type Service struct {
 	retryStrategy        retry.Strategy
 	connectRetryStrategy retry.Strategy
 
-	closed      bool
-	quitCh      chan struct{}
+	closed bool
+	quitCh chan struct{}
 
 	followFailures int
 	subscriptions  map[string][][]byte
@@ -246,16 +246,18 @@ func (s *Service) Close() (ret error) {
 		return
 	}
 	s.closed = true
-	close(s.quitCh)
 	if s.active != s.svc && s.active != nil {
+		close(s.quitCh)
 		// it's possible that Close on a follower was called after
 		// we purposely shutdown connection due to leader also closing.
 		_ = s.active.Close()
 	} else if s.active == s.svc && s.active != nil { // leader
 		s.mu.Unlock()
-		// best effort
-		_ = s.pubsub.publish(context.Background(), internalTopic, internalMessageBye)
+		// best effort, use server method directly so we guarantee delivery
+		req := pubsubpb.PublishRequest{Topic: internalTopic, Data: internalMessageBye}
+		_, _ = s.pubsub.Publish(context.Background(), &req)
 		s.mu.Lock()
+		close(s.quitCh)
 	}
 	if err := s.svc.Close(); err != nil {
 		ret = multierr.Append(ret, err)
@@ -386,7 +388,7 @@ func (s *Service) resubscribe(ctx context.Context, subscriptions map[string][][]
 			continue
 		}
 		for i := 0; i < len(buffered); i++ {
-			stream <- msgError{msg: &pubsubpb.ReceiveResponse{Data: buffered[i]}}
+			stream <- msgError{msg: &pubsubpb.ReceiveMessage_Data{Data: buffered[i]}}
 		}
 		s.log(log.DebugLevel, "resubscribe: re-published %d messages from topic %q",
 			len(buffered), topic)
@@ -490,6 +492,12 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 		_ = os.Remove(s.lockFile)
 		return false, nil
 	case err := <-done:
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.closed {
+			_ = os.Remove(s.lockFile)
+			return false, nil
+		}
 		return false, err
 	}
 }
