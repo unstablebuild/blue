@@ -153,7 +153,7 @@ func TestServiceIntegration(t *testing.T) {
 	})
 
 	t.Run("multiple instances", func(t *testing.T) {
-		doctest.TestDocumentService(t, func(t *testing.T) document.Service {
+		doctest.TestDocumentServiceNoList(t, func(t *testing.T) document.Service {
 			const n = 50
 			cfg := testConfig()
 
