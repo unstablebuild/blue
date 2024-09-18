@@ -44,7 +44,7 @@ func TestStreamIterator(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
 		ctx, cancel := context.WithCancel(context.Background())
-		it := FromStream[data](ctx, cancel, &errorStream{})
+		it := FromRawStream[data](ctx, cancel, &errorStream{})
 		_, ok := it.Next(ctx)
 		assert.False(t, ok)
 		require.NoError(t, it.Close())
@@ -60,7 +60,7 @@ func TestStreamIterator(t *testing.T) {
 			cancel()
 		}()
 		stream := blockingStream{quitCh: make(chan struct{})}
-		it := FromStream[data](ctx, func() {
+		it := FromRawStream[data](ctx, func() {
 			close(stream.quitCh)
 			cancel()
 		}, stream)
@@ -76,7 +76,7 @@ func TestStreamIterator(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		stream := blockingStream{quitCh: make(chan struct{})}
-		it := FromStream[data](ctx, func() {
+		it := FromRawStream[data](ctx, func() {
 			close(stream.quitCh)
 			cancel()
 		}, stream)
@@ -95,7 +95,7 @@ func TestStreamIterator(t *testing.T) {
 		stream := grpcClientStream{data: []data{a, b, c}, ready: make(chan struct{}, 3)}
 		var cancelCalled bool
 		ctx, cancel := context.WithCancel(context.Background())
-		it := FromStream[data](ctx, func() {
+		it := FromRawStream[data](ctx, func() {
 			cancelCalled = true
 			cancel()
 		}, &stream)
@@ -117,7 +117,7 @@ func TestStreamIterator(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
 		ctx, cancel := context.WithCancel(context.Background())
-		it := FromStream[data](ctx, cancel, &errorStream{})
+		it := FromRawStream[data](ctx, cancel, &errorStream{})
 		_, ok := it.Next(ctx)
 		assert.False(t, ok)
 		assert.EqualError(t, it.Err(), "1 error occurred: kaboom")
@@ -132,7 +132,7 @@ func TestStreamIterator(t *testing.T) {
 		ready := make(chan struct{}) // blocking
 		stream := grpcClientStream{data: []data{a, b, c}, ready: ready}
 		ctx, cancel := context.WithCancel(context.Background())
-		it := FromStream[data](ctx, cancel, &stream)
+		it := FromRawStream[data](ctx, cancel, &stream)
 		<-ready
 
 		require.NoError(t, it.Close())

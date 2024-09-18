@@ -29,8 +29,17 @@ import (
 	"sync/atomic"
 )
 
-// Stream abstract a subset of grpc.ClientStream.
-type Stream interface {
+// Stream abstract a GRPC protoc-generated grpc.ClientStream.
+type Stream[T any] interface {
+	// Recv blocks until it receives a message into m or the stream is
+	// done. It returns io.EOF when the stream completes successfully. On
+	// any other error, the stream is aborted and the error contains the RPC
+	// status.
+	Recv() (*T, error)
+}
+
+// RawStream abstract a subset of grpc.ClientStream.
+type RawStream interface {
 	// RecvMsg blocks until it receives a message into m or the stream is
 	// done. It returns io.EOF when the stream completes successfully. On
 	// any other error, the stream is aborted and the error contains the RPC
@@ -38,7 +47,7 @@ type Stream interface {
 	RecvMsg(m interface{}) error
 }
 
-// FromStream takes a Stream which casually resembles a grpc.ClientStream, and
+// FromStream takes a Stream, tipically genereated via protoc, and
 // returns an Iterator of T. The iterator stops when its Close function is returned or
 // the underlying stream returns io.EOF or other error. Only non io.EOF errors
 // will be surfaced via the returning iterator's Err method.
@@ -48,9 +57,7 @@ type Stream interface {
 // returned iterator's Close method is called, the stream's resources
 // are also cleaned up.
 func FromStream[T any](
-	ctx context.Context,
-	cancel func(),
-	stream Stream,
+	ctx context.Context, cancel func(), stream Stream[T],
 ) Iterator[*T] {
 	var closed atomic.Bool
 	type msg struct {
@@ -61,10 +68,8 @@ func FromStream[T any](
 	ch := make(chan msg)
 	go func() {
 		defer close(ch)
-		var err error
 		for {
-			data := new(T)
-			err = stream.RecvMsg(data)
+			data, err := stream.Recv()
 			select {
 			case ch <- msg{data: data, err: err}:
 			case <-ctx.Done():
@@ -96,4 +101,22 @@ func FromStream[T any](
 		<-ch // wait for clean goroutine to be done
 		return nil
 	})
+}
+
+// FromRawStream works similar to FromStream, but takes a raw grpc.ClientStream,
+// so it's inherently less safe than using FromStream.
+func FromRawStream[T any](
+	ctx context.Context, cancel func(), stream RawStream,
+) Iterator[*T] {
+	return FromStream[T](ctx, cancel, streamAdapter[T]{stream})
+}
+
+type streamAdapter[T any] struct {
+	s RawStream
+}
+
+func (r streamAdapter[T]) Recv() (*T, error) {
+	ret := new(T)
+	err := r.s.RecvMsg(ret)
+	return ret, err
 }
