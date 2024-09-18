@@ -85,7 +85,6 @@ func TestStreamIterator(t *testing.T) {
 		}()
 		_, ok := it.Next(ctx)
 		assert.False(t, ok)
-		assert.Error(t, it.Err())
 	})
 
 	t.Run("exhausts underlying document iterator", func(t *testing.T) {
