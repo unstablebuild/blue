@@ -24,6 +24,7 @@
 package iterator
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -41,21 +42,23 @@ func TestIsEmpty(t *testing.T) {
 		{"multiple items returns false and and same iterator", []testStruct{{"1", 1}, {"2", 2}}, false},
 	}
 
+	ctx := context.Background()
+
 	for _, tcase := range tsuite {
 		t.Run(tcase.desc, func(t *testing.T) {
-			actualOutIt, actualOutOk := IsEmpty(FromSlice(tcase.inSlice))
+			actualOutIt, actualOutOk := IsEmpty(ctx, FromSlice(tcase.inSlice))
 			assert.Equal(t, tcase.expectedOutOk, actualOutOk)
-			actualOutSlice, err := ToSlice(actualOutIt)
+			actualOutSlice, err := ToSlice(ctx, actualOutIt)
 			require.NoError(t, err)
 			assert.Equal(t, append([]testStruct{}, tcase.inSlice...), actualOutSlice)
 		})
 	}
 
 	t.Run("iterator returned Empty is empty", func(t *testing.T) {
-		next, empty := IsEmpty(Empty[string]())
+		next, empty := IsEmpty(ctx, Empty[string]())
 		require.True(t, empty)
 
-		_, empty = IsEmpty(next)
+		_, empty = IsEmpty(ctx, next)
 		require.True(t, empty)
 	})
 }

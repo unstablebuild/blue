@@ -24,13 +24,14 @@
 package cliformat
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"reflect"
 
+	"github.com/olekukonko/tablewriter"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/iterator"
-	"github.com/olekukonko/tablewriter"
 )
 
 // Table returns an IteratorFormatter that formats elements
@@ -65,12 +66,14 @@ func isEncodeable(t interface{}) (reflect.Value, bool) {
 	}
 }
 
-func (f tableFormatter[T]) Format(w io.Writer, it iterator.Iterator[T]) error {
+func (f tableFormatter[T]) Format(
+	ctx context.Context, w io.Writer, it iterator.Iterator[T],
+) error {
 	table := tablewriter.NewWriter(w)
 	table.SetHeader(f.fields)
 
 	for {
-		t, ok := it.Next()
+		t, ok := it.Next(ctx)
 		if !ok {
 			if err := it.Err(); err != nil {
 				return err

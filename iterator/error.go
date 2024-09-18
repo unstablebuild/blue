@@ -23,6 +23,8 @@
 
 package iterator
 
+import "context"
+
 // Error returns an Iterator of T that never returns a value
 // and always returns the given error.
 func Error[T any](err error) Iterator[T] {
@@ -33,7 +35,7 @@ type errorIt[T any] struct {
 	err error
 }
 
-func (e errorIt[T]) Next() (ret T, ok bool) {
+func (e errorIt[T]) Next(context.Context) (ret T, ok bool) {
 	return
 }
 

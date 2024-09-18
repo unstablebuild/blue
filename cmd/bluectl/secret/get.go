@@ -82,14 +82,15 @@ func (s *secretDescribe) Run(ctx context.Context, args []string) error {
 	switch strings.ToLower(s.format) {
 	case "json":
 		t := cliformat.JSON[secretmanager.Secret]()
-		return t.Format(os.Stdout, sec)
+		return t.Format(ctx, os.Stdout, sec)
 	case "table":
-		t := cliformat.Table[secretmanager.Secret]([]string{"ID", "CreatedAt", "Annotations"})
-		return t.Format(os.Stdout, sec)
+		t := cliformat.Table[secretmanager.Secret](
+			[]string{"ID", "CreatedAt", "Annotations"})
+		return t.Format(ctx, os.Stdout, sec)
 	default:
 		t, err := cliformat.Template[secretmanager.Secret](s.format)
 		if err == nil {
-			return t.Format(os.Stdout, sec)
+			return t.Format(ctx, os.Stdout, sec)
 		}
 		return cli.ErrInvalidArgs
 	}

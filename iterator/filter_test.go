@@ -24,6 +24,7 @@
 package iterator
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -55,7 +56,7 @@ func TestFilter(t *testing.T) {
 	for _, tcase := range tsuite {
 		t.Run(tcase.desc, func(t *testing.T) {
 			actualOut := Filter(FromSlice(tcase.in), tcase.inFn)
-			actualOutSlice, err := ToSlice(actualOut)
+			actualOutSlice, err := ToSlice(context.Background(), actualOut)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.expected, actualOutSlice)
 		})

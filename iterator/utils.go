@@ -23,14 +23,18 @@
 
 package iterator
 
-import "github.com/ernestrc/go-multierror"
+import (
+	"context"
+
+	"github.com/ernestrc/go-multierror"
+)
 
 // ToSlice consumes the given iterator and returns a slice with
 // all of the elements produced.
-func ToSlice[T any](it Iterator[T]) ([]T, error) {
+func ToSlice[T any](ctx context.Context, it Iterator[T]) ([]T, error) {
 	ret := make([]T, 0)
 	for {
-		t, ok := it.Next()
+		t, ok := it.Next(ctx)
 		if !ok {
 			if err := it.Err(); err != nil {
 				return nil, err
@@ -47,24 +51,27 @@ func FromSlice[T any](els []T) Iterator[T] {
 }
 
 // FromFunc returns an Iterator backed by the provided function.
-func FromFunc[T any](fn func() (T, bool, error), close func() error) Iterator[T] {
+func FromFunc[T any](
+	fn func(context.Context) (T, bool, error),
+	close func() error,
+) Iterator[T] {
 	return &fnIter[T]{fn: fn, close: close}
 }
 
 // IsEmpty consumes the first element in i and returns true if it is empty
 // or false if not and returns a new iterator that should be used instead of i.
-func IsEmpty[T any](i Iterator[T]) (Iterator[T], bool) {
-	el, ok := i.Next()
+func IsEmpty[T any](ctx context.Context, i Iterator[T]) (Iterator[T], bool) {
+	el, ok := i.Next(ctx)
 	if !ok {
 		return FromSlice[T](nil), true
 	}
 
-	return FromFunc(func() (T, bool, error) {
+	return FromFunc(func(ctx context.Context) (T, bool, error) {
 		if ok {
 			ok = false
 			return el, true, nil
 		}
-		iEl, iOk := i.Next()
+		iEl, iOk := i.Next(ctx)
 		if !iOk {
 			return iEl, false, i.Err()
 		}
@@ -74,12 +81,12 @@ func IsEmpty[T any](i Iterator[T]) (Iterator[T], bool) {
 
 type fnIter[T any] struct {
 	err   error
-	fn    func() (T, bool, error)
+	fn    func(context.Context) (T, bool, error)
 	close func() error
 }
 
-func (f *fnIter[T]) Next() (T, bool) {
-	t, ok, err := f.fn()
+func (f *fnIter[T]) Next(ctx context.Context) (T, bool) {
+	t, ok, err := f.fn(ctx)
 	if err != nil {
 		f.err = multierror.Append(f.err, err)
 		return t, false
@@ -99,7 +106,7 @@ type sliceIter[T any] struct {
 	els []T
 }
 
-func (i *sliceIter[T]) Next() (ret T, ok bool) {
+func (i *sliceIter[T]) Next(context.Context) (ret T, ok bool) {
 	if len(i.els) == 0 {
 		return
 	}
