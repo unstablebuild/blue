@@ -104,7 +104,6 @@ func (p *pubsub) initLeader(
 	addr := listener.Addr()
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	}
 	opts = append(opts, grpc.WithContextDialer(
 		func(ctx context.Context, _ string) (net.Conn, error) {
