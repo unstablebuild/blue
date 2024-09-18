@@ -89,7 +89,7 @@ func (s *Segador) assertEqualMap(t *testing.T, svc document.Service, target map[
 	id := uuid.New().String()
 	ctx := context.Background()
 	res := make(map[string]interface{})
-	err := svc.Create(ctx, id, s)
+	err := svc.Set(ctx, id, s)
 	require.NoError(t, err)
 	err = svc.Get(ctx, id, &res)
 	require.NoError(t, err)
@@ -319,7 +319,7 @@ func testDatastoreGet(t *testing.T, serviceFactory FnServiceFactory) {
 		err := s.Get(ctx, myID, &myBob)
 		assert.Equal(t, document.ErrNotFound, err)
 
-		err = s.Create(ctx, myID, bob)
+		err = s.Set(ctx, myID, bob)
 		require.NoError(t, err)
 
 		err = s.Get(ctx, myID, &myBob)
@@ -339,7 +339,7 @@ func testDatastoreGet(t *testing.T, serviceFactory FnServiceFactory) {
 		defer s.Close()
 
 		myID := "get_errors_non_ptr"
-		err := s.Create(ctx, myID, myOtherEntity{})
+		err := s.Set(ctx, myID, myOtherEntity{})
 		require.NoError(t, err)
 
 		var myVal Segador
@@ -351,7 +351,7 @@ func testDatastoreGet(t *testing.T, serviceFactory FnServiceFactory) {
 		defer s.Close()
 		myID := "get_map_receiver"
 
-		err := s.Create(ctx, myID, bob)
+		err := s.Set(ctx, myID, bob)
 		require.NoError(t, err)
 
 		var myBob map[string]interface{}
@@ -373,7 +373,7 @@ func testDatastoreDelete(t *testing.T, serviceFactory FnServiceFactory) {
 
 		var myBob Segador
 
-		err := s.Create(ctx, myID, bob)
+		err := s.Set(ctx, myID, bob)
 		require.NoError(t, err)
 
 		err = s.Get(ctx, myID, &myBob)
@@ -391,7 +391,7 @@ func testDatastoreDelete(t *testing.T, serviceFactory FnServiceFactory) {
 		defer s.Close()
 		myID := "get_delete_notfound"
 
-		err := s.Create(ctx, myID, bob)
+		err := s.Set(ctx, myID, bob)
 		require.NoError(t, err)
 
 		for i := 0; i < 3; i++ {
@@ -429,7 +429,7 @@ func prepareForUpdate(
 ) (s document.Service) {
 	ctx := context.Background()
 	s = serviceFactory(t)
-	err := s.Create(ctx, myID, document)
+	err := s.Set(ctx, myID, document)
 	require.NoError(t, err)
 	return
 }
@@ -619,13 +619,13 @@ func prepareServiceForListTest(
 
 	for i := 0; i < 10; i++ {
 		myID := fmt.Sprintf("%s_list_bob_%d", name, i)
-		err := s.Create(ctx, myID, bob)
+		err := s.Set(ctx, myID, bob)
 		require.NoError(t, err)
 	}
 
 	for i := 0; i < 2; i++ {
 		myID := fmt.Sprintf("%s_list_alice_%d", name, i)
-		err := s.Create(ctx, myID, alice)
+		err := s.Set(ctx, myID, alice)
 		require.NoError(t, err)
 	}
 
@@ -851,7 +851,7 @@ func TestDocumentService(t *testing.T, serviceFactory FnServiceFactory) {
 			go func() {
 				defer wg.Done()
 				var myBob Segador
-				_ = s.Create(ctx, myID, bob)
+				_ = s.Set(ctx, myID, bob)
 				_ = s.Get(ctx, myID, &myBob)
 				_ = s.Update(ctx, myID, []document.Update{{FieldPath: []string{"Name"}, Value: "value"}})
 				_ = s.Delete(ctx, myID)
@@ -945,7 +945,7 @@ func TestDocumentServicePreconditions(t *testing.T, serviceFactory FnServiceFact
 		m := myStruct{}
 		docID := uuid.New().String()
 		ctx := context.Background()
-		require.NoError(t, s.Create(ctx, docID, m))
+		require.NoError(t, s.Set(ctx, docID, m))
 
 		n := 100
 		retryStrategy := retry.CombinedStrategy(

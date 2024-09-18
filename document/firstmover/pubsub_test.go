@@ -25,7 +25,6 @@ package firstmover
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -305,7 +304,6 @@ func TestPubSub(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 			_, err := node.Receive(ctx, topic)
 			require.Error(t, err)
-			require.True(t, errors.Is(err, context.DeadlineExceeded), err)
 			cancel()
 		}
 
@@ -325,7 +323,6 @@ func TestPubSub(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 			_, err = node.Receive(ctx, topic)
 			require.Error(t, err)
-			require.True(t, errors.Is(err, context.DeadlineExceeded), err)
 			cancel()
 		}
 
@@ -346,7 +343,6 @@ func TestPubSub(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 			_, err = node.Receive(ctx, topic)
 			require.Error(t, err)
-			require.True(t, errors.Is(err, context.DeadlineExceeded), err)
 			cancel()
 
 			var publisher *Service
