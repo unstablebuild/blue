@@ -118,7 +118,7 @@ func (d *documentTracker) fetchLastIssueNumber(ctx context.Context, pkg string) 
 
 	var maxIssueNumber int
 	for {
-		report, ok := it.Next()
+		report, ok := it.Next(ctx)
 		if !ok {
 			if err := it.Err(); err != nil {
 				return 0, err

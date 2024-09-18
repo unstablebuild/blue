@@ -53,7 +53,7 @@ func listPackageReports(m Tracker, pkg string,
 	if err != nil {
 		return nil, err
 	}
-	return iterator.ToSlice(iter)
+	return iterator.ToSlice(context.Background(), iter)
 }
 
 func listVersionReports(m Tracker, pkg, ver string,
@@ -62,7 +62,7 @@ func listVersionReports(m Tracker, pkg, ver string,
 	if err != nil {
 		return nil, err
 	}
-	return iterator.ToSlice(iter)
+	return iterator.ToSlice(context.Background(), iter)
 }
 
 func TestDocumentTracker(t *testing.T) {

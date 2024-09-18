@@ -24,6 +24,7 @@
 package iterator
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -61,9 +62,10 @@ func TestUnslice(t *testing.T) {
 	for _, test := range suite {
 		t.Run(test.description, func(t *testing.T) {
 			actualResIt := Unslice(test.it)
-			actualRes, err := Reduce(actualResIt, func(ret []int, i int) ([]int, error) {
-				return append(ret, i), nil
-			})
+			actualRes, err := Reduce(context.Background(), actualResIt,
+				func(ret []int, i int) ([]int, error) {
+					return append(ret, i), nil
+				})
 			require.NoError(t, err)
 			assert.Equal(t, test.expectRes, actualRes)
 		})

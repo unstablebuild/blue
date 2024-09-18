@@ -23,16 +23,43 @@
 
 package iterator
 
-import "github.com/unstablebuild/blue/document"
+import (
+	"context"
 
-// FromDocumentIterator maps a document.Iterator to
+	"github.com/unstablebuild/blue/document"
+)
+
+// FromDocumentIterator maps a document.Iterator to an Iterator of type T.
 func FromDocumentIterator[T any](it document.Iterator) Iterator[T] {
-	return FromFunc(func() (ret T, ok bool, err error) {
-		if !it.HasNext() {
+	type msg struct {
+		data T
+		err  error
+	}
+	ch := make(chan msg)
+	go func() {
+		defer close(ch) // signal ok = false below
+		var err error
+		var data T
+		for {
+			if !it.HasNext() {
+				return
+			}
+			err = it.NextTo(&data)
+			ch <- msg{data: data, err: err}
+		}
+	}()
+	return FromFunc(func(ctx context.Context) (ret T, ok bool, err error) {
+		var m msg
+		select {
+		case m, ok = <-ch:
+			ret = m.data
+			err = m.err
+			return
+		case <-ctx.Done():
+			err = ctx.Err()
 			return
 		}
-		ok = true
-		err = it.NextTo(&ret)
-		return
-	}, it.Close)
+	}, func() error {
+		return it.Close()
+	})
 }

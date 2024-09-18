@@ -24,6 +24,7 @@
 package cliformat
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"text/template"
@@ -47,9 +48,11 @@ type templateFormatter[T any] struct {
 	tmpl *template.Template
 }
 
-func (f templateFormatter[T]) Format(w io.Writer, it iterator.Iterator[T]) error {
+func (f templateFormatter[T]) Format(
+	ctx context.Context, w io.Writer, it iterator.Iterator[T],
+) error {
 	for {
-		t, ok := it.Next()
+		t, ok := it.Next(ctx)
 		if !ok {
 			if err := it.Err(); err != nil {
 				return err

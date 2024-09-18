@@ -140,7 +140,7 @@ func TestDocumentManager(t *testing.T) {
 		require.NoError(t, m.DeletePackage(ctx, "hopper"))
 		pkgIter, err := m.ListPackages(ctx, nil)
 		require.NoError(t, err)
-		packages, err := iterator.ToSlice(pkgIter)
+		packages, err := iterator.ToSlice(context.Background(), pkgIter)
 		require.NoError(t, err)
 
 		require.Len(t, packages, 0)
@@ -199,7 +199,7 @@ func TestDocumentManager(t *testing.T) {
 
 		pkgIter, err := m.ListPackages(ctx, nil)
 		require.NoError(t, err)
-		packages, err := iterator.ToSlice(pkgIter)
+		packages, err := iterator.ToSlice(context.Background(), pkgIter)
 		require.NoError(t, err)
 		require.Len(t, packages, 1)
 		assert.Equal(t, Package{
@@ -276,7 +276,7 @@ func TestDocumentManager(t *testing.T) {
 		filters := map[string]string{"Metadata.repository": "blue"}
 		it, err := m.List(ctx, fixtureRelease.Package, filters)
 		require.NoError(t, err)
-		items, err := iterator.ToSlice(it)
+		items, err := iterator.ToSlice(context.Background(), it)
 		require.NoError(t, err)
 
 		require.Len(t, items, 1)

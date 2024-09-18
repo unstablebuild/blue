@@ -23,7 +23,10 @@
 
 package iterator
 
-import "io"
+import (
+	"context"
+	"io"
+)
 
 // Iterator provides a convenient interface for iterating over
 // chunks of structured or unstructured data such as
@@ -35,7 +38,11 @@ type Iterator[T any] interface {
 	// Note that if an error is found, it's up to the implementation as to
 	// whether to return false and stop iteration or aggregate errors
 	// and return at the end.
-	Next() (T, bool)
+	//
+	// This method blocks until data is available. Implementations should
+	// use the given context's Done channel to know when data is no longer
+	// required and so the call should return.
+	Next(context.Context) (T, bool)
 	// Err returns the first error or an aggreation of the errors
 	// encountered by the Iterator.
 	Err() error

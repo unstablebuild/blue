@@ -281,7 +281,7 @@ type versionsIterator struct {
 	err  error
 }
 
-func (i *versionsIterator) Next() (Secret, bool) {
+func (i *versionsIterator) Next(ctx context.Context) (Secret, bool) {
 	if i.err != nil {
 		return Secret{}, false
 	}

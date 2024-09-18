@@ -24,6 +24,7 @@
 package cliformat
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 
@@ -38,10 +39,12 @@ func JSON[T any]() IteratorFormatter[T] {
 type jsonFormatter[T any] struct {
 }
 
-func (j jsonFormatter[T]) Format(w io.Writer, it iterator.Iterator[T]) error {
+func (j jsonFormatter[T]) Format(
+	ctx context.Context, w io.Writer, it iterator.Iterator[T],
+) error {
 	e := json.NewEncoder(w)
 	for {
-		t, ok := it.Next()
+		t, ok := it.Next(ctx)
 		if !ok {
 			if err := it.Err(); err != nil {
 				return err

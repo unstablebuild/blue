@@ -24,6 +24,7 @@
 package cliformat
 
 import (
+	"context"
 	"io"
 
 	"github.com/unstablebuild/blue/iterator"
@@ -31,5 +32,5 @@ import (
 
 // IteratorFormatter defines the basic Iterator formatting method Format.
 type IteratorFormatter[T any] interface {
-	Format(io.Writer, iterator.Iterator[T]) error
+	Format(context.Context, io.Writer, iterator.Iterator[T]) error
 }

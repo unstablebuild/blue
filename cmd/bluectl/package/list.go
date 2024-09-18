@@ -99,14 +99,14 @@ func (s *releaseList) Run(ctx context.Context, args []string) error {
 	switch strings.ToLower(s.format) {
 	case "json":
 		t := cliformat.JSON[release.Package]()
-		return t.Format(os.Stdout, packages)
+		return t.Format(ctx, os.Stdout, packages)
 	case "table":
 		t := cliformat.Table[release.Package]([]string{"Name", "Notes", "Latest", "CreatedAt"})
-		return t.Format(os.Stdout, packages)
+		return t.Format(ctx, os.Stdout, packages)
 	default:
 		t, err := cliformat.Template[release.Package](s.format)
 		if err == nil {
-			return t.Format(os.Stdout, packages)
+			return t.Format(ctx, os.Stdout, packages)
 		}
 		return cli.ErrInvalidArgs
 	}

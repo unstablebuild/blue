@@ -23,7 +23,11 @@
 
 package iterator
 
-import "github.com/ernestrc/go-multierror"
+import (
+	"context"
+
+	"github.com/ernestrc/go-multierror"
+)
 
 // Aggregate combines multiple iterators of T into one single iterator of T.
 // If its is nil or empty, this method safely returns an empty iterator.
@@ -36,12 +40,12 @@ type aggregate[T any] struct {
 	err error
 }
 
-func (a *aggregate[T]) Next() (ret T, ok bool) {
+func (a *aggregate[T]) Next(ctx context.Context) (ret T, ok bool) {
 	for {
 		if len(a.its) == 0 {
 			return
 		}
-		ret, ok = a.its[0].Next()
+		ret, ok = a.its[0].Next(ctx)
 		if ok {
 			return
 		}

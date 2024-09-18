@@ -23,18 +23,22 @@
 
 package iterator
 
+import "context"
+
 // Reduce combines all the elements in an iterator using a
 // binary operation to produce a single value.
 func Reduce[T any, V any](
-	it Iterator[T], fn func(V, T) (V, error),
+	ctx context.Context,
+	it Iterator[T],
+	reducer func(V, T) (V, error),
 ) (ret V, err error) {
 	for {
-		t, ok := it.Next()
+		t, ok := it.Next(ctx)
 		if !ok {
 			err = it.Err()
 			return
 		}
-		ret, err = fn(ret, t)
+		ret, err = reducer(ret, t)
 		if err != nil {
 			return
 		}

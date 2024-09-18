@@ -24,6 +24,7 @@
 package iterator
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"strings"
@@ -87,9 +88,10 @@ func TestAggregate(t *testing.T) {
 	for _, test := range suite {
 		t.Run(test.description, func(t *testing.T) {
 			actualResIt := Aggregate[int](test.it...)
-			actualRes, actualErr := Reduce(actualResIt, func(ret []int, i int) ([]int, error) {
-				return append(ret, i), nil
-			})
+			actualRes, actualErr := Reduce(context.Background(), actualResIt,
+				func(ret []int, i int) ([]int, error) {
+					return append(ret, i), nil
+				})
 			assert.Equal(t, test.expectRes, actualRes)
 			if test.expectErr != "" {
 				require.Error(t, actualErr)
@@ -106,24 +108,26 @@ func TestAggregate(t *testing.T) {
 			it2Closed bool
 		)
 		var i int
-		it1 := FromFunc[string](func() (string, bool, error) { return "1", i < 1, nil },
-			func() error {
-				it1Closed = true
-				return nil
-			})
-		it2 := FromFunc[string](func() (string, bool, error) { return "2", i < 2, nil },
-			func() error {
-				it2Closed = true
-				return nil
-			})
+		it1 := FromFunc[string](func(context.Context) (string, bool, error) {
+			return "1", i < 1, nil
+		}, func() error {
+			it1Closed = true
+			return nil
+		})
+		it2 := FromFunc[string](func(context.Context) (string, bool, error) {
+			return "2", i < 2, nil
+		}, func() error {
+			it2Closed = true
+			return nil
+		})
 		actualResIt := Aggregate[string](it1, it2)
 		for ; i < 2; i++ {
-			n, ok := actualResIt.Next()
+			n, ok := actualResIt.Next(context.Background())
 			require.True(t, ok, i)
 			assert.Equal(t, strconv.Itoa(i+1), n, i)
 		}
 
-		_, ok := actualResIt.Next()
+		_, ok := actualResIt.Next(context.Background())
 		require.False(t, ok)
 
 		assert.True(t, it1Closed)
@@ -142,16 +146,18 @@ func TestAggregate(t *testing.T) {
 			it1Closed bool
 			it2Closed bool
 		)
-		it1 := FromFunc[string](func() (string, bool, error) { return "1", true, nil },
-			func() error {
-				it1Closed = true
-				return nil
-			})
-		it2 := FromFunc[string](func() (string, bool, error) { return "2", true, nil },
-			func() error {
-				it2Closed = true
-				return nil
-			})
+		it1 := FromFunc[string](func(context.Context) (string, bool, error) {
+			return "1", true, nil
+		}, func() error {
+			it1Closed = true
+			return nil
+		})
+		it2 := FromFunc[string](func(context.Context) (string, bool, error) {
+			return "2", true, nil
+		}, func() error {
+			it2Closed = true
+			return nil
+		})
 		actualResIt := Aggregate[string](it1, it2)
 
 		require.NoError(t, actualResIt.Close())

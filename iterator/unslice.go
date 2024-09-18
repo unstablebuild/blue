@@ -23,6 +23,8 @@
 
 package iterator
 
+import "context"
+
 // Unslice converts an iterator of slices of T into an iterator of T.
 func Unslice[T any](it Iterator[[]T]) Iterator[T] {
 	return &unslice[T]{it: it}
@@ -33,7 +35,7 @@ type unslice[T any] struct {
 	next []T
 }
 
-func (u *unslice[T]) Next() (ret T, ok bool) {
+func (u *unslice[T]) Next(ctx context.Context) (ret T, ok bool) {
 	for {
 		if len(u.next) > 0 {
 			head := u.next[0]
@@ -41,7 +43,7 @@ func (u *unslice[T]) Next() (ret T, ok bool) {
 			return head, true
 		}
 
-		u.next, ok = u.it.Next()
+		u.next, ok = u.it.Next(ctx)
 		if !ok {
 			return
 		}

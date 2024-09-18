@@ -25,6 +25,7 @@ package cliformat
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -87,7 +88,7 @@ func TestTemplate(t *testing.T) {
 			require.NoError(t, err)
 			var buf bytes.Buffer
 			it := iterator.FromSlice[any](tcase.inEls)
-			err = table.Format(&buf, it)
+			err = table.Format(context.Background(), &buf, it)
 			if tcase.expectedErr {
 				assert.Error(t, err)
 			} else {

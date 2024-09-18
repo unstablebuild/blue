@@ -25,10 +25,11 @@ package cliformat
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
-	"github.com/unstablebuild/blue/iterator"
 	"github.com/stretchr/testify/assert"
+	"github.com/unstablebuild/blue/iterator"
 )
 
 type testStruct2 struct {
@@ -145,7 +146,7 @@ func TestTable(t *testing.T) {
 			var buf bytes.Buffer
 			buf.WriteString("\n") // make test cases easier to write
 			it := iterator.FromSlice[any](tcase.inEls)
-			err := table.Format(&buf, it)
+			err := table.Format(context.Background(), &buf, it)
 			if tcase.expectedErr {
 				assert.Error(t, err)
 			} else {

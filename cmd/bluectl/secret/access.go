@@ -101,7 +101,7 @@ func (s *secretAccess) Run(ctx context.Context, args []string) error {
 
 	// do not show payload in table
 	t := cliformat.Table[secretmanager.SecretVersion]([]string{"ID", "Version", "State", "CreatedAt"})
-	if err := t.Format(os.Stdout, iterator.FromSlice(res)); err != nil {
+	if err := t.Format(ctx, os.Stdout, iterator.FromSlice(res)); err != nil {
 		return err
 	}
 

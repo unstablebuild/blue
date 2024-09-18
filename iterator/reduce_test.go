@@ -24,6 +24,7 @@
 package iterator
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -66,7 +67,7 @@ func TestReduce(t *testing.T) {
 
 	for _, test := range suite {
 		t.Run(test.description, func(t *testing.T) {
-			actualRes, actualErr := Reduce(test.it, test.fn)
+			actualRes, actualErr := Reduce(context.Background(), test.it, test.fn)
 			assert.Equal(t, test.expectRes, actualRes)
 			assert.Equal(t, test.expectErr, actualErr)
 		})

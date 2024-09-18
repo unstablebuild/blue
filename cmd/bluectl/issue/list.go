@@ -129,7 +129,7 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 	switch strings.ToLower(s.format) {
 	case "json":
 		t := cliformat.JSON[issue.Report]()
-		return t.Format(os.Stdout, reports)
+		return t.Format(ctx, os.Stdout, reports)
 	case "table":
 		type outIssue struct {
 			ID        string
@@ -141,7 +141,7 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 		}
 
 		table := cliformat.Table[outIssue]([]string{"ID", "Subject", "Author", "Labels", "CreatedAt", "ClosedAt"})
-		return table.Format(os.Stdout, iterator.Map[issue.Report, outIssue](reports,
+		return table.Format(ctx, os.Stdout, iterator.Map[issue.Report, outIssue](reports,
 			func(report issue.Report) outIssue {
 				var labels []string
 				for k := range report.Metadata {
@@ -161,7 +161,7 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 	default:
 		t, err := cliformat.Template[issue.Report](s.format)
 		if err == nil {
-			return t.Format(os.Stdout, reports)
+			return t.Format(ctx, os.Stdout, reports)
 		}
 		return cli.ErrInvalidArgs
 	}
@@ -186,9 +186,9 @@ func (it *filterDuplicatesIterator) Close() error {
 	return it.it.Close()
 }
 
-func (it *filterDuplicatesIterator) Next() (issue.Report, bool) {
+func (it *filterDuplicatesIterator) Next(ctx context.Context) (issue.Report, bool) {
 	for {
-		next, ok := it.it.Next()
+		next, ok := it.it.Next(ctx)
 		if !ok {
 			return next, ok
 		}
