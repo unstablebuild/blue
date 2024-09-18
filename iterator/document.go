@@ -25,16 +25,19 @@ package iterator
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/unstablebuild/blue/document"
 )
 
 // FromDocumentIterator maps a document.Iterator to an Iterator of type T.
 func FromDocumentIterator[T any](it document.Iterator) Iterator[T] {
+	var closed atomic.Bool
 	type msg struct {
 		data T
 		err  error
 	}
+
 	ch := make(chan msg)
 	quitCh := make(chan struct{})
 	go func() {
@@ -53,6 +56,7 @@ func FromDocumentIterator[T any](it document.Iterator) Iterator[T] {
 			}
 		}
 	}()
+
 	return FromFunc(func(ctx context.Context) (ret T, ok bool, err error) {
 		var m msg
 		select {
@@ -65,6 +69,10 @@ func FromDocumentIterator[T any](it document.Iterator) Iterator[T] {
 			return
 		}
 	}, func() error {
+		if !closed.CompareAndSwap(false, true) {
+			return nil
+		}
+
 		close(quitCh)
 		err := it.Close()
 		<-ch // wait for goroutine to be done

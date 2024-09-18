@@ -37,6 +37,16 @@ import (
 )
 
 func TestDocumentIterator(t *testing.T) {
+	t.Run("double Close is a no-op", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		it := FromDocumentIterator[string](&errorDocumentIterator{})
+		_, ok := it.Next(context.Background())
+		assert.False(t, ok)
+		require.NoError(t, it.Close())
+		require.NoError(t, it.Close())
+	})
+
 	t.Run("unblocks Next if context is canceled", func(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
