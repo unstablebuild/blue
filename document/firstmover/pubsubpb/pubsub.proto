@@ -12,16 +12,23 @@ message PublishRequest {
 message PublishResponse {
 }
 
-message ReceiveRequest {
-	string topic = 1;
-}
+message ReceiveMessage {
+	message Data {
+		string sender = 1;
+		bytes data = 2;
+	}
 
-message ReceiveResponse {
-	string sender = 1;
-	bytes data = 2;
+	message Request {
+		string topic = 1;
+	}
+	message Ack {
+	}
+	Ack ack = 1;
+	Data data = 2;
+	Request req = 3;
 }
 
 service PubSub {
 	rpc Publish(PublishRequest) returns (PublishResponse);
-	rpc Receive(ReceiveRequest) returns (stream ReceiveResponse);
+	rpc Receive(stream ReceiveMessage) returns (stream ReceiveMessage);
 }

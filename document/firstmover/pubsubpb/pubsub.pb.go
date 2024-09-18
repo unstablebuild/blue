@@ -121,16 +121,18 @@ func (*PublishResponse) Descriptor() ([]byte, []int) {
 	return file_pubsubpb_pubsub_proto_rawDescGZIP(), []int{1}
 }
 
-type ReceiveRequest struct {
+type ReceiveMessage struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Topic string `protobuf:"bytes,1,opt,name=topic,proto3" json:"topic,omitempty"`
+	Ack  *ReceiveMessage_Ack     `protobuf:"bytes,1,opt,name=ack,proto3" json:"ack,omitempty"`
+	Data *ReceiveMessage_Data    `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	Req  *ReceiveMessage_Request `protobuf:"bytes,3,opt,name=req,proto3" json:"req,omitempty"`
 }
 
-func (x *ReceiveRequest) Reset() {
-	*x = ReceiveRequest{}
+func (x *ReceiveMessage) Reset() {
+	*x = ReceiveMessage{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_pubsubpb_pubsub_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -138,13 +140,13 @@ func (x *ReceiveRequest) Reset() {
 	}
 }
 
-func (x *ReceiveRequest) String() string {
+func (x *ReceiveMessage) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ReceiveRequest) ProtoMessage() {}
+func (*ReceiveMessage) ProtoMessage() {}
 
-func (x *ReceiveRequest) ProtoReflect() protoreflect.Message {
+func (x *ReceiveMessage) ProtoReflect() protoreflect.Message {
 	mi := &file_pubsubpb_pubsub_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -156,19 +158,33 @@ func (x *ReceiveRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ReceiveRequest.ProtoReflect.Descriptor instead.
-func (*ReceiveRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ReceiveMessage.ProtoReflect.Descriptor instead.
+func (*ReceiveMessage) Descriptor() ([]byte, []int) {
 	return file_pubsubpb_pubsub_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *ReceiveRequest) GetTopic() string {
+func (x *ReceiveMessage) GetAck() *ReceiveMessage_Ack {
 	if x != nil {
-		return x.Topic
+		return x.Ack
 	}
-	return ""
+	return nil
 }
 
-type ReceiveResponse struct {
+func (x *ReceiveMessage) GetData() *ReceiveMessage_Data {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *ReceiveMessage) GetReq() *ReceiveMessage_Request {
+	if x != nil {
+		return x.Req
+	}
+	return nil
+}
+
+type ReceiveMessage_Data struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -177,8 +193,8 @@ type ReceiveResponse struct {
 	Data   []byte `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 }
 
-func (x *ReceiveResponse) Reset() {
-	*x = ReceiveResponse{}
+func (x *ReceiveMessage_Data) Reset() {
+	*x = ReceiveMessage_Data{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_pubsubpb_pubsub_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -186,13 +202,13 @@ func (x *ReceiveResponse) Reset() {
 	}
 }
 
-func (x *ReceiveResponse) String() string {
+func (x *ReceiveMessage_Data) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ReceiveResponse) ProtoMessage() {}
+func (*ReceiveMessage_Data) ProtoMessage() {}
 
-func (x *ReceiveResponse) ProtoReflect() protoreflect.Message {
+func (x *ReceiveMessage_Data) ProtoReflect() protoreflect.Message {
 	mi := &file_pubsubpb_pubsub_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -204,23 +220,108 @@ func (x *ReceiveResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ReceiveResponse.ProtoReflect.Descriptor instead.
-func (*ReceiveResponse) Descriptor() ([]byte, []int) {
-	return file_pubsubpb_pubsub_proto_rawDescGZIP(), []int{3}
+// Deprecated: Use ReceiveMessage_Data.ProtoReflect.Descriptor instead.
+func (*ReceiveMessage_Data) Descriptor() ([]byte, []int) {
+	return file_pubsubpb_pubsub_proto_rawDescGZIP(), []int{2, 0}
 }
 
-func (x *ReceiveResponse) GetSender() string {
+func (x *ReceiveMessage_Data) GetSender() string {
 	if x != nil {
 		return x.Sender
 	}
 	return ""
 }
 
-func (x *ReceiveResponse) GetData() []byte {
+func (x *ReceiveMessage_Data) GetData() []byte {
 	if x != nil {
 		return x.Data
 	}
 	return nil
+}
+
+type ReceiveMessage_Request struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Topic string `protobuf:"bytes,1,opt,name=topic,proto3" json:"topic,omitempty"`
+}
+
+func (x *ReceiveMessage_Request) Reset() {
+	*x = ReceiveMessage_Request{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_pubsubpb_pubsub_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ReceiveMessage_Request) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReceiveMessage_Request) ProtoMessage() {}
+
+func (x *ReceiveMessage_Request) ProtoReflect() protoreflect.Message {
+	mi := &file_pubsubpb_pubsub_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReceiveMessage_Request.ProtoReflect.Descriptor instead.
+func (*ReceiveMessage_Request) Descriptor() ([]byte, []int) {
+	return file_pubsubpb_pubsub_proto_rawDescGZIP(), []int{2, 1}
+}
+
+func (x *ReceiveMessage_Request) GetTopic() string {
+	if x != nil {
+		return x.Topic
+	}
+	return ""
+}
+
+type ReceiveMessage_Ack struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *ReceiveMessage_Ack) Reset() {
+	*x = ReceiveMessage_Ack{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_pubsubpb_pubsub_proto_msgTypes[5]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ReceiveMessage_Ack) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReceiveMessage_Ack) ProtoMessage() {}
+
+func (x *ReceiveMessage_Ack) ProtoReflect() protoreflect.Message {
+	mi := &file_pubsubpb_pubsub_proto_msgTypes[5]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReceiveMessage_Ack.ProtoReflect.Descriptor instead.
+func (*ReceiveMessage_Ack) Descriptor() ([]byte, []int) {
+	return file_pubsubpb_pubsub_proto_rawDescGZIP(), []int{2, 2}
 }
 
 var File_pubsubpb_pubsub_proto protoreflect.FileDescriptor
@@ -234,23 +335,32 @@ var file_pubsubpb_pubsub_proto_rawDesc = []byte{
 	0x20, 0x01, 0x28, 0x0c, 0x52, 0x04, 0x64, 0x61, 0x74, 0x61, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x65,
 	0x6e, 0x64, 0x65, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x73, 0x65, 0x6e, 0x64,
 	0x65, 0x72, 0x22, 0x11, 0x0a, 0x0f, 0x50, 0x75, 0x62, 0x6c, 0x69, 0x73, 0x68, 0x52, 0x65, 0x73,
-	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x26, 0x0a, 0x0e, 0x52, 0x65, 0x63, 0x65, 0x69, 0x76, 0x65,
-	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x14, 0x0a, 0x05, 0x74, 0x6f, 0x70, 0x69, 0x63,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x22, 0x3d, 0x0a,
-	0x0f, 0x52, 0x65, 0x63, 0x65, 0x69, 0x76, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x12, 0x16, 0x0a, 0x06, 0x73, 0x65, 0x6e, 0x64, 0x65, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x06, 0x73, 0x65, 0x6e, 0x64, 0x65, 0x72, 0x12, 0x12, 0x0a, 0x04, 0x64, 0x61, 0x74, 0x61,
-	0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x04, 0x64, 0x61, 0x74, 0x61, 0x32, 0x7e, 0x0a, 0x06,
-	0x50, 0x75, 0x62, 0x53, 0x75, 0x62, 0x12, 0x38, 0x0a, 0x07, 0x50, 0x75, 0x62, 0x6c, 0x69, 0x73,
-	0x68, 0x12, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x50, 0x75, 0x62, 0x6c, 0x69, 0x73,
-	0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x2e, 0x50, 0x75, 0x62, 0x6c, 0x69, 0x73, 0x68, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x12, 0x3a, 0x0a, 0x07, 0x52, 0x65, 0x63, 0x65, 0x69, 0x76, 0x65, 0x12, 0x15, 0x2e, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x2e, 0x52, 0x65, 0x63, 0x65, 0x69, 0x76, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65,
-	0x73, 0x74, 0x1a, 0x16, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x52, 0x65, 0x63, 0x65, 0x69,
-	0x76, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x30, 0x01, 0x42, 0x0b, 0x5a, 0x09,
-	0x2f, 0x70, 0x75, 0x62, 0x73, 0x75, 0x62, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x33,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0xfa, 0x01, 0x0a, 0x0e, 0x52, 0x65, 0x63, 0x65, 0x69, 0x76,
+	0x65, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x12, 0x2b, 0x0a, 0x03, 0x61, 0x63, 0x6b, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x52, 0x65,
+	0x63, 0x65, 0x69, 0x76, 0x65, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x2e, 0x41, 0x63, 0x6b,
+	0x52, 0x03, 0x61, 0x63, 0x6b, 0x12, 0x2e, 0x0a, 0x04, 0x64, 0x61, 0x74, 0x61, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x1a, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x52, 0x65, 0x63, 0x65,
+	0x69, 0x76, 0x65, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x2e, 0x44, 0x61, 0x74, 0x61, 0x52,
+	0x04, 0x64, 0x61, 0x74, 0x61, 0x12, 0x2f, 0x0a, 0x03, 0x72, 0x65, 0x71, 0x18, 0x03, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x1d, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x52, 0x65, 0x63, 0x65, 0x69,
+	0x76, 0x65, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x2e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x52, 0x03, 0x72, 0x65, 0x71, 0x1a, 0x32, 0x0a, 0x04, 0x44, 0x61, 0x74, 0x61, 0x12, 0x16,
+	0x0a, 0x06, 0x73, 0x65, 0x6e, 0x64, 0x65, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06,
+	0x73, 0x65, 0x6e, 0x64, 0x65, 0x72, 0x12, 0x12, 0x0a, 0x04, 0x64, 0x61, 0x74, 0x61, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x0c, 0x52, 0x04, 0x64, 0x61, 0x74, 0x61, 0x1a, 0x1f, 0x0a, 0x07, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x14, 0x0a, 0x05, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x1a, 0x05, 0x0a, 0x03, 0x41,
+	0x63, 0x6b, 0x32, 0x7f, 0x0a, 0x06, 0x50, 0x75, 0x62, 0x53, 0x75, 0x62, 0x12, 0x38, 0x0a, 0x07,
+	0x50, 0x75, 0x62, 0x6c, 0x69, 0x73, 0x68, 0x12, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e,
+	0x50, 0x75, 0x62, 0x6c, 0x69, 0x73, 0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16,
+	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x50, 0x75, 0x62, 0x6c, 0x69, 0x73, 0x68, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x3b, 0x0a, 0x07, 0x52, 0x65, 0x63, 0x65, 0x69, 0x76,
+	0x65, 0x12, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x52, 0x65, 0x63, 0x65, 0x69, 0x76,
+	0x65, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x1a, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x2e, 0x52, 0x65, 0x63, 0x65, 0x69, 0x76, 0x65, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x28,
+	0x01, 0x30, 0x01, 0x42, 0x0b, 0x5a, 0x09, 0x2f, 0x70, 0x75, 0x62, 0x73, 0x75, 0x62, 0x70, 0x62,
+	0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -265,23 +375,28 @@ func file_pubsubpb_pubsub_proto_rawDescGZIP() []byte {
 	return file_pubsubpb_pubsub_proto_rawDescData
 }
 
-var file_pubsubpb_pubsub_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_pubsubpb_pubsub_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_pubsubpb_pubsub_proto_goTypes = []interface{}{
-	(*PublishRequest)(nil),  // 0: proto.PublishRequest
-	(*PublishResponse)(nil), // 1: proto.PublishResponse
-	(*ReceiveRequest)(nil),  // 2: proto.ReceiveRequest
-	(*ReceiveResponse)(nil), // 3: proto.ReceiveResponse
+	(*PublishRequest)(nil),         // 0: proto.PublishRequest
+	(*PublishResponse)(nil),        // 1: proto.PublishResponse
+	(*ReceiveMessage)(nil),         // 2: proto.ReceiveMessage
+	(*ReceiveMessage_Data)(nil),    // 3: proto.ReceiveMessage.Data
+	(*ReceiveMessage_Request)(nil), // 4: proto.ReceiveMessage.Request
+	(*ReceiveMessage_Ack)(nil),     // 5: proto.ReceiveMessage.Ack
 }
 var file_pubsubpb_pubsub_proto_depIdxs = []int32{
-	0, // 0: proto.PubSub.Publish:input_type -> proto.PublishRequest
-	2, // 1: proto.PubSub.Receive:input_type -> proto.ReceiveRequest
-	1, // 2: proto.PubSub.Publish:output_type -> proto.PublishResponse
-	3, // 3: proto.PubSub.Receive:output_type -> proto.ReceiveResponse
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	5, // 0: proto.ReceiveMessage.ack:type_name -> proto.ReceiveMessage.Ack
+	3, // 1: proto.ReceiveMessage.data:type_name -> proto.ReceiveMessage.Data
+	4, // 2: proto.ReceiveMessage.req:type_name -> proto.ReceiveMessage.Request
+	0, // 3: proto.PubSub.Publish:input_type -> proto.PublishRequest
+	2, // 4: proto.PubSub.Receive:input_type -> proto.ReceiveMessage
+	1, // 5: proto.PubSub.Publish:output_type -> proto.PublishResponse
+	2, // 6: proto.PubSub.Receive:output_type -> proto.ReceiveMessage
+	5, // [5:7] is the sub-list for method output_type
+	3, // [3:5] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_pubsubpb_pubsub_proto_init() }
@@ -315,7 +430,7 @@ func file_pubsubpb_pubsub_proto_init() {
 			}
 		}
 		file_pubsubpb_pubsub_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ReceiveRequest); i {
+			switch v := v.(*ReceiveMessage); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -327,7 +442,31 @@ func file_pubsubpb_pubsub_proto_init() {
 			}
 		}
 		file_pubsubpb_pubsub_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ReceiveResponse); i {
+			switch v := v.(*ReceiveMessage_Data); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_pubsubpb_pubsub_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ReceiveMessage_Request); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_pubsubpb_pubsub_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ReceiveMessage_Ack); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -345,7 +484,7 @@ func file_pubsubpb_pubsub_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_pubsubpb_pubsub_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

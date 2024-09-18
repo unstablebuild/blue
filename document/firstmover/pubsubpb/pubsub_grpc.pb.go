@@ -23,7 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PubSubClient interface {
 	Publish(ctx context.Context, in *PublishRequest, opts ...grpc.CallOption) (*PublishResponse, error)
-	Receive(ctx context.Context, in *ReceiveRequest, opts ...grpc.CallOption) (PubSub_ReceiveClient, error)
+	Receive(ctx context.Context, opts ...grpc.CallOption) (PubSub_ReceiveClient, error)
 }
 
 type pubSubClient struct {
@@ -43,23 +43,18 @@ func (c *pubSubClient) Publish(ctx context.Context, in *PublishRequest, opts ...
 	return out, nil
 }
 
-func (c *pubSubClient) Receive(ctx context.Context, in *ReceiveRequest, opts ...grpc.CallOption) (PubSub_ReceiveClient, error) {
+func (c *pubSubClient) Receive(ctx context.Context, opts ...grpc.CallOption) (PubSub_ReceiveClient, error) {
 	stream, err := c.cc.NewStream(ctx, &PubSub_ServiceDesc.Streams[0], "/proto.PubSub/Receive", opts...)
 	if err != nil {
 		return nil, err
 	}
 	x := &pubSubReceiveClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
 	return x, nil
 }
 
 type PubSub_ReceiveClient interface {
-	Recv() (*ReceiveResponse, error)
+	Send(*ReceiveMessage) error
+	Recv() (*ReceiveMessage, error)
 	grpc.ClientStream
 }
 
@@ -67,8 +62,12 @@ type pubSubReceiveClient struct {
 	grpc.ClientStream
 }
 
-func (x *pubSubReceiveClient) Recv() (*ReceiveResponse, error) {
-	m := new(ReceiveResponse)
+func (x *pubSubReceiveClient) Send(m *ReceiveMessage) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *pubSubReceiveClient) Recv() (*ReceiveMessage, error) {
+	m := new(ReceiveMessage)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -80,7 +79,7 @@ func (x *pubSubReceiveClient) Recv() (*ReceiveResponse, error) {
 // for forward compatibility
 type PubSubServer interface {
 	Publish(context.Context, *PublishRequest) (*PublishResponse, error)
-	Receive(*ReceiveRequest, PubSub_ReceiveServer) error
+	Receive(PubSub_ReceiveServer) error
 	mustEmbedUnimplementedPubSubServer()
 }
 
@@ -91,7 +90,7 @@ type UnimplementedPubSubServer struct {
 func (UnimplementedPubSubServer) Publish(context.Context, *PublishRequest) (*PublishResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Publish not implemented")
 }
-func (UnimplementedPubSubServer) Receive(*ReceiveRequest, PubSub_ReceiveServer) error {
+func (UnimplementedPubSubServer) Receive(PubSub_ReceiveServer) error {
 	return status.Errorf(codes.Unimplemented, "method Receive not implemented")
 }
 func (UnimplementedPubSubServer) mustEmbedUnimplementedPubSubServer() {}
@@ -126,15 +125,12 @@ func _PubSub_Publish_Handler(srv interface{}, ctx context.Context, dec func(inte
 }
 
 func _PubSub_Receive_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(ReceiveRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(PubSubServer).Receive(m, &pubSubReceiveServer{stream})
+	return srv.(PubSubServer).Receive(&pubSubReceiveServer{stream})
 }
 
 type PubSub_ReceiveServer interface {
-	Send(*ReceiveResponse) error
+	Send(*ReceiveMessage) error
+	Recv() (*ReceiveMessage, error)
 	grpc.ServerStream
 }
 
@@ -142,8 +138,16 @@ type pubSubReceiveServer struct {
 	grpc.ServerStream
 }
 
-func (x *pubSubReceiveServer) Send(m *ReceiveResponse) error {
+func (x *pubSubReceiveServer) Send(m *ReceiveMessage) error {
 	return x.ServerStream.SendMsg(m)
+}
+
+func (x *pubSubReceiveServer) Recv() (*ReceiveMessage, error) {
+	m := new(ReceiveMessage)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // PubSub_ServiceDesc is the grpc.ServiceDesc for PubSub service.
@@ -163,6 +167,7 @@ var PubSub_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "Receive",
 			Handler:       _PubSub_Receive_Handler,
 			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "pubsubpb/pubsub.proto",

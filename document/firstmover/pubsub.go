@@ -144,7 +144,7 @@ func (p *pubsub) publish(
 		Data:   msg,
 		Sender: p.id,
 	}
-	p.log(log.TraceLevel, "client is publishing message to topic %q", topic)
+	p.log(log.TraceLevel, "client is publishing message %q to topic %q", msg, topic)
 	_, err := client.Publish(ctx, &req)
 	if err != nil {
 		return err
@@ -154,7 +154,7 @@ func (p *pubsub) publish(
 }
 
 type msgError struct {
-	msg *pubsubpb.ReceiveResponse
+	msg *pubsubpb.ReceiveMessage_Data
 	err error
 }
 
@@ -173,11 +173,19 @@ func (p *pubsub) subscribe(
 		return quitCtx, stream, nil
 	}
 
-	// if topic stream doesn't exist, create a new one
-	req := pubsubpb.ReceiveRequest{
+	req := pubsubpb.ReceiveMessage_Request{
 		Topic: topic,
 	}
-	srv, err := p.client.Receive(ctx, &req)
+	// if topic stream doesn't exist, create a new one
+	msg := pubsubpb.ReceiveMessage{
+		Req: &req,
+	}
+	pbStream, err := p.client.Receive(ctx)
+	if err != nil {
+		p.mu.Unlock()
+		return quitCtx, nil, err
+	}
+	err = pbStream.Send(&msg)
 	if err != nil {
 		p.mu.Unlock()
 		return quitCtx, nil, err
@@ -187,7 +195,7 @@ func (p *pubsub) subscribe(
 	p.mu.Unlock()
 	// blocks until server has sent header and so
 	// connection is fully established
-	md, err := srv.Header()
+	md, err := pbStream.Header()
 	if err != nil {
 		return quitCtx, nil, err
 	}
@@ -209,14 +217,34 @@ func (p *pubsub) subscribe(
 		}()
 
 		for {
-			msg, err := srv.Recv()
-			p.log(log.TraceLevel, "client stream Recv returned: %v, %v", msg, err)
+			msg, err := pbStream.Recv()
+			p.log(log.TraceLevel, "client stream Recv returned: %q, %v", msg, err)
 			select {
-			case stream <- msgError{msg: msg, err: err}:
-				if msg != nil {
-					p.log(log.TraceLevel, "client stream Recv succesfully buffered: %v", msg)
+			case stream <- msgError{msg: msg.GetData(), err: err}:
+				if err != nil {
+					return
+				}
+				p.log(log.TraceLevel, "client stream sending ack for message: %q", msg)
+				ack := pubsubpb.ReceiveMessage_Ack{}
+				ackMsg := pubsubpb.ReceiveMessage{Ack: &ack}
+				err = pbStream.SendMsg(&ackMsg)
+				if err != nil {
+					p.log(log.TraceLevel, "client stream error sending ack for message: %q: %v",
+						msg, err)
+					select {
+					case stream <- msgError{err: err}:
+					case <-quitCtx.Done():
+						return
+					}
 				}
 			case <-quitCtx.Done():
+				p.log(log.TraceLevel, "ignoring message %q, err=%v: quit context is done",
+					msg, err)
+				// best effort
+				select {
+				case stream <- msgError{err: err}:
+				default:
+				}
 				return
 				// do not use the passed context for streaming, as it should only
 				// be used for subscribing.
@@ -252,7 +280,7 @@ func (p *pubsub) receive(
 			return nil, ctx.Err()
 		}
 		if !ok {
-			return nil, errors.New("closed stream")
+			return nil, status.Errorf(codes.Aborted, "closed")
 		}
 		if msgErr.err != nil {
 			return nil, msgErr.err
@@ -260,6 +288,8 @@ func (p *pubsub) receive(
 		// when we publish as a leader, we should not receive
 		// these messages on the next call to Receive.
 		if msgErr.msg.GetSender() == p.id {
+			p.log(log.TraceLevel, "ignoring self published message %q for topic %q",
+				msgErr.msg, topic)
 			continue
 		}
 		return msgErr.msg.GetData(), nil
@@ -281,8 +311,8 @@ func (p *pubsub) Publish(
 		return nil, status.Errorf(codes.Aborted, "closed")
 	}
 
-	p.log(log.TraceLevel, "server is broadcasting message for topic %q: subscribers: %d",
-		topic, len(subscribers))
+	p.log(log.TraceLevel, "server is broadcasting message %q for topic %q: subscribers: %d",
+		msg, topic, len(subscribers))
 
 	errors := make([]error, len(subscribers))
 	var wg sync.WaitGroup
@@ -290,29 +320,54 @@ func (p *pubsub) Publish(
 	for i, sub := range subscribers {
 		go func(sub subscriber, i int) {
 			defer wg.Done()
-			var req pubsubpb.ReceiveResponse
-			req.Data = msg
+
+			var req pubsubpb.ReceiveMessage
+			var data pubsubpb.ReceiveMessage_Data
+			data.Data = msg
+			req.Data = &data
 			if serr := sub.stream.Send(&req); serr != nil {
 				// cancel offending stream, but also return
 				// an error to this rpc so we provide at least once semantics
 				select {
-				case sub.errors <- fmt.Errorf("stream send: %w", serr):
+				case sub.errors <- fmt.Errorf("stream send data: %w", serr):
+				default:
+				}
+
+				errors[i] = serr
+				return
+			}
+
+			var ack pubsubpb.ReceiveMessage
+			if serr := sub.stream.RecvMsg(&ack); serr != nil {
+				select {
+				case sub.errors <- fmt.Errorf("stream receive ack: %w", serr):
 				default:
 				}
 				errors[i] = serr
+				return
+			}
+
+			if ack.GetAck() == nil {
+				err := fmt.Errorf("protocol error: received non ack: %+v", &ack)
+				select {
+				case sub.errors <- err:
+				default:
+				}
+				errors[i] = err
 			}
 		}(sub, i)
 	}
+
 	p.mu.Unlock()
 	wg.Wait()
 
-	p.log(log.TraceLevel, "server is done broadcasting message for topic %q to %d subscribers",
-		topic, len(subscribers))
+	p.log(log.TraceLevel, "server is done broadcasting message %q for topic %q to %d subscribers",
+		msg, topic, len(subscribers))
 
 	var err error
-	for _, rerr := range errors {
-		if rerr != nil {
-			err = multierror.Append(err, rerr)
+	for _, serr := range errors {
+		if serr != nil {
+			err = multierror.Append(err, serr)
 		}
 	}
 	if err != nil {
@@ -321,12 +376,19 @@ func (p *pubsub) Publish(
 	return new(pubsubpb.PublishResponse), nil
 }
 
-func (p *pubsub) Receive(
-	req *pubsubpb.ReceiveRequest, srv pubsubpb.PubSub_ReceiveServer,
-) error {
+func (p *pubsub) Receive(srv pubsubpb.PubSub_ReceiveServer) error {
 	<-p.readyCtx.Done()
 
-	topic := req.GetTopic()
+	msg, err := srv.Recv()
+	if err != nil {
+		return err
+	}
+
+	topic := msg.GetReq().GetTopic()
+	if topic == "" {
+		return errors.New("empty topic in receive request")
+	}
+
 	errors := make(chan error)
 	p.mu.Lock()
 	if p.closed {
@@ -347,7 +409,7 @@ func (p *pubsub) Receive(
 	// subsequent calls to Publish.
 	md := metadata.New(make(map[string]string))
 	md.Append("ID", p.id)
-	err := srv.SendHeader(md)
+	err = srv.SendHeader(md)
 	if err != nil {
 		return fmt.Errorf("rpc send header: %w", err)
 	}
