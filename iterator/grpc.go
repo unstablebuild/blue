@@ -25,6 +25,7 @@ package iterator
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sync/atomic"
 )
@@ -97,6 +98,9 @@ func FromValueStream[T any](
 			data, err := stream.Recv()
 			select {
 			case ch <- msg{data: data, err: err}:
+				if err != nil {
+					return
+				}
 			case <-ctx.Done():
 				return
 			}
@@ -109,8 +113,10 @@ func FromValueStream[T any](
 		case m, ok = <-ch:
 			ret = m.data
 			err = m.err
-			if err == io.EOF {
+			if err != nil {
 				ok = false
+			}
+			if errors.Is(err, io.EOF) {
 				err = nil
 			}
 			return
