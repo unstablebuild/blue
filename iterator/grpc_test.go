@@ -26,6 +26,7 @@ package iterator
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"testing"
 	"time"
@@ -44,7 +45,8 @@ func TestStreamIterator(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
 		ctx, cancel := context.WithCancel(context.Background())
-		it := FromRawStream[data](ctx, cancel, &errorStream{})
+		it := FromRawStream[data](ctx, cancel, &errorStream{err: errors.New("oops")})
+
 		_, ok := it.Next(ctx)
 		assert.False(t, ok)
 		require.NoError(t, it.Close())
@@ -116,10 +118,23 @@ func TestStreamIterator(t *testing.T) {
 		defer goleak.VerifyNone(t)
 
 		ctx, cancel := context.WithCancel(context.Background())
-		it := FromRawStream[data](ctx, cancel, &errorStream{})
+		it := FromRawStream[data](ctx, cancel, &errorStream{err: errors.New("kaboom")})
 		_, ok := it.Next(ctx)
 		assert.False(t, ok)
 		assert.EqualError(t, it.Err(), "1 error occurred: kaboom")
+		require.NoError(t, it.Close())
+	})
+
+	t.Run("handles wrapped io.EOF errors", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		it := FromRawStream[data](ctx, cancel, &errorStream{
+			err: fmt.Errorf("something: %w", io.EOF),
+		})
+		_, ok := it.Next(ctx)
+		assert.False(t, ok)
+		assert.NoError(t, it.Err())
 		require.NoError(t, it.Close())
 	})
 
@@ -164,8 +179,9 @@ func (b blockingStream) RecvMsg(doc interface{}) error {
 }
 
 type errorStream struct {
+	err error
 }
 
 func (b *errorStream) RecvMsg(doc interface{}) error {
-	return errors.New("kaboom")
+	return b.err
 }
