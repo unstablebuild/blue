@@ -151,6 +151,55 @@ func TestStreamIterator(t *testing.T) {
 
 		require.NoError(t, it.Close())
 	})
+
+	t.Run("sends acks", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		a, b, c := data{X: "a"}, data{X: "b"}, data{X: "c"}
+		stream := generatedStream{data: []data{a, b, c}}
+		ctx, cancel := context.WithCancel(context.Background())
+		it := FromStreamWithAck[data, data](ctx, cancel, &stream)
+
+		values, err := ToSlice(context.Background(), it)
+		require.NoError(t, err)
+
+		assert.EqualValues(t, []*data{&a, &b, &c}, values)
+		assert.EqualValues(t, []*data{new(data), new(data), new(data)}, stream.send)
+	})
+
+	t.Run("bubbles up ack errors", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
+		a, b, c := data{X: "a"}, data{X: "b"}, data{X: "c"}
+		stream := generatedStream{data: []data{a, b, c}, err: errors.New("Janis")}
+		ctx, cancel := context.WithCancel(context.Background())
+		it := FromStreamWithAck[data, data](ctx, cancel, &stream)
+
+		_, ok := it.Next(ctx)
+		require.False(t, ok)
+		require.EqualError(t, it.Err(), "1 error occurred: Janis")
+	})
+}
+
+type generatedStream struct {
+	err  error
+	data []data
+	send []*data
+}
+
+func (b *generatedStream) Send(d *data) error {
+	b.send = append(b.send, d)
+	return b.err
+}
+
+func (b *generatedStream) Recv() (*data, error) {
+	if len(b.data) == 0 {
+		return nil, io.EOF
+	}
+	ptr := new(data)
+	*ptr = b.data[0]
+	b.data = b.data[1:]
+	return ptr, b.err
 }
 
 type grpcClientStream struct {
