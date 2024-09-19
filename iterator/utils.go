@@ -60,9 +60,15 @@ func FromFunc[T any](
 
 // IsEmpty consumes the first element in i and returns true if it is empty
 // or false if not and returns a new iterator that should be used instead of i.
+//
+// The given iterator is consumed in either case, so its Close method
+// is wrapped with the returned iterator, or if the given iterator is empty,
+// its Close method is called for the caller, so it's safe to override the variable
+// holding the passed iterator with the return value of this function.
 func IsEmpty[T any](ctx context.Context, i Iterator[T]) (Iterator[T], bool) {
 	el, ok := i.Next(ctx)
 	if !ok {
+		_ = i.Close()
 		return FromSlice[T](nil), true
 	}
 

@@ -61,4 +61,40 @@ func TestIsEmpty(t *testing.T) {
 		_, empty = IsEmpty(ctx, next)
 		require.True(t, empty)
 	})
+
+	t.Run("Close is called if empty", func(t *testing.T) {
+		var called bool
+		_, empty := IsEmpty(ctx, FromFunc[string](func(context.Context) (string, bool, error) {
+			return "", false, nil
+		}, func() error {
+			called = true
+			return nil
+		}))
+		require.True(t, empty)
+		assert.True(t, called)
+	})
+
+	t.Run("Close is called if non empty, when the returned iterator's Close is called", func(t *testing.T) {
+		var called bool
+		var i int
+		next, empty := IsEmpty(ctx, FromFunc[string](func(context.Context) (string, bool, error) {
+			i++
+			return "a", i == 1, nil
+		}, func() error {
+			called = true
+			return nil
+		}))
+		require.False(t, empty)
+		assert.False(t, called)
+
+		val, ok := next.Next(ctx)
+		require.True(t, ok)
+		assert.Equal(t, "a", val)
+		assert.False(t, called)
+
+		_, ok = next.Next(ctx)
+		require.False(t, ok)
+		require.NoError(t, next.Close())
+		assert.True(t, called)
+	})
 }
