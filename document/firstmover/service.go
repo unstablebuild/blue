@@ -327,6 +327,7 @@ loop:
 			// set active svc and unlock API
 			s.setActiveAndUnlock(client)
 			subscriptions := s.subscriptions
+			s.subscriptions = make(map[string][][]byte)
 			s.mu.Unlock()
 			s.resubscribe(ctx, subscriptions)
 			s.monitorLeader(ctx, conn)
@@ -395,7 +396,6 @@ func (s *Service) resubscribe(ctx context.Context, subscriptions map[string][][]
 		s.log(log.DebugLevel, "resubscribe: re-published %d messages from topic %q",
 			len(buffered), topic)
 	}
-	s.subscriptions = make(map[string][][]byte)
 }
 
 func (s *Service) monitorLeader(ctx context.Context, conn *grpc.ClientConn) {
@@ -484,6 +484,7 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 	s.log(log.DebugLevel, "Successfully assumed position of leader. Unlocking API...")
 	s.setActiveAndUnlock(s.svc)
 	subscriptions := s.subscriptions
+	s.subscriptions = make(map[string][][]byte)
 	s.mu.Unlock()
 
 	s.resubscribe(ctx, subscriptions)
