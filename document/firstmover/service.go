@@ -78,8 +78,9 @@ type Service struct {
 	retryStrategy        retry.Strategy
 	connectRetryStrategy retry.Strategy
 
-	closed bool
-	quitCh chan struct{}
+	closed      bool
+	quitCh      chan struct{}
+	closeWaitCh chan struct{}
 
 	followFailures int
 	subscriptions  map[string][][]byte
@@ -117,6 +118,7 @@ func (s *Service) Init(svc document.Service, lockFile string, cfg Config) {
 	s.connectRetryStrategy = retry.SequentialStrategy(cfg.ConnectRetryCadence)
 
 	s.quitCh = make(chan struct{})
+	s.closeWaitCh = make(chan struct{})
 
 	go s.leadOrFollow()
 }
@@ -243,8 +245,8 @@ func (s *Service) Receive(
 // Close closes all resources associated with this Service.
 func (s *Service) Close() (ret error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.closed {
+		s.mu.Unlock()
 		return
 	}
 	s.closed = true
@@ -260,7 +262,10 @@ func (s *Service) Close() (ret error) {
 		_, _ = s.pubsub.Publish(context.Background(), &req)
 		s.mu.Lock()
 		close(s.quitCh)
+	} else {
+		close(s.quitCh)
 	}
+
 	if err := s.svc.Close(); err != nil {
 		ret = multierr.Append(ret, err)
 	}
@@ -268,6 +273,9 @@ func (s *Service) Close() (ret error) {
 	if err := s.pubsub.Close(); err != nil {
 		ret = multierr.Append(ret, err)
 	}
+	s.mu.Unlock()
+
+	<-s.closeWaitCh
 	return
 }
 
@@ -321,6 +329,19 @@ loop:
 		switch state {
 		case connectivity.Ready:
 			s.mu.Lock()
+			// we are holding the lock, so Close cannot race
+			// to close quitCh; if closed, then we should return
+			// immediately or else we leak resources.
+			// if Close is waiting to acquire the lock,
+			// then active will be set and the call to active.Close
+			// will trigger the connection checking below to return.
+			select {
+			case <-quitCh:
+				_ = client.Close()
+				s.mu.Unlock()
+				return false, nil
+			default:
+			}
 			s.followFailures = 0 // reset
 			s.pubsub.init()
 			s.pubsub.initFollower(conn)
@@ -510,6 +531,7 @@ func (s *Service) log(level log.Level, msg string, args ...interface{}) {
 }
 
 func (s *Service) leadOrFollow() {
+	defer close(s.closeWaitCh)
 	quitCh := s.quitCh
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -649,4 +671,5 @@ func (u *unlockListener) Close() error {
 // Addr returns the listener's network address.
 func (u *unlockListener) Addr() net.Addr {
 	return u.root.Addr()
+
 }
