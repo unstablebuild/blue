@@ -61,11 +61,11 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		Marshaler:                      docbson.Marshaler(),
-		TransientFailureRecoverTimeout: 1 * time.Second,
-		MethodRetryCadence:             20 * time.Millisecond,
+		TransientFailureRecoverTimeout: 500 * time.Millisecond,
+		MethodRetryCadence:             200 * time.Millisecond,
 		ReceiveRetryCadence:            5 * time.Second,
-		ConnectRetryCadence:            50 * time.Millisecond,
+		ConnectRetryCadence:            300 * time.Millisecond,
 		TimeToCoup:                     1 * time.Second,
-		DialTimeout:                    100 * time.Millisecond,
+		DialTimeout:                    400 * time.Millisecond,
 	}
 }
