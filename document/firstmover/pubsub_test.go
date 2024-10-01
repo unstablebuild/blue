@@ -423,10 +423,10 @@ func TestPubSub(t *testing.T) {
 		go func() {
 			<-ready
 			_ = leader.Close()
-			require.NoError(t, followers[1].Publish(context.Background(), topic, []byte("block")))
 		}()
 
 		go func() {
+			require.NoError(t, followers[1].Publish(context.Background(), topic, []byte("block")))
 			ready <- struct{}{}
 		}()
 		data, err := followers[0].Receive(context.Background(), topic)
