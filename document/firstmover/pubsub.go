@@ -262,7 +262,14 @@ func (p *pubsub) subscribe(
 func (p *pubsub) receive(
 	ctx context.Context, topic string,
 ) ([]byte, error) {
-	quitCtx, stream, err := p.subscribe(ctx, topic, false)
+	// do not use the receive context as the
+	// subscripion context for a subscription
+	// created here: a client could set a Receive timeout
+	// and unintentionally cancel the stream.
+	p.mu.Lock()
+	subscribeCtx := p.ctx
+	p.mu.Unlock()
+	quitCtx, stream, err := p.subscribe(subscribeCtx, topic, false)
 	if err != nil {
 		return nil, err
 	}

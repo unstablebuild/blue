@@ -311,6 +311,33 @@ func TestPubSub(t *testing.T) {
 		assert.NoError(t, followers[0].Close())
 	})
 
+	t.Run("Receive with implicit subscribe times out, subscription is not cancelled", func(t *testing.T) {
+		leader, followers := makeLeaderFollowerPair(t, 1)
+		topic := "1234"
+
+		ctx := context.Background()
+		for i, node := range []*Service{leader, followers[0]} {
+			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			_, err := node.Receive(ctx, topic)
+			require.Error(t, err)
+			cancel()
+
+			ctx = context.Background()
+			if i == 0 {
+				require.NoError(t, followers[0].Publish(ctx, topic, []byte("block")))
+			} else {
+				require.NoError(t, leader.Publish(ctx, topic, []byte("block")))
+			}
+
+			data, err := node.Receive(ctx, topic)
+			require.NoError(t, err)
+			assert.Equal(t, "block", string(data))
+		}
+
+		assert.NoError(t, leader.Close())
+		assert.NoError(t, followers[0].Close())
+	})
+
 	t.Run("leader/follower Receive times out, prior Subscribe", func(t *testing.T) {
 		leader, followers := makeLeaderFollowerPair(t, 1)
 		topic := "1234"
