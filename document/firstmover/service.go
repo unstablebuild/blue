@@ -273,6 +273,7 @@ func (s *Service) Close() (ret error) {
 		// we purposely shutdown connection due to leader also closing.
 		_ = s.active.Close()
 	} else if s.active == s.svc && s.active != nil { // leader
+		s.pubsub.ready() // make sure that if we're not ready yet, we fail immediately
 		s.mu.Unlock()
 		// best effort, use server method directly so we guarantee delivery
 		req := pubsubpb.PublishRequest{Topic: internalTopic, Data: internalMessageBye}
@@ -408,13 +409,8 @@ loop:
 				return true, errors.New("timed out waiting for transient failure to recover")
 			}
 		case connectivity.Shutdown:
-			select {
-			case <-quitCh:
-				return false, nil
-			default:
-				s.log(log.DebugLevel, "connection state is Shutdown")
-				return true, errors.New("grpc connection state = shutdown")
-			}
+			s.log(log.DebugLevel, "connection state is Shutdown")
+			return true, errors.New("grpc connection state = shutdown")
 		default:
 			panic(fmt.Sprintf("unknown connection state: %v", state))
 		}
@@ -530,11 +526,6 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 	case <-quitCh:
 		return false, nil
 	case err := <-done:
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		if s.closed {
-			return false, nil
-		}
 		return false, err
 	}
 }
@@ -557,7 +548,7 @@ func (s *Service) leadOrFollow() {
 		<-quitCh
 	}()
 
-	err := retry.Retry(ctx, s.connectRetryStrategy, func(ctx context.Context) (bool, error) {
+	fn := func(ctx context.Context) (bool, error) {
 		var cfg net.ListenConfig
 		listener, err := cfg.Listen(ctx, "unix", s.lockFile)
 		if err == nil {
@@ -610,7 +601,18 @@ func (s *Service) leadOrFollow() {
 		}
 		s.log(log.WarnLevel, "Unexpected follow error: %v", err)
 		return false, err
+	}
+
+	err := retry.Retry(ctx, s.connectRetryStrategy, func(ctx context.Context) (bool, error) {
+		retry, err := fn(ctx)
+		select {
+		case <-quitCh:
+			return false, nil
+		default:
+			return retry, err
+		}
 	})
+
 	select {
 	case <-quitCh:
 	default:

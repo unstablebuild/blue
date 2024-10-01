@@ -154,7 +154,7 @@ func TestServiceIntegration(t *testing.T) {
 
 	t.Run("multiple instances", func(t *testing.T) {
 		doctest.TestDocumentServiceNoList(t, func(t *testing.T) document.Service {
-			const n = 50
+			const n = 100 // have a n ~100 reproduces certain shutdown/recovery issues
 			cfg := testConfig()
 
 			lockFile := makeTempLockFile(t)
@@ -188,6 +188,25 @@ func TestServiceIntegration(t *testing.T) {
 			}()
 			return ret
 		})
+	})
+
+	t.Run("Close on massive network of peers", func(t *testing.T) {
+		const n = 100
+		cfg := testConfig()
+
+		lockFile := makeTempLockFile(t)
+		svc := document.NewInMemoryService()
+
+		instances := make([]*Service, 0, n)
+		for i := 0; i < n; i++ {
+			instance := New(svc, lockFile, cfg)
+			_ = instance.Get(context.Background(), lockFile, nil)
+			instances = append(instances, instance)
+		}
+		for i := 0; i < n; i++ {
+			instance := instances[i]
+			require.NoError(t, instance.Close())
+		}
 	})
 }
 
@@ -314,5 +333,8 @@ func makeTempLockFile(t *testing.T) string {
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 	require.NoError(t, os.Remove(f.Name()))
+	t.Cleanup(func() {
+		os.Remove(f.Name())
+	})
 	return f.Name()
 }
