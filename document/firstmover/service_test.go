@@ -255,6 +255,7 @@ func testConfig() Config {
 		Marshaler:                      docbson.Marshaler(),
 		TransientFailureRecoverTimeout: 450 * time.Millisecond,
 		MethodRetryCadence:             20 * time.Millisecond,
+		ReceiveRetryCadence:            500 * time.Millisecond,
 		ConnectRetryCadence:            50 * time.Millisecond,
 		TimeToCoup:                     500 * time.Millisecond,
 		DialTimeout:                    50 * time.Millisecond,

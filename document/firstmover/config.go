@@ -38,6 +38,10 @@ type Config struct {
 	TransientFailureRecoverTimeout time.Duration
 	// MethodRetryCadence is the method retry timeout until next attempt.
 	MethodRetryCadence time.Duration
+	// ReceiveRetryCadence is the receive retry cadence to accomodate
+	// new leader/follower assigns. It should be much much longer than
+	// MethodRetryCadence as receive is expected to block.
+	ReceiveRetryCadence time.Duration
 	// ConnectRetryCadence is the connect retry timeout until next attempt.
 	ConnectRetryCadence time.Duration
 	// TimeToCoup is the time for a follower to take the lead
@@ -59,6 +63,7 @@ func DefaultConfig() Config {
 		Marshaler:                      docbson.Marshaler(),
 		TransientFailureRecoverTimeout: 1 * time.Second,
 		MethodRetryCadence:             20 * time.Millisecond,
+		ReceiveRetryCadence:            5 * time.Second,
 		ConnectRetryCadence:            50 * time.Millisecond,
 		TimeToCoup:                     1 * time.Second,
 		DialTimeout:                    100 * time.Millisecond,

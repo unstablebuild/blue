@@ -46,6 +46,8 @@ import (
 // when re-connecting to another leader
 const clientStreamBuffer = 100
 
+var errAlreadySubscribed = errors.New("this client is already subscribed to this topic")
+
 type pubsub struct {
 	pubsubpb.UnimplementedPubSubServer
 	mu       sync.Locker
@@ -158,16 +160,16 @@ type msgError struct {
 }
 
 func (p *pubsub) subscribe(
-	ctx context.Context, topic string,
+	subscriptionCtx context.Context, topic string,
 	excl bool,
 ) (context.Context, chan msgError, error) {
 	p.mu.Lock()
 	quitCtx := p.ctx
 	stream, ok := p.clientStreams[topic]
+	p.mu.Unlock()
 	if ok {
-		p.mu.Unlock()
 		if excl {
-			return quitCtx, nil, errors.New("this client is already subscribed to this topic")
+			return quitCtx, nil, errAlreadySubscribed
 		}
 		return quitCtx, stream, nil
 	}
@@ -179,19 +181,14 @@ func (p *pubsub) subscribe(
 	msg := pubsubpb.ReceiveMessage{
 		Req: &req,
 	}
-	pbStream, err := p.client.Receive(ctx)
+	pbStream, err := p.client.Receive(subscriptionCtx)
 	if err != nil {
-		p.mu.Unlock()
 		return quitCtx, nil, err
 	}
 	err = pbStream.Send(&msg)
 	if err != nil {
-		p.mu.Unlock()
 		return quitCtx, nil, err
 	}
-	stream = make(chan msgError, clientStreamBuffer)
-	p.clientStreams[topic] = stream
-	p.mu.Unlock()
 	// blocks until server has sent header and so
 	// connection is fully established
 	md, err := pbStream.Header()
@@ -200,6 +197,18 @@ func (p *pubsub) subscribe(
 	}
 
 	p.log(log.DebugLevel, "subscribed to topic %s, metadata: %+v", topic, md)
+
+	p.mu.Lock()
+	select {
+	case <-quitCtx.Done():
+		return quitCtx, nil, quitCtx.Err()
+	case <-subscriptionCtx.Done():
+		return quitCtx, nil, subscriptionCtx.Err()
+	default:
+	}
+	stream = make(chan msgError, clientStreamBuffer)
+	p.clientStreams[topic] = stream
+	p.mu.Unlock()
 
 	// stream messages until until srv stream is done,
 	// broken or pubsub is closed
@@ -245,10 +254,8 @@ func (p *pubsub) subscribe(
 				default:
 				}
 				return
-				// do not use the passed context for streaming, as it should only
-				// be used for subscribing.
-				//case <-ctx.Done():
-				//return
+			case <-subscriptionCtx.Done():
+				return
 			}
 			if err != nil {
 				return
