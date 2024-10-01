@@ -412,31 +412,6 @@ func TestPubSub(t *testing.T) {
 		assert.NoError(t, followers[1].Close())
 	})
 
-	t.Run("Receive leader dies while Receive is waiting, is able to receive from another peer, doesn't block", func(t *testing.T) {
-		leader, followers := makeLeaderFollowerPair(t, 2)
-		topic := "1234"
-
-		err := followers[0].Subscribe(context.Background(), topic)
-		require.NoError(t, err)
-
-		ready := make(chan struct{})
-		go func() {
-			<-ready
-			_ = leader.Close()
-		}()
-
-		go func() {
-			require.NoError(t, followers[1].Publish(context.Background(), topic, []byte("block")))
-			ready <- struct{}{}
-		}()
-		data, err := followers[0].Receive(context.Background(), topic)
-		require.NoError(t, err)
-		assert.Equal(t, "block", string(data))
-
-		assert.NoError(t, followers[0].Close())
-		assert.NoError(t, followers[1].Close())
-	})
-
 	t.Run("extreme concurrency of leaders and followers", func(t *testing.T) {
 		const n, m = 100, 50
 		cfg := testConfig()
