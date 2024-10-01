@@ -34,6 +34,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/ernestrc/go-multierror"
 	multierr "github.com/ernestrc/go-multierror"
@@ -76,6 +77,7 @@ type Service struct {
 	cfg                  Config
 	maxFollowFailures    int
 	retryStrategy        retry.Strategy
+	receiveRetryStrategy retry.Strategy
 	connectRetryStrategy retry.Strategy
 
 	closed      bool
@@ -115,6 +117,7 @@ func (s *Service) Init(svc document.Service, lockFile string, cfg Config) {
 		retry.SequentialStrategy(cfg.MethodRetryCadence),
 		retry.LimitStrategy(uint(cfg.TimeToCoup/cfg.MethodRetryCadence*2)),
 	)
+	s.receiveRetryStrategy = retry.SequentialStrategy(cfg.ReceiveRetryCadence)
 	s.connectRetryStrategy = retry.SequentialStrategy(cfg.ConnectRetryCadence)
 
 	s.quitCh = make(chan struct{})
@@ -126,7 +129,7 @@ func (s *Service) Init(svc document.Service, lockFile string, cfg Config) {
 // Create satisfies document.Service.
 func (s *Service) Create(ctx context.Context, ID string, doc interface{}) error {
 	<-s.readyCtx.Done()
-	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
+	return s.retryHandleDocErrs(ctx, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		active := s.active
 		s.mu.Unlock()
@@ -138,7 +141,7 @@ func (s *Service) Create(ctx context.Context, ID string, doc interface{}) error 
 // Set satisfies document.Service.
 func (s *Service) Set(ctx context.Context, ID string, doc interface{}) error {
 	<-s.readyCtx.Done()
-	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
+	return s.retryHandleDocErrs(ctx, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		active := s.active
 		s.mu.Unlock()
@@ -153,7 +156,7 @@ func (s *Service) Update(
 	preconds ...document.Precondition,
 ) error {
 	<-s.readyCtx.Done()
-	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
+	return s.retryHandleDocErrs(ctx, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		active := s.active
 		s.mu.Unlock()
@@ -165,7 +168,7 @@ func (s *Service) Update(
 // Get satisfies document.Service.
 func (s *Service) Get(ctx context.Context, ID string, doc interface{}) error {
 	<-s.readyCtx.Done()
-	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
+	return s.retryHandleDocErrs(ctx, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		active := s.active
 		s.mu.Unlock()
@@ -177,7 +180,7 @@ func (s *Service) Get(ctx context.Context, ID string, doc interface{}) error {
 // Delete satisfies document.Service.
 func (s *Service) Delete(ctx context.Context, ID string) error {
 	<-s.readyCtx.Done()
-	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
+	return s.retryHandleDocErrs(ctx, func(ctx context.Context) (bool, error) {
 		s.mu.Lock()
 		active := s.active
 		s.mu.Unlock()
@@ -191,7 +194,10 @@ func (s *Service) List(ctx context.Context, filters []document.Filter) (
 	it document.Iterator, err error,
 ) {
 	<-s.readyCtx.Done()
-	err = retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
+	// ignore the retry context here as the context semantics
+	// are different for List: it's the iterator's of the subscription
+	// rather than the call to List.
+	err = s.retryHandleDocErrs(ctx, func(_ context.Context) (bool, error) {
 		s.mu.Lock()
 		active := s.active
 		s.mu.Unlock()
@@ -207,7 +213,7 @@ func (s *Service) Publish(
 	ctx context.Context, topic string, msg []byte,
 ) error {
 	<-s.readyCtx.Done()
-	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
+	return s.retryHandleDocErrs(ctx, func(ctx context.Context) (bool, error) {
 		err := s.pubsub.publish(ctx, topic, msg)
 		return s.isRetriableError(err), err
 	})
@@ -220,8 +226,16 @@ func (s *Service) Subscribe(
 	ctx context.Context, topic string,
 ) error {
 	<-s.readyCtx.Done()
-	return retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
+	var i int
+	// ignore the retry context here as the context semantics
+	// are different for subscribe: it's the context of the subscription
+	// rather than the call to subscribe.
+	return s.retryHandleDocErrs(ctx, func(_ context.Context) (bool, error) {
 		_, _, err := s.pubsub.subscribe(ctx, topic, true)
+		if i > 0 && err == errAlreadySubscribed {
+			return false, nil
+		}
+		i++
 		return s.isRetriableError(err), err
 	})
 }
@@ -230,15 +244,18 @@ func (s *Service) Subscribe(
 // or blocks until a message is available.
 //
 // Under the hood a subscription is created so messages
-// between calls to Receive are never lost.
+// between calls to Receive are never lost. Clients that
+// want fine-grained control over the lifecycle of the
+// subscription should use Subscribe first and pass
+// a context that can be canceled to cancel the subscription.
 func (s *Service) Receive(
 	ctx context.Context, topic string,
 ) (data []byte, err error) {
 	<-s.readyCtx.Done()
-	err = retryHandleDocErrs(ctx, s.retryStrategy, func(ctx context.Context) (bool, error) {
+	err = s.retryHandleDocErrsWithStrategy(ctx, func(ctx context.Context) (bool, error) {
 		data, err = s.pubsub.receive(ctx, topic)
 		return s.isRetriableError(err), err
-	})
+	}, s.receiveRetryStrategy, s.cfg.ReceiveRetryCadence)
 	return
 }
 
@@ -623,22 +640,39 @@ func (s *Service) isRetriableError(err error) bool {
 	c := stat.Code()
 	return strings.Contains(stat.Message(), "connection error") ||
 		strings.Contains(stat.Message(), "EOF") ||
+		strings.Contains(stat.Message(), "Unavailable") ||
+		strings.Contains(stat.Message(), "Canceled") ||
 		c == codes.Unavailable || c == codes.DeadlineExceeded || c == codes.Aborted ||
 		c == codes.Canceled
 }
 
 // if last error is a document.Err*, then return that rather than any other transient errors.
-func retryHandleDocErrs(
-	ctx context.Context, retryStrategy retry.Strategy, fn func(ctx context.Context) (bool, error),
+func (s *Service) retryHandleDocErrs(
+	ctx context.Context, fn func(ctx context.Context) (bool, error),
+) error {
+	return s.retryHandleDocErrsWithStrategy(ctx, fn, s.retryStrategy, s.cfg.MethodRetryCadence)
+}
+
+func (s *Service) retryHandleDocErrsWithStrategy(
+	ctx context.Context, fn func(ctx context.Context) (bool, error),
+	retryStrategy retry.Strategy, retryCadence time.Duration,
 ) error {
 	var err error
 	retryErr := retry.Retry(ctx, retryStrategy, func(ctx context.Context) (bool, error) {
+		sctx, cancel := context.WithTimeout(ctx, retryCadence)
+
 		var shouldRetry bool
-		shouldRetry, err = fn(ctx)
+		shouldRetry, err = fn(sctx)
+		cancel()
 		if !shouldRetry {
 			// return nil so retryErr is nil and we know that we need to
 			// return original error
 			return shouldRetry, nil
+		}
+		select {
+		case <-s.quitCh:
+			return false, err
+		default:
 		}
 		return shouldRetry, err
 	})
