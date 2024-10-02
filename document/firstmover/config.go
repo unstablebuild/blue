@@ -64,8 +64,8 @@ func DefaultConfig() Config {
 		TransientFailureRecoverTimeout: 500 * time.Millisecond,
 		MethodRetryCadence:             200 * time.Millisecond,
 		ReceiveRetryCadence:            5 * time.Second,
-		ConnectRetryCadence:            300 * time.Millisecond,
+		ConnectRetryCadence:            50 * time.Millisecond,
 		TimeToCoup:                     1 * time.Second,
-		DialTimeout:                    400 * time.Millisecond,
+		DialTimeout:                    40 * time.Millisecond,
 	}
 }

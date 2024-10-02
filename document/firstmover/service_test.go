@@ -31,6 +31,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/document/docmarshal"
@@ -39,6 +40,12 @@ import (
 	"github.com/unstablebuild/blue/document/docmarshal/doctoml"
 	"github.com/unstablebuild/blue/document/doctest"
 )
+
+func TestDefaultConfiguration(t *testing.T) {
+	cfg := DefaultConfig()
+	maxFollowFailures := int(cfg.TimeToCoup / (cfg.DialTimeout + cfg.ConnectRetryCadence))
+	assert.Greater(t, maxFollowFailures, 1)
+}
 
 func TestServiceIntegration(t *testing.T) {
 	for name, _marshaler := range map[string]docmarshal.Marshaler{
