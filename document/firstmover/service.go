@@ -30,6 +30,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -69,13 +70,15 @@ import (
 // dispatched multiple times, so protocols implemented on top
 // should work around these limitations.
 type Service struct {
-	pubsub         *pubsub
-	mu             sync.Mutex
-	svc            document.Service
-	lockFileListen string // this distinction between listen/read is only used for tests
-	lockFileRead   string
-	readyCtx       context.Context
-	ready          func()
+	pubsub             *pubsub
+	mu                 sync.Mutex
+	svc                document.Service
+	lockFileListen     string // this distinction between listen/read is only used for tests
+	lockFileRead       string
+	lockFileRemoveSync string
+	pid                string
+	readyCtx           context.Context
+	ready              func()
 
 	cfg                  Config
 	maxFollowFailures    int
@@ -107,15 +110,20 @@ func (s *Service) Init(svc document.Service, lockFile string, cfg Config) {
 	if cfg.Marshaler == nil {
 		panic("empty Marshaler in config")
 	}
+
 	s.svc = svc
 	if s.lockFileListen == "" {
 		s.lockFileListen = lockFile
 	}
+	s.pid = strconv.Itoa(os.Getpid())
 	s.lockFileRead = lockFile
+	s.lockFileRemoveSync = lockFile + ".sync"
 	s.subscriptions = make(map[string][][]byte)
 	s.pubsub = new(pubsub)
 	s.pubsub.mu = &s.mu
 	s.readyCtx, s.ready = context.WithCancel(context.Background())
+
+	s.log(log.TraceLevel, "initializing new service peer...")
 
 	s.cfg = cfg
 	s.maxFollowFailures = int(cfg.TimeToCoup / (cfg.DialTimeout + cfg.ConnectRetryCadence))
@@ -129,7 +137,6 @@ func (s *Service) Init(svc document.Service, lockFile string, cfg Config) {
 	s.quitCh = make(chan struct{})
 	s.closeWaitCh = make(chan struct{})
 
-	s.log(log.TraceLevel, "initializing new service peer...")
 	go s.leadOrFollow()
 }
 
@@ -378,7 +385,7 @@ loop:
 			default:
 			}
 			s.followFailures = 0 // reset
-			s.pubsub.init()
+			s.pubsub.init(s.lockFileListen, s.pid)
 			s.pubsub.initFollower(conn)
 			// set active svc and unlock API
 			s.setActiveAndUnlock(client)
@@ -505,7 +512,7 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 	defer gsrv.Stop()
 
 	s.mu.Lock()
-	s.pubsub.init()
+	s.pubsub.init(s.lockFileListen, s.pid)
 	s.mu.Unlock()
 	docpb.RegisterDocumentStoreServer(gsrv, server)
 	pubsubpb.RegisterPubSubServer(gsrv, s.pubsub)
@@ -541,12 +548,21 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 	s.subscriptions = make(map[string][][]byte)
 	s.mu.Unlock()
 
+	// clean lock remove sync file, after a while to allow for reconnections
+	// and protect the newly created leader from a coup.
+	t := time.NewTimer(s.cfg.ConnectRetryCadence * 2)
+	defer t.Stop()
+
 	s.resubscribe(ctx, subscriptions)
-	select {
-	case <-quitCh:
-		return false, nil
-	case err := <-done:
-		return false, err
+	for {
+		select {
+		case <-t.C:
+			_ = os.Remove(s.lockFileRemoveSync)
+		case <-quitCh:
+			return false, nil
+		case err := <-done:
+			return false, err
+		}
 	}
 }
 
@@ -555,7 +571,9 @@ func (s *Service) log(level log.Level, msg string, args ...interface{}) {
 		return
 	}
 	log.WithField(logging.KeyClass, "firstmover.Service").
-		WithField("ptr", fmt.Sprintf("%p", s)).
+		WithField("address", fmt.Sprintf("%p", s)).
+		WithField("lock", s.lockFileListen).
+		WithField("pid", s.pid).
 		Logf(level, msg, args...)
 }
 
@@ -611,7 +629,39 @@ func (s *Service) leadOrFollow() {
 		}
 		if s.followFailures >= s.maxFollowFailures {
 			s.followFailures = 0
-			s.log(log.WarnLevel, "Unresponsive leader. Removing lock and taking the lead: %v", err)
+			// this could happen if leader crashes. Generally the unix socket
+			// is removed when listener is closed gracefully.
+			s.log(log.WarnLevel, "Unresponsive leader. "+
+				"Starting coup to elect a new leader: original folow error: %v", err)
+
+			// only allow one follower to remove socket, to avoid a nasty
+			// race condition: two followers race to remove the unix socket,
+			// one is faster and is able to create unix socket, only to get
+			// the slower one to remove it, resulting in a split brain.
+			f, oerr := os.OpenFile(s.lockFileRemoveSync, os.O_CREATE|os.O_EXCL, 0766)
+			if oerr != nil {
+				if !os.IsExist(oerr) {
+					s.log(log.ErrorLevel, "Could not synchronize coup: open sync file: %v", oerr)
+					return true, err
+				}
+
+				fi, serr := os.Stat(s.lockFileRemoveSync)
+				if serr != nil {
+					s.log(log.ErrorLevel, "Could not synchronize coup: stat sync file: %v", serr)
+					return true, err
+				}
+				// NOTE: if follower is taking too long, maybe that follower crashed too
+				lastCreated := fi.ModTime()
+				if time.Since(lastCreated) < s.cfg.ConnectRetryCadence*4 {
+					s.log(log.DebugLevel, "Some other process is removing the lock")
+					return true, err
+				}
+				s.log(log.WarnLevel, "Some other process is taking too long removing the lock, removing sync file...")
+				_ = os.Remove(s.lockFileRemoveSync)
+				return true, err
+			}
+			s.log(log.InfoLevel, "Removing lock to allow a leader to be elected...")
+			_ = f.Close()
 			_ = os.Remove(s.lockFileRead)
 			return true, err
 		}
