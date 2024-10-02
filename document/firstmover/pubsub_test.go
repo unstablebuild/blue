@@ -25,7 +25,9 @@ package firstmover
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"sync"
 	"testing"
@@ -39,6 +41,13 @@ import (
 )
 
 func makeLeaderFollowerPair(t *testing.T, nfollowers int) (*Service, []*Service) {
+	return makeLeaderFollowerPairLockFileListen(t, nfollowers, "")
+}
+
+func makeLeaderFollowerPairLockFileListen(
+	t *testing.T, nfollowers int,
+	lockFileListen string,
+) (*Service, []*Service) {
 	lockFile := makeTempLockFile(t)
 	cfg := testConfig()
 	cfg.Marshaler = doctoml.Marshaler()
@@ -50,7 +59,10 @@ func makeLeaderFollowerPair(t *testing.T, nfollowers int) (*Service, []*Service)
 	require.Equal(t, document.ErrNotFound, err)
 	var followers []*Service
 	for i := 0; i < nfollowers; i++ {
-		followers = append(followers, New(svc, lockFile, cfg))
+		follower := new(Service)
+		follower.lockFileListen = lockFileListen
+		follower.Init(svc, lockFile, cfg)
+		followers = append(followers, follower)
 	}
 	return leader, followers
 }
@@ -410,6 +422,62 @@ func TestPubSub(t *testing.T) {
 
 		assert.NoError(t, followers[0].Close())
 		assert.NoError(t, followers[1].Close())
+	})
+
+	t.Run("receive is able to receive messages across leader/follower handoffs", func(t *testing.T) {
+		// change the follower's listen lockFile to be a regular file
+		// so we ensure that across leader re-elections, this instance
+		// never becomes the leader.
+		lockFile, err := os.CreateTemp("", "")
+		require.NoError(t, err)
+		_, err = lockFile.WriteString("abc")
+		require.NoError(t, err)
+		require.NoError(t, lockFile.Close())
+
+		leader, followers := makeLeaderFollowerPairLockFileListen(t, 1, lockFile.Name())
+		topic := "1234"
+		ctx := context.Background()
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		err = followers[0].Subscribe(ctx, topic)
+		require.NoError(t, err)
+
+		const n = 2
+		var data [n][]byte
+		var errs [n]error
+		var wg sync.WaitGroup
+		wg.Add(n)
+		go func() {
+			for i := 0; i < n; i++ {
+				data[i], errs[i] = followers[0].Receive(ctx, topic)
+				wg.Done()
+			}
+		}()
+
+		require.NoError(t, leader.Close())
+		for i := 0; i < n; i++ {
+			newLeader := New(leader.svc, leader.lockFileListen, leader.cfg)
+			for {
+				// NOTE: if Publish below is published before follower is able
+				// to connect, then the message is lost.
+				err := followers[0].Get(ctx, "abc", make(map[string]interface{}))
+				if errors.Is(err, document.ErrNotFound) {
+					break
+				}
+			}
+			require.NoError(t, newLeader.Publish(ctx, topic, []byte("block")))
+			newLeader.Close()
+		}
+
+		wg.Wait()
+		for i := 0; i < n; i++ {
+			data, err := data[i], errs[i]
+			require.NoError(t, err)
+			assert.Equal(t, "block", string(data))
+		}
+
+		assert.NoError(t, followers[0].Close())
 	})
 
 	t.Run("extreme concurrency of leaders and followers", func(t *testing.T) {

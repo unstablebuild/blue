@@ -64,15 +64,18 @@ import (
 // will fail, and clients of this document.Service are encouraged
 // to do their own retries on List operations.
 //
-// This Service also exposes pub/sub capabilities with at least once
-// semantics.
+// This Service also exposes pub/sub capabilities but message
+// delivery is not guaranteed, and the same message could be
+// dispatched multiple times, so protocols implemented on top
+// should work around these limitations.
 type Service struct {
-	pubsub   *pubsub
-	mu       sync.Mutex
-	svc      document.Service
-	lockFile string
-	readyCtx context.Context
-	ready    func()
+	pubsub         *pubsub
+	mu             sync.Mutex
+	svc            document.Service
+	lockFileListen string // this distinction between listen/read is only used for tests
+	lockFileRead   string
+	readyCtx       context.Context
+	ready          func()
 
 	cfg                  Config
 	maxFollowFailures    int
@@ -105,7 +108,10 @@ func (s *Service) Init(svc document.Service, lockFile string, cfg Config) {
 		panic("empty Marshaler in config")
 	}
 	s.svc = svc
-	s.lockFile = lockFile
+	if s.lockFileListen == "" {
+		s.lockFileListen = lockFile
+	}
+	s.lockFileRead = lockFile
 	s.subscriptions = make(map[string][][]byte)
 	s.pubsub = new(pubsub)
 	s.pubsub.mu = &s.mu
@@ -123,6 +129,7 @@ func (s *Service) Init(svc document.Service, lockFile string, cfg Config) {
 	s.quitCh = make(chan struct{})
 	s.closeWaitCh = make(chan struct{})
 
+	s.log(log.TraceLevel, "initializing new service peer...")
 	go s.leadOrFollow()
 }
 
@@ -253,6 +260,15 @@ func (s *Service) Receive(
 ) (data []byte, err error) {
 	<-s.readyCtx.Done()
 	err = s.retryHandleDocErrsWithStrategy(ctx, func(ctx context.Context) (bool, error) {
+		s.mu.Lock()
+		pending := s.subscriptions[topic]
+		if len(pending) > 0 {
+			data = pending[0]
+			s.subscriptions[topic] = pending[1:]
+			s.mu.Unlock()
+			return false, nil
+		}
+		s.mu.Unlock()
 		data, err = s.pubsub.receive(ctx, topic)
 		return s.isRetriableError(err), err
 	}, s.receiveRetryStrategy, s.cfg.ReceiveRetryCadence)
@@ -266,6 +282,7 @@ func (s *Service) Close() (ret error) {
 		s.mu.Unlock()
 		return
 	}
+	s.log(log.TraceLevel, "Close called on peer...")
 	s.closed = true
 	if s.active != s.svc && s.active != nil {
 		close(s.quitCh)
@@ -306,7 +323,7 @@ func (s *Service) IsLeader() bool {
 }
 
 const (
-	internalTopic            = "__XXpubsubintXX__"
+	internalTopic            = "__pubsubinternal"
 	internalMessageByeString = "BYE"
 )
 
@@ -418,12 +435,15 @@ loop:
 }
 
 func (s *Service) resubscribe(ctx context.Context, subscriptions map[string][][]byte) {
+	s.log(log.DebugLevel, "resubscribe: resubscribing to %d subscriptions", len(subscriptions))
 	for topic, buffered := range subscriptions {
 		_, stream, err := s.pubsub.subscribe(ctx, topic, false)
 		if err != nil {
 			s.log(log.WarnLevel, "resubscribe to %q: %v", topic, err)
 			continue
 		}
+		s.log(log.DebugLevel, "resubscribe: created stream %p for topic %q, "+
+			"sending %d messages", stream, topic, len(buffered))
 		for i := 0; i < len(buffered); i++ {
 			stream <- msgError{msg: &pubsubpb.ReceiveMessage_Data{Data: buffered[i]}}
 		}
@@ -535,6 +555,7 @@ func (s *Service) log(level log.Level, msg string, args ...interface{}) {
 		return
 	}
 	log.WithField(logging.KeyClass, "firstmover.Service").
+		WithField("ptr", fmt.Sprintf("%p", s)).
 		Logf(level, msg, args...)
 }
 
@@ -550,7 +571,7 @@ func (s *Service) leadOrFollow() {
 
 	fn := func(ctx context.Context) (bool, error) {
 		var cfg net.ListenConfig
-		listener, err := cfg.Listen(ctx, "unix", s.lockFile)
+		listener, err := cfg.Listen(ctx, "unix", s.lockFileListen)
 		if err == nil {
 			retry, err := s.lead(ctx, listener)
 			if err == nil || retry {
@@ -561,7 +582,7 @@ func (s *Service) leadOrFollow() {
 		}
 
 		if errors.Is(err, syscall.ENOENT) { // a component of the path does not exist
-			mkdirErr := os.MkdirAll(filepath.Dir(s.lockFile), 0766)
+			mkdirErr := os.MkdirAll(filepath.Dir(s.lockFileListen), 0766)
 			if mkdirErr != nil {
 				s.log(log.WarnLevel, "create lock dir: %v", mkdirErr)
 				return false, multierror.Append(err, mkdirErr)
@@ -576,14 +597,14 @@ func (s *Service) leadOrFollow() {
 			!errors.Is(err, os.ErrInvalid) && // socket already bound to an address
 			!errors.Is(err, syscall.EINVAL) { // socket already bound to an address
 			s.log(log.WarnLevel, "Unexpected error while trying to "+
-				"acquire lock %q: %v", s.lockFile, err)
+				"acquire lock %q: %v", s.lockFileListen, err)
 			return false, err
 		}
 
 		s.log(log.TraceLevel, "Expected error while trying to acquire lock %q: "+
-			"fallback to follow instead: %v", s.lockFile, err)
+			"fallback to follow instead: %v", s.lockFileListen, err)
 
-		addr := net.UnixAddr{Net: "unix", Name: s.lockFile}
+		addr := net.UnixAddr{Net: "unix", Name: s.lockFileRead}
 		retry, err := s.follow(ctx, &addr)
 		if err != nil {
 			s.followFailures++
@@ -591,7 +612,7 @@ func (s *Service) leadOrFollow() {
 		if s.followFailures >= s.maxFollowFailures {
 			s.followFailures = 0
 			s.log(log.WarnLevel, "Unresponsive leader. Removing lock and taking the lead: %v", err)
-			_ = os.Remove(s.lockFile)
+			_ = os.Remove(s.lockFileRead)
 			return true, err
 		}
 		if err == nil || retry {
