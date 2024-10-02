@@ -61,7 +61,7 @@ type pubsub struct {
 	closed   bool
 
 	// leader only
-	subscribers    map[string][]subscriber
+	subscribers    map[string][]*subscriber
 	leaderConn     *grpc.ClientConn
 	leaderListener net.Listener
 
@@ -76,6 +76,7 @@ type pubsub struct {
 type subscriber struct {
 	errors chan error
 	stream pubsubpb.PubSub_ReceiveServer
+	mu     sync.Mutex
 }
 
 func (p *pubsub) init(lockFile, pid string) {
@@ -87,7 +88,7 @@ func (p *pubsub) init(lockFile, pid string) {
 
 func (p *pubsub) reset() {
 	p.clientStreams = make(map[string]chan msgError)
-	p.subscribers = make(map[string][]subscriber)
+	p.subscribers = make(map[string][]*subscriber)
 	p.id = uuid.New().String()
 	p.cancelFn()
 	p.ctx, p.cancelFn = context.WithCancel(context.Background())
@@ -335,8 +336,11 @@ func (p *pubsub) Publish(
 	var wg sync.WaitGroup
 	wg.Add(len(subscribers))
 	for i, sub := range subscribers {
-		go func(sub subscriber, i int) {
+		go func(sub *subscriber, i int) {
 			defer wg.Done()
+
+			sub.mu.Lock()
+			defer sub.mu.Unlock()
 
 			var req pubsubpb.ReceiveMessage
 			var data pubsubpb.ReceiveMessage_Data
@@ -412,12 +416,9 @@ func (p *pubsub) Receive(srv pubsubpb.PubSub_ReceiveServer) error {
 		p.mu.Unlock()
 		return status.Errorf(codes.Aborted, "closed")
 	}
-	p.subscribers[topic] = append(p.subscribers[topic],
-		subscriber{
-			errors: errors,
-			stream: srv,
-		},
-	)
+	sub := &subscriber{errors: errors, stream: srv}
+	sub.mu.Lock()
+	p.subscribers[topic] = append(p.subscribers[topic], sub)
 	quitCtx := p.ctx
 	p.mu.Unlock()
 
@@ -426,7 +427,9 @@ func (p *pubsub) Receive(srv pubsubpb.PubSub_ReceiveServer) error {
 	// subsequent calls to Publish.
 	md := metadata.New(make(map[string]string))
 	md.Append("ID", p.id)
+
 	err = srv.SendHeader(md)
+	sub.mu.Unlock()
 	if err != nil {
 		return fmt.Errorf("rpc send header: %w", err)
 	}
