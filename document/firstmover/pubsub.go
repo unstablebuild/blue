@@ -52,6 +52,8 @@ type pubsub struct {
 	pubsubpb.UnimplementedPubSubServer
 	mu       sync.Locker
 	id       string
+	pid      string
+	lockFile string
 	ctx      context.Context
 	cancelFn func()
 	readyCtx context.Context
@@ -76,9 +78,11 @@ type subscriber struct {
 	stream pubsubpb.PubSub_ReceiveServer
 }
 
-func (p *pubsub) init() {
+func (p *pubsub) init(lockFile, pid string) {
 	p.cancelFn = func() {}
 	p.readyCtx, p.ready = context.WithCancel(context.Background())
+	p.lockFile = lockFile
+	p.pid = pid
 }
 
 func (p *pubsub) reset() {
@@ -493,5 +497,7 @@ func (s *pubsub) log(level log.Level, msg string, args ...interface{}) {
 	log.WithFields(log.Fields{
 		logging.KeyClass: "firstmover.pubsub",
 		"address":        fmt.Sprintf("%p", s),
+		"lock":           s.lockFile,
+		"pid":            s.pid,
 	}).Logf(level, msg, args...)
 }

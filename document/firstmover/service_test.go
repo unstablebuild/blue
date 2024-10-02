@@ -28,9 +28,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/ernestrc/go-multierror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
@@ -122,21 +124,28 @@ func TestServiceIntegration(t *testing.T) {
 			lockFile := makeTempLockFile(t)
 			svc := document.NewInMemoryService()
 			leader := New(svc, lockFile, testConfig())
+
 			// ensure leader is available
-			err := leader.Set(context.Background(), lockFile, &testStruct{A: "1234"})
+			err := leader.Set(context.Background(), "random", &testStruct{A: "1234"})
 			require.NoError(t, err)
-			follower := New(document.NewInMemoryService(), lockFile, testConfig())
+			follower := New(svc, lockFile, testConfig())
+
 			// ensure follow is available and using leader
 			var temp testStruct
-			err = follower.Get(context.Background(), lockFile, &temp)
+			err = follower.Get(context.Background(), "random", &temp)
 			require.NoError(t, err)
 			require.Equal(t, "1234", temp.A)
 			leader.Close()
+
+			// cleanup
+			err = follower.Delete(context.Background(), "random")
+			require.NoError(t, err)
+
 			return follower
 		})
 	})
 
-	t.Run("remove leader lock, seconds assumes leader after leader is unresponsive", func(t *testing.T) {
+	t.Run("remove leader lock, second instance assumes leader after leader is unresponsive", func(t *testing.T) {
 		doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 			lockFile := makeTempLockFile(t)
 			svc := document.NewInMemoryService()
@@ -144,18 +153,54 @@ func TestServiceIntegration(t *testing.T) {
 			// ensure leader is available
 			err := leader.Set(context.Background(), "dragonballz", &testStruct{A: "1234"})
 			require.NoError(t, err)
-			follower := New(document.NewInMemoryService(), lockFile, testConfig())
+			follower := New(svc, lockFile, testConfig())
+
 			// ensure follow is available and using leader
 			var temp testStruct
 			err = follower.Get(context.Background(), "dragonballz", &temp)
 			require.NoError(t, err)
 			require.Equal(t, "1234", temp.A)
-			err = follower.Delete(context.Background(), "dragonballz")
+			err = follower.Delete(context.Background(), "dragonballz") // cleanup
 			require.NoError(t, err)
 
 			// remove lock
 			os.Remove(lockFile)
 			return follower
+		})
+	})
+
+	t.Run("remove leader lock, other assumes leader after leader is unresponsive", func(t *testing.T) {
+		doctest.TestDocumentService(t, func(t *testing.T) document.Service {
+			lockFile := makeTempLockFile(t)
+			svc := document.NewInMemoryService()
+			leader := New(svc, lockFile, testConfig())
+			// ensure leader is available
+			err := leader.Set(context.Background(), "dragonballz", &testStruct{A: "1234"})
+			require.NoError(t, err)
+			follower1 := New(svc, lockFile, testConfig())
+			follower2 := New(svc, lockFile, testConfig())
+			follower3 := New(svc, lockFile, testConfig())
+			follower4 := New(svc, lockFile, testConfig())
+			follower5 := New(svc, lockFile, testConfig())
+			followers := []document.Service{
+				follower1, follower2, follower3, follower4, follower5,
+			}
+
+			// ensure that they're all connected to leader
+			for _, follower := range followers {
+				var temp testStruct
+				err = follower.Get(context.Background(), "dragonballz", &temp)
+				require.NoError(t, err)
+				require.Equal(t, "1234", temp.A)
+			}
+			err = leader.Delete(context.Background(), "dragonballz")
+			require.NoError(t, err)
+
+			// remove lock
+			os.Remove(lockFile)
+
+			// returns a diff follower for each call
+			return &alternatingService{svc: followers}
 		})
 	})
 
@@ -344,4 +389,51 @@ func makeTempLockFile(t *testing.T) string {
 		os.Remove(f.Name())
 	})
 	return f.Name()
+}
+
+type alternatingService struct {
+	i   atomic.Int64
+	svc []document.Service
+}
+
+func (a *alternatingService) Create(
+	ctx context.Context, ID string, doc interface{},
+) error {
+	i := int(a.i.Add(1))
+	return a.svc[i%len(a.svc)].Create(ctx, ID, doc)
+}
+
+func (a *alternatingService) Set(ctx context.Context, ID string, doc interface{}) error {
+	i := int(a.i.Add(1))
+	return a.svc[i%len(a.svc)].Set(ctx, ID, doc)
+}
+
+func (a *alternatingService) Update(ctx context.Context, ID string,
+	updates []document.Update, precond ...document.Precondition) error {
+	i := int(a.i.Add(1))
+	return a.svc[i%len(a.svc)].Update(ctx, ID, updates, precond...)
+}
+
+func (a *alternatingService) Get(ctx context.Context, ID string, doc interface{}) error {
+	i := int(a.i.Add(1))
+	return a.svc[i%len(a.svc)].Get(ctx, ID, doc)
+}
+
+func (a *alternatingService) Delete(ctx context.Context, ID string) error {
+	i := int(a.i.Add(1))
+	return a.svc[i%len(a.svc)].Delete(ctx, ID)
+}
+
+func (a *alternatingService) List(ctx context.Context, filters []document.Filter) (
+	document.Iterator, error,
+) {
+	i := int(a.i.Add(1))
+	return a.svc[i%len(a.svc)].List(ctx, filters)
+}
+
+func (a *alternatingService) Close() (ret error) {
+	for _, svc := range a.svc {
+		ret = multierror.Append(ret, svc.Close())
+	}
+	return
 }
