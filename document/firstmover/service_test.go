@@ -330,6 +330,7 @@ func testConfig() Config {
 		ConnectRetryCadence:            50 * time.Millisecond,
 		TimeToCoup:                     500 * time.Millisecond,
 		DialTimeout:                    50 * time.Millisecond,
+		MaxMessageSize:                 DefaultMaxMessageSize * 2,
 	}
 }
 

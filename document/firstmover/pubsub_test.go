@@ -79,10 +79,10 @@ func TestPubSub(t *testing.T) {
 		leader, follower := makeLeaderFollowerPair(t, 1)
 
 		ctx := context.Background()
-		err := leader.Publish(ctx, "1234", make([]byte, MaxMessageSize*2))
+		err := leader.Publish(ctx, "1234", make([]byte, leader.cfg.MaxMessageSize*2))
 		require.Equal(t, ErrMessageTooLarge, err)
 
-		err = follower[0].Publish(ctx, "1234", make([]byte, MaxMessageSize*2))
+		err = follower[0].Publish(ctx, "1234", make([]byte, leader.cfg.MaxMessageSize*2))
 		require.Equal(t, ErrMessageTooLarge, err)
 
 		assert.NoError(t, leader.Close())

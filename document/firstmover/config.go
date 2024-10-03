@@ -55,6 +55,9 @@ type Config struct {
 	// This error will be retried by followers until a new leader
 	// is selected.
 	CloseError error
+	// MaxMessageSize determines the maximum message size
+	// of published messages via Service.Publish.
+	MaxMessageSize int
 }
 
 // DefaultConfig returns a sane Config.
@@ -67,5 +70,6 @@ func DefaultConfig() Config {
 		ConnectRetryCadence:            50 * time.Millisecond,
 		TimeToCoup:                     1 * time.Second,
 		DialTimeout:                    40 * time.Millisecond,
+		MaxMessageSize:                 DefaultMaxMessageSize,
 	}
 }

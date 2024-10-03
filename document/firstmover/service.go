@@ -53,10 +53,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// MaxMessageSize is the maximum message size of published messages
-// via Service.Publish. If Publish is called with a message
-// larger than this value, Service returns ErrMessageTooLarge.
-const MaxMessageSize = 1024 * 1024 * 4
+// DefaultMaxMessageSize is the default maximum message size
+// of published messages via Service.Publish. This can be
+// overwritten via Config.MaxMessageSize.
+const DefaultMaxMessageSize = 1024 * 1024 * 4
 
 // ErrMessageTooLarge is returned in calls to Service.Publish
 // when message is larger than MaxMessageSize.
@@ -238,7 +238,7 @@ func (s *Service) List(ctx context.Context, filters []document.Filter) (
 func (s *Service) Publish(
 	ctx context.Context, topic string, msg []byte,
 ) error {
-	if len(msg) > MaxMessageSize {
+	if len(msg) > s.cfg.MaxMessageSize {
 		return ErrMessageTooLarge
 	}
 	<-s.readyCtx.Done()
@@ -358,8 +358,8 @@ func (s *Service) follow(ctx context.Context, addr net.Addr) (bool, error) {
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallSendMsgSize(MaxMessageSize),
-			grpc.MaxCallRecvMsgSize(MaxMessageSize),
+			grpc.MaxCallSendMsgSize(s.cfg.MaxMessageSize),
+			grpc.MaxCallRecvMsgSize(s.cfg.MaxMessageSize),
 		),
 		grpc.WithBlock(),
 	}
@@ -528,8 +528,8 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 	defer listener.Close()
 
 	gsrv := grpc.NewServer(
-		grpc.MaxSendMsgSize(MaxMessageSize),
-		grpc.MaxRecvMsgSize(MaxMessageSize),
+		grpc.MaxSendMsgSize(s.cfg.MaxMessageSize),
+		grpc.MaxRecvMsgSize(s.cfg.MaxMessageSize),
 	)
 	defer gsrv.Stop()
 
