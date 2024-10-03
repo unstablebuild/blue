@@ -53,6 +53,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// MaxMessageSize is the maximum message size of published messages
+// via Service.Publish. If Publish is called with a message
+// larger than this value, Service returns ErrMessageTooLarge.
+const MaxMessageSize = 1024 * 1024 * 4
+
+// ErrMessageTooLarge is returned in calls to Service.Publish
+// when message is larger than MaxMessageSize.
+var ErrMessageTooLarge = errors.New("message exceeds maximum size")
+
 // Service is a document.Service that either acquires a lock
 // by creating a unix socket at lockFile and exposes svc
 // to RPC clients or if it fails to acquire lock, it will connect
@@ -223,9 +232,15 @@ func (s *Service) List(ctx context.Context, filters []document.Filter) (
 
 // Publish publishes an arbitrary message to the given topic.
 // It will be received by all subscribers of this topic.
+//
+// This method returns ErrMessageTooLarge if a message is larger
+// than MaxMessageSize.
 func (s *Service) Publish(
 	ctx context.Context, topic string, msg []byte,
 ) error {
+	if len(msg) > MaxMessageSize {
+		return ErrMessageTooLarge
+	}
 	<-s.readyCtx.Done()
 	return s.retryHandleDocErrs(ctx, func(ctx context.Context) (bool, error) {
 		err := s.pubsub.publish(ctx, topic, msg)
@@ -342,6 +357,10 @@ func (s *Service) follow(ctx context.Context, addr net.Addr) (bool, error) {
 	quitCh := s.quitCh
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallSendMsgSize(MaxMessageSize),
+			grpc.MaxCallRecvMsgSize(MaxMessageSize),
+		),
 		grpc.WithBlock(),
 	}
 	opts = append(opts, grpc.WithContextDialer(
@@ -508,7 +527,10 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 	server := docrpc.NewServer(document.SyncWithLocker(s.svc, &s.mu), s.cfg.Marshaler)
 	defer listener.Close()
 
-	gsrv := grpc.NewServer()
+	gsrv := grpc.NewServer(
+		grpc.MaxSendMsgSize(MaxMessageSize),
+		grpc.MaxRecvMsgSize(MaxMessageSize),
+	)
 	defer gsrv.Stop()
 
 	s.mu.Lock()
