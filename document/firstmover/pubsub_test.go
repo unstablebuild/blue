@@ -40,70 +40,6 @@ import (
 	"github.com/unstablebuild/blue/retry"
 )
 
-func makeLeaderFollowerPair(t *testing.T, nfollowers int) (*Service, []*Service) {
-	return makeLeaderFollowerPairLockFileListen(t, nfollowers, "")
-}
-
-func makeLeaderFollowerPairLockFileListen(
-	t *testing.T, nfollowers int,
-	lockFileListen string,
-) (*Service, []*Service) {
-	lockFile := makeTempLockFile(t)
-	cfg := testConfig()
-	cfg.Marshaler = doctoml.Marshaler()
-	svc := document.NewInMemoryServiceWithMarshaler(cfg.Marshaler)
-	leader := New(svc, lockFile, cfg)
-	// ensure leader is available
-	var temp testStruct
-	err := leader.Get(context.Background(), lockFile, &temp)
-	require.Equal(t, document.ErrNotFound, err)
-	var followers []*Service
-	for i := 0; i < nfollowers; i++ {
-		follower := new(Service)
-		follower.lockFileListen = lockFileListen
-		follower.Init(svc, lockFile, cfg)
-		followers = append(followers, follower)
-	}
-	return leader, followers
-}
-
-func publishAndReceive(t *testing.T, sender, receiver *Service, n int) {
-	ctx := context.Background()
-
-	var done, ready sync.WaitGroup
-	actualMsg := make([][]byte, n)
-	actualErr := make([]error, n)
-
-	done.Add(n)
-	ready.Add(n)
-	for i := 0; i < n; i++ {
-		go func(i int) {
-			defer done.Done()
-			actualErr[i] = receiver.Subscribe(ctx, strconv.Itoa(i))
-			ready.Done()
-			if actualErr[i] != nil {
-				return
-			}
-			actualMsg[i], actualErr[i] = receiver.Receive(
-				ctx, strconv.Itoa(i))
-		}(i)
-	}
-
-	ready.Wait()
-	// unfortunately it's impossible to truly hook into the internal stream Recv
-	// and know for sure that there's an actual subscriber ready for that
-	for i := 0; i < n; i++ {
-		err := sender.Publish(ctx, strconv.Itoa(i), []byte(strconv.Itoa(i)))
-		require.NoError(t, err)
-	}
-	done.Wait()
-
-	for i := 0; i < n; i++ {
-		require.NoError(t, actualErr[i], i)
-		assert.Equal(t, strconv.Itoa(i), string(actualMsg[i]), i)
-	}
-}
-
 func TestPubSub(t *testing.T) {
 	t.Run("Close called more than once doesn't block or panic", func(t *testing.T) {
 		svc, _ := makeLeaderFollowerPair(t, 0)
@@ -136,6 +72,21 @@ func TestPubSub(t *testing.T) {
 				_ = follower.Close()
 			}
 		})
+	})
+
+	t.Run("nodes receive ErrMessageTooLarge if "+
+		"trying to publish a message larger than MaxMessageSize", func(t *testing.T) {
+		leader, follower := makeLeaderFollowerPair(t, 1)
+
+		ctx := context.Background()
+		err := leader.Publish(ctx, "1234", make([]byte, MaxMessageSize*2))
+		require.Equal(t, ErrMessageTooLarge, err)
+
+		err = follower[0].Publish(ctx, "1234", make([]byte, MaxMessageSize*2))
+		require.Equal(t, ErrMessageTooLarge, err)
+
+		assert.NoError(t, leader.Close())
+		assert.NoError(t, follower[0].Close())
 	})
 
 	t.Run("leader is able to publish to a topic and "+
@@ -516,4 +467,68 @@ func TestPubSub(t *testing.T) {
 		}()
 		publishAndReceive(t, instance1, instance2, m)
 	})
+}
+
+func makeLeaderFollowerPair(t *testing.T, nfollowers int) (*Service, []*Service) {
+	return makeLeaderFollowerPairLockFileListen(t, nfollowers, "")
+}
+
+func makeLeaderFollowerPairLockFileListen(
+	t *testing.T, nfollowers int,
+	lockFileListen string,
+) (*Service, []*Service) {
+	lockFile := makeTempLockFile(t)
+	cfg := testConfig()
+	cfg.Marshaler = doctoml.Marshaler()
+	svc := document.NewInMemoryServiceWithMarshaler(cfg.Marshaler)
+	leader := New(svc, lockFile, cfg)
+	// ensure leader is available
+	var temp testStruct
+	err := leader.Get(context.Background(), lockFile, &temp)
+	require.Equal(t, document.ErrNotFound, err)
+	var followers []*Service
+	for i := 0; i < nfollowers; i++ {
+		follower := new(Service)
+		follower.lockFileListen = lockFileListen
+		follower.Init(svc, lockFile, cfg)
+		followers = append(followers, follower)
+	}
+	return leader, followers
+}
+
+func publishAndReceive(t *testing.T, sender, receiver *Service, n int) {
+	ctx := context.Background()
+
+	var done, ready sync.WaitGroup
+	actualMsg := make([][]byte, n)
+	actualErr := make([]error, n)
+
+	done.Add(n)
+	ready.Add(n)
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			defer done.Done()
+			actualErr[i] = receiver.Subscribe(ctx, strconv.Itoa(i))
+			ready.Done()
+			if actualErr[i] != nil {
+				return
+			}
+			actualMsg[i], actualErr[i] = receiver.Receive(
+				ctx, strconv.Itoa(i))
+		}(i)
+	}
+
+	ready.Wait()
+	// unfortunately it's impossible to truly hook into the internal stream Recv
+	// and know for sure that there's an actual subscriber ready for that
+	for i := 0; i < n; i++ {
+		err := sender.Publish(ctx, strconv.Itoa(i), []byte(strconv.Itoa(i)))
+		require.NoError(t, err)
+	}
+	done.Wait()
+
+	for i := 0; i < n; i++ {
+		require.NoError(t, actualErr[i], i)
+		assert.Equal(t, strconv.Itoa(i), string(actualMsg[i]), i)
+	}
 }
