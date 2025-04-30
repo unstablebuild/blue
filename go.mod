@@ -16,6 +16,9 @@ require (
 	github.com/go-delve/delve v1.9.1
 	github.com/google/uuid v1.3.0
 	github.com/olekukonko/tablewriter v0.0.5
+	github.com/pkoukk/tiktoken-go v0.1.7
+	github.com/pkoukk/tiktoken-go-loader v0.0.1
+	github.com/sashabaranov/go-openai v1.39.0
 	github.com/sirupsen/logrus v1.6.0
 	github.com/slack-go/slack v0.13.0
 	github.com/stretchr/testify v1.8.4
@@ -47,6 +50,7 @@ require (
 	github.com/cilium/ebpf v0.7.0 // indirect
 	github.com/cloudflare/circl v1.3.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/fatih/color v1.10.0 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
