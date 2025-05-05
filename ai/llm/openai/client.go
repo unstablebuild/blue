@@ -25,6 +25,7 @@ package openai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -87,6 +88,41 @@ type Config struct {
 	Tools []Tool
 	// BaseURL for of the http service.
 	BaseURL string
+
+	// Ensure responses always follow a specific format. Clients must ensure that
+	// the selected format type is compatible with the selected model.
+	ResponseFormat *ChatCompletionResponseFormat
+}
+
+// ChatCompletionResponseFormatType is one of the many supported format types.
+// See https://platform.openai.com/docs/guides/structured-outputs.
+type ChatCompletionResponseFormatType string
+
+const (
+	// ChatCompletionResponseFormatTypeJSONObject forces output to be in json mode.
+	// This is for older models that do not support schemas yet.
+	ChatCompletionResponseFormatTypeJSONObject ChatCompletionResponseFormatType = ChatCompletionResponseFormatType(openai.ChatCompletionResponseFormatTypeJSONObject)
+	// ChatCompletionResponseFormatTypeJSONSchema is a feature that ensures
+	// the model will always generate responses that adhere to your
+	// supplied JSON Schema, so you don't need to worry about the model
+	// omitting a required key, or hallucinating an invalid enum value.
+	ChatCompletionResponseFormatTypeJSONSchema ChatCompletionResponseFormatType = ChatCompletionResponseFormatType(openai.ChatCompletionResponseFormatTypeJSONSchema)
+	// ChatCompletionResponseFormatTypeText this is the default.
+	ChatCompletionResponseFormatTypeText ChatCompletionResponseFormatType = ChatCompletionResponseFormatType(openai.ChatCompletionResponseFormatTypeText)
+)
+
+// ChatCompletionResponseFormatJSONSchema is the json schema to use when
+// ChatCompletionResponseFormatTypeJSONSchema is selected as the output format.
+type ChatCompletionResponseFormatJSONSchema struct {
+	Name        string
+	Description string
+	Schema      json.Marshaler
+	Strict      bool
+}
+
+type ChatCompletionResponseFormat struct {
+	Type       ChatCompletionResponseFormatType        `json:"type,omitempty"`
+	JSONSchema *ChatCompletionResponseFormatJSONSchema `json:"json_schema,omitempty"`
 }
 
 // NewClient returns a backedn.Service backed by openai's text completion API.
@@ -146,6 +182,7 @@ func NewClient(
 
 	return client{
 		tools:              tools,
+		responseFormat:     openAIResponseFormatFromModel(config.ResponseFormat),
 		config:             config,
 		client:             c,
 		counter:            tkm,
@@ -174,6 +211,7 @@ var (
 
 type client struct {
 	tools              []openai.Tool
+	responseFormat     *openai.ChatCompletionResponseFormat
 	config             Config
 	client             *openai.Client
 	counter            *tiktoken.Tiktoken
@@ -220,6 +258,7 @@ func (a client) CreateChatCompletion(
 		Temperature:      float32(a.config.Temperature),
 		TopP:             float32(a.config.TopP),
 		Tools:            a.tools,
+		ResponseFormat:   a.responseFormat,
 		// NOTE: openai's choices/N API is not very useful at the moment
 		// so we simply do not allow user to employ it
 		// which greatly simplifies the llm.Service interface.

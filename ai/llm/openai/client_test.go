@@ -256,6 +256,49 @@ func TestCreateChatCompletion(t *testing.T) {
 		actualFunction := last.Message.Metadata.(Metadata).ToolCalls[0].Function.Name
 		assert.Equal(t, "getCurrentWeather", actualFunction)
 	})
+
+	t.Run("uses JSON schema provided", func(t *testing.T) {
+		var trueOrFalse trueOrFalse
+		schema, err := jsonschema.GenerateSchemaForType(trueOrFalse)
+		require.NoError(t, err)
+
+		client := NewClient(token, Config{
+			ResponseFormat: &ChatCompletionResponseFormat{
+				Type: ChatCompletionResponseFormatTypeJSONSchema,
+				JSONSchema: &ChatCompletionResponseFormatJSONSchema{
+					Name:        "true-or-false",
+					Description: "A single object returning true or false",
+					Schema:      schema,
+					Strict:      true,
+				},
+			},
+			Model: O4Mini,
+		}, AvailableModels())
+		ctx := context.Background()
+		req := llm.ChatCompletionRequest{Messages: []llm.ChatCompletionMessage{
+			{Role: llm.RoleUser, Content: "Is 2 greater than 1?"},
+		}}
+		it, err := client.CreateChatCompletion(ctx, req)
+		require.NoError(t, err)
+
+		var finishReason llm.FinishReason
+		var builder strings.Builder
+		for i := 0; ; i++ {
+			resp, ok := it.Next(ctx)
+			if !ok {
+				break
+			}
+			assert.NotZero(t, resp.ID)
+			assert.WithinDuration(t, time.Now(), resp.Created, 1*time.Minute)
+			assert.Equal(t, llm.RoleAssistant, resp.Message.Role)
+			builder.WriteString(resp.Message.Content)
+			finishReason = resp.FinishReason
+		}
+
+		require.NoError(t, it.Err())
+		assert.Contains(t, builder.String(), `{"is":true}`)
+		assert.Equal(t, llm.FinishReasonStop, finishReason)
+	})
 }
 
 func TestContextWindows(t *testing.T) {
@@ -320,4 +363,8 @@ func loadTestImage(t *testing.T) image.Image {
 	img, err := png.Decode(f)
 	require.NoError(t, err)
 	return img
+}
+
+type trueOrFalse struct {
+	Is bool `json:"is"`
 }
