@@ -177,3 +177,33 @@ func modelToolCallsFromOpenAI(tools []openai.ToolCall) (ret []ToolCall) {
 	}
 	return
 }
+
+func openAIResponseFormatFromModel(format *ChatCompletionResponseFormat) (
+	ret *openai.ChatCompletionResponseFormat,
+) {
+	if format == nil {
+		return
+	}
+
+	ret = new(openai.ChatCompletionResponseFormat)
+	switch format.Type {
+	case ChatCompletionResponseFormatTypeJSONObject:
+		ret.Type = openai.ChatCompletionResponseFormatTypeJSONObject
+	case ChatCompletionResponseFormatTypeJSONSchema:
+		ret.Type = openai.ChatCompletionResponseFormatTypeJSONSchema
+	case ChatCompletionResponseFormatTypeText:
+		ret.Type = openai.ChatCompletionResponseFormatTypeText
+	}
+
+	if format.JSONSchema == nil {
+		return
+	}
+
+	ret.JSONSchema = new(openai.ChatCompletionResponseFormatJSONSchema)
+	ret.JSONSchema.Name = format.JSONSchema.Name
+	ret.JSONSchema.Description = format.JSONSchema.Description
+	ret.JSONSchema.Schema = format.JSONSchema.Schema
+	ret.JSONSchema.Strict = format.JSONSchema.Strict
+
+	return
+}
