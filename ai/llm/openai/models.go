@@ -21,27 +21,76 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-
 package openai
 
 import "github.com/sashabaranov/go-openai"
 
 const (
-	// GPT3Dot5Turbo is openai's preferred gpt-3.5-turbo model.
+	// GPT3Dot5Turbo is a faster, more lightweight predecessor to GPT-4,
+	// suited for everyday tasks with lower resource demands and lower
+	// cost.
 	GPT3Dot5Turbo = openai.GPT3Dot5Turbo1106
-	// GPT4 is openai's gpt-4 model.
+
+	// GPT4 is the original GPT-4 model known for its high reasoning abilities,
+	// commonly used for professional and academic applications.
 	GPT4 = openai.GPT4
 
-	// GPT4Turbo is openai's gpt-4 turbo preview model.
-	GPT4Turbo = openai.GPT4TurboPreview
+	// GPT4Turbo is a faster and more cost-efficient variant of GPT-4
+	// with high accuracy and long context support (up to 128k tokens),
+	// optimized for performance.
+	GPT4Turbo = openai.GPT4Turbo
+
+	// O1 is the first in a new series of AI models designed
+	// to "think before responding," employing internal chain-of-thought
+	// reasoning to tackle complex tasks in science, mathematics, and programming.
+	O1 = openai.O1
+
+	// O1Mini is a cost-effective reasoning model optimized for STEM tasks,
+	// particularly math and coding. Achieves performance comparable to the full o1
+	// model on benchmarks like AIME and Codeforces, while being approximately
+	// 80% more cost-efficient. Ideal for applications requiring reasoning without
+	// extensive general world knowledge.​
+	O1Mini = openai.O1Mini
+
+	// O3 is the successor to O1, offering enhanced reasoning abilities and performance.
+	O3 = openai.O3
+
+	// O3Mini is an enhanced reasoning model offering faster and more
+	// accurate responses in STEM domains compared to o1-mini. Demonstrates improved
+	// accuracy and speed over o1-mini, with the "high" reasoning mode achieving
+	// notable benchmarks in tasks like AIME and GPQA Diamond.
+	O3Mini = openai.O3Mini
+
+	// O4Mini excels in mathematics, coding, and visual tasks; surpasses its
+	// predecessor, o3-mini, in both STEM and non-STEM domains like data science.
+	// Seamlessly utilizes ChatGPT tools such as web browsing, Python execution,
+	// image analysis, and file interpretation, enabling autonomous multi-step reasoning.
+	// Capable of interpreting and reasoning with images, including sketches
+	// and diagrams, by integrating them into its thought process.
+	// Offers a significant reduction in operational costs compared to larger models,
+	// making it suitable for high-throughput applications.
+	// Supports up to 200,000 tokens, facilitating extended interactions and
+	// complex problem-solving.​
+	O4Mini = openai.O4Mini
+
+	// GPT4o is OpenAI's latest flagship model offering improved speed,
+	// lower cost, and native multimodal capabilities (text, vision, audio)
+	// in one unified model.
+	GPT4o = openai.GPT4o
 )
 
 // AvailableModels returns a set with the available models and their
-// corresponding maximum context windows.
+// corresponding maximum context windows in tokens.
 func AvailableModels() (ret map[string]int) {
 	return map[string]int{
+		GPT3Dot5Turbo: 16000,
 		GPT4:          8192,
-		GPT3Dot5Turbo: 16385,
-		GPT4Turbo:     8192,
+		GPT4Turbo:     128000,
+		O1:            32768,
+		O1Mini:        32768,
+		O3:            65536,
+		O3Mini:        65536,
+		O4Mini:        200000,
+		GPT4o:         128000,
 	}
 }
