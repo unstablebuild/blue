@@ -21,12 +21,15 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-
 package llm
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
+	"image"
+	"image/png"
 	"time"
 
 	"github.com/unstablebuild/blue/iterator"
@@ -77,12 +80,55 @@ type ChatCompletionRequest struct {
 	Messages []ChatCompletionMessage
 }
 
+// ChatMessagePartType is a type of ChatMessagePart.
+type ChatMessagePartType uint8
+
+const (
+	// ChatMessagePartTypeText is a text ChatMessagePart.
+	ChatMessagePartTypeText ChatMessagePartType = iota
+	// ChatMessagePartTypeImageURL is an image URL ChatMessagePart.
+	ChatMessagePartTypeImageURL
+)
+
+// ChatMessagePart represents either or both textual and image message,
+// in the context of a ChatCompletionMessage.
+type ChatMessagePart struct {
+	Type     ChatMessagePartType
+	Text     string
+	ImageURL string
+}
+
+// NewChatMessagePartFromImageURL returns a ChatMessagePart from an image URL.
+func NewChatMessagePartFromImageURL(url string) ChatMessagePart {
+	return ChatMessagePart{
+		Type:     ChatMessagePartTypeImageURL,
+		ImageURL: url,
+	}
+}
+
+// NewChatMessagePartFromImageURL converts an image.Image, into a stream-ready
+// ChatMessagePart.
+func NewChatMessagePartFromImage(img image.Image) (ChatMessagePart, error) {
+	var b bytes.Buffer
+	b.WriteString("data:image/png;base64,")
+	writer := base64.NewEncoder(base64.StdEncoding, &b)
+	err := png.Encode(writer, img)
+	if err != nil {
+		return ChatMessagePart{}, fmt.Errorf("png encode: %w", err)
+	}
+	return NewChatMessagePartFromImageURL(b.String()), nil
+}
+
 // ChatCompletionMessage is a message in a chat with an assistant llm.
 type ChatCompletionMessage struct {
 	// The role of the author of this message.
 	Role Role
 	// The contents of the message.
 	Content string
+	// OtherContent overrides Content to provide the ability
+	// to add non-textual content to the chat context.
+	OtherContent []ChatMessagePart
+
 	// Metadata contains service-specific data.
 	// Check the documentation of a service implementation
 	// to know what type this Metadata will be.

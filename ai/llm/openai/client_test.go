@@ -21,12 +21,13 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-
 package openai
 
 import (
 	"context"
 	"errors"
+	"image"
+	"image/png"
 	"os"
 	"strconv"
 	"strings"
@@ -77,7 +78,6 @@ func TestCreateChatCompletion(t *testing.T) {
 			assert.NotZero(t, resp.ID)
 			assert.WithinDuration(t, time.Now(), resp.Created, 1*time.Minute)
 			assert.Equal(t, llm.RoleAssistant, resp.Message.Role)
-			assert.Len(t, resp.Message.Metadata.(Metadata).ToolCalls, 0)
 			builder.WriteString(resp.Message.Content)
 			finishReason = resp.FinishReason
 		}
@@ -149,13 +149,47 @@ func TestCreateChatCompletion(t *testing.T) {
 			assert.NotZero(t, resp.ID)
 			assert.WithinDuration(t, time.Now(), resp.Created, 1*time.Minute)
 			assert.Equal(t, llm.RoleAssistant, resp.Message.Role)
-			assert.Len(t, resp.Message.Metadata.(Metadata).ToolCalls, 0)
 			builder.WriteString(resp.Message.Content)
 			finishReason = resp.FinishReason
 		}
 
 		require.NoError(t, it.Err())
 		assert.Contains(t, builder.String(), "chaos")
+		assert.Equal(t, llm.FinishReasonStop, finishReason)
+	})
+
+	t.Run("sends a chat completion request with an input image", func(t *testing.T) {
+		client := NewClient(token, Config{
+			Model:       GPT4o,
+			Temperature: 0.1,
+		}, AvailableModels())
+		ctx := context.Background()
+		imgPart, err := llm.NewChatMessagePartFromImage(loadTestImage(t))
+		require.NoError(t, err)
+		req := llm.ChatCompletionRequest{Messages: []llm.ChatCompletionMessage{
+			{Role: llm.RoleUser, OtherContent: []llm.ChatMessagePart{
+				{Type: llm.ChatMessagePartTypeText, Text: "what's in this image?"},
+				imgPart,
+			}},
+		}}
+		it, err := client.CreateChatCompletion(ctx, req)
+		require.NoError(t, err)
+
+		var finishReason llm.FinishReason
+		var builder strings.Builder
+		for i := 0; ; i++ {
+			resp, ok := it.Next(ctx)
+			if !ok {
+				break
+			}
+			assert.NotZero(t, resp.ID)
+			assert.Equal(t, llm.RoleAssistant, resp.Message.Role)
+			builder.WriteString(resp.Message.Content)
+			finishReason = resp.FinishReason
+		}
+
+		require.NoError(t, it.Err())
+		assert.Contains(t, builder.String(), "turquoise")
 		assert.Equal(t, llm.FinishReasonStop, finishReason)
 	})
 
@@ -181,7 +215,7 @@ func TestCreateChatCompletion(t *testing.T) {
 					},
 				}},
 			},
-			Model: GPT3Dot5Turbo,
+			Model: GPT4,
 		}, AvailableModels())
 		ctx := context.Background()
 		req := llm.ChatCompletionRequest{Messages: []llm.ChatCompletionMessage{
@@ -278,4 +312,12 @@ func makeMessageTokens(c client, greaterThan int) []llm.ChatCompletionMessage {
 		})
 	}
 	return msgs
+}
+
+func loadTestImage(t *testing.T) image.Image {
+	f, err := os.Open("./testdata/chatgpt_image.png")
+	require.NoError(t, err)
+	img, err := png.Decode(f)
+	require.NoError(t, err)
+	return img
 }

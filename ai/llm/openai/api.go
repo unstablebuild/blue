@@ -21,7 +21,6 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-
 package openai
 
 import (
@@ -80,6 +79,34 @@ type FunctionCall struct {
 	Arguments string
 }
 
+func openAIMultiContentFromModel(
+	msg []llm.ChatMessagePart,
+) (ret []openai.ChatMessagePart) {
+	if len(msg) == 0 {
+		return
+	}
+	ret = make([]openai.ChatMessagePart, len(msg))
+	for i, part := range msg {
+		openaiPart := openai.ChatMessagePart{
+			Text: part.Text,
+		}
+		switch part.Type {
+		case llm.ChatMessagePartTypeImageURL:
+			openaiPart.Type = openai.ChatMessagePartTypeImageURL
+		default: // case ChatMessagePartTypeText:
+			openaiPart.Type = openai.ChatMessagePartTypeText
+		}
+		if part.ImageURL != "" {
+			openaiPart.ImageURL = &openai.ChatMessageImageURL{
+				URL:    part.ImageURL,
+				Detail: openai.ImageURLDetailAuto,
+			}
+		}
+		ret[i] = openaiPart
+	}
+	return
+}
+
 func openAIMessageFromModel(
 	msg llm.ChatCompletionMessage,
 ) (ret openai.ChatCompletionMessage, err error) {
@@ -104,10 +131,11 @@ func openAIMessageFromModel(
 		return
 	}
 	ret = openai.ChatCompletionMessage{
-		Role:      role,
-		Content:   msg.Content,
-		ToolCalls: toolCalls,
-		Name:      msg.Name,
+		Role:         role,
+		Content:      msg.Content,
+		MultiContent: openAIMultiContentFromModel(msg.OtherContent),
+		ToolCalls:    toolCalls,
+		Name:         msg.Name,
 	}
 	return
 }
