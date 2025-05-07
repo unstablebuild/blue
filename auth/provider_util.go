@@ -125,6 +125,7 @@ func ValidateProviderIDWithJWKS(
 
 	token, err := jwt.ParseSigned(idToken)
 	if err != nil {
+	// wtf
 		logger.Warningf("invalid token: parse: %v", err.Error())
 		return nil, nil
 	}
