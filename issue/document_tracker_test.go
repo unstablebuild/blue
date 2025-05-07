@@ -25,6 +25,7 @@ package issue
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strconv"
 	"testing"
@@ -180,4 +181,31 @@ func TestDocumentTracker(t *testing.T) {
 			assert.NotZero(t, id)
 		}
 	})
+
+	t.Run("handles fetch last report errors by bubbling them up", func(t *testing.T) {
+		svc := newErrorService()
+		m := NewDocumentTracker(svc)
+		report := Report{
+			Author:  "test2",
+			Subject: "bummers",
+			Package: "nonexistentpkg",
+		}
+		_, err := m.CreateReport(context.Background(), report)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "kaboom")
+	})
+}
+
+type errorService struct {
+	document.Service
+}
+
+func newErrorService() document.Service {
+	return &errorService{Service: document.NewInMemoryService()}
+}
+
+func (n errorService) List(ctx context.Context, filters []document.Filter) (
+	document.Iterator, error,
+) {
+	return nil, errors.New("kaboom")
 }

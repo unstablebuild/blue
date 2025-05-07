@@ -110,7 +110,9 @@ func (d *documentTracker) fetchLastIssueNumber(ctx context.Context, pkg string) 
 	// It only happens once the service is started.
 	it, err := d.ListPackageReports(ctx, pkg, nil)
 	defer func() {
-		_ = it.Close()
+		if err == nil {
+			_ = it.Close()
+		}
 	}()
 	if err != nil {
 		return 0, fmt.Errorf("fetch last issue number: %v", err)
