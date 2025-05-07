@@ -319,6 +319,8 @@ func fetchProviderToken[T any](
 		return
 	}
 
+	log.Infof("REMOVE THIS: %q, %+v", respBody, respBody)
+
 	ok = true
 	return
 }
@@ -336,6 +338,19 @@ func validateProviderResponse[T any](
 			response{Message: err.Error()})
 		return nil, false
 	}
+	// FIXME claims is nil when login it after a very long time
+	/* 2025-05-07 11:54:05.512	TRACE	[ox-builtin]	auth.CachedTokenSource	traceID: fc549124-9081-4ec6-bd87-580ece85d6c8, cache-valid: false, callType: Token, ptr: 0x140001560a0, step: attempt
+2025-05-07 11:54:05.514	TRACE	[ox-builtin]	auth.CachedTokenSource	cached: 0x0, ptr: 0x140001560a0, traceID: fc549124-9081-4ec6-bd87-580ece85d6c8, cache-valid: false, msg: sourcing from storage: <nil>
+2025-05-07 11:54:05.514	TRACE	[ox-builtin]	auth.CachedTokenSource	ptr: 0x140001560a0, traceID: fc549124-9081-4ec6-bd87-580ece85d6c8, cache-valid: false, cached: 0x0, msg: fetching a new one: using refresh_token true
+2025-05-07 11:54:05.667	INFO	[ox-builtin]	-	traceID: fc549124-9081-4ec6-bd87-580ece85d6c8, msg: acquiring new oauth2 token source against API https://api.unstable.build/o/oauth2/token. token=true, valid=false
+2025-05-07 11:54:06.267	ERROR	[ox-builtin]	auth.CachedTokenSource	error: acquire token: oauth2: cannot fetch token: 424 Failed Dependency\nResponse: {\"Message\":\"invalid token\",\"Success\":false,\"Data\":\"\"}, duration_us: 755247.000, traceID: fc549124-9081-4ec6-bd87-580ece85d6c8, cache-valid: false, ptr: 0x140001560a0, step: failure, callType: Token
+2025-05-07 11:54:06.505	TRACE	[ox-builtin]	auth.CachedTokenSource	cache-valid: false, callType: Token, ptr: 0x14000156050, step: attempt, traceID: fc5cc01f-80f8-470c-b9c2-5844a6416748
+2025-05-07 11:54:06.507	TRACE	[ox-builtin]	auth.CachedTokenSource	ptr: 0x14000156050, traceID: fc5cc01f-80f8-470c-b9c2-5844a6416748, cache-valid: false, cached: 0x0, msg: sourcing from storage: <nil>
+2025-05-07 11:54:06.507	TRACE	[ox-builtin]	auth.CachedTokenSource	ptr: 0x14000156050, traceID: fc5cc01f-80f8-470c-b9c2-5844a6416748, cache-valid: false, cached: 0x0, msg: fetching a new one: using refresh_token true
+2025-05-07 11:54:06.656	INFO	[ox-builtin]	-	traceID: fc5cc01f-80f8-470c-b9c2-5844a6416748, msg: acquiring new oauth2 token source against API https://api.unstable.build/o/oauth2/token. token=true, valid=false
+2025-05-07 11:54:07.116	ERROR	[ox-builtin]	auth.CachedTokenSource	traceID: fc5cc01f-80f8-470c-b9c2-5844a6416748, error: acquire token: oauth2: cannot fetch token: 424 Failed Dependency\nResponse: {\"Message\":\"invalid token\",\"Success\":false,\"Data\":\"\"}, callType: Token, step: failure, duration_us: 610120.000, cache-valid: false, ptr: 0x14000156050
+2025-05-07 11:54:07.116	WARNING	[ox-builtin]	-	msg: login: acquire token: oauth2: cannot fetch token: 424 Failed Dependency\nResponse: {\"Message\":\"invalid token\",\"Success\":false,\"Data\":\"\"}
+*/
 	if claims == nil {
 		writeResponse(ctx, callType, traceID, attemptAt, w, in, http.StatusFailedDependency,
 			response{Message: "invalid token"})
