@@ -168,6 +168,10 @@ func TestTokenHandler(t *testing.T) {
 			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{validClientID},
 				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
 			badRedeemHandler(validClientID), goodCertsHandler(&validJWKS), http.StatusFailedDependency},
+		{"provider returned other json response is 400",
+			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{validClientID},
+				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
+			goodRedeemHandlerBadResponse(validClientID), goodCertsHandler(&validJWKS), http.StatusBadRequest},
 	}
 
 	for _, test := range suite {
@@ -273,6 +277,22 @@ func badRedeemHandler(clientID string) http.Handler {
 	otherKey, _ := rsa.GenerateKey(rand.Reader, 4096)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeTestRedeemResponse(w, clientID, providerExpiresIn, otherKey)
+	})
+}
+
+func goodRedeemHandlerBadResponse(clientID string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var out redeemResponse[User]
+		out.TokenType = "somethingWeird"
+
+		data, err := json.Marshal(out)
+		if err != nil {
+			logrus.Errorf("signer sign: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(data)
 	})
 }
 
