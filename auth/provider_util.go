@@ -97,28 +97,34 @@ func ValidateProviderIDWithCertsURL(
 		return false, nil
 	})
 	if err != nil {
+		logging.LogResultInfo(err, attemptAt, traceID, callType, fields...)
 		return nil, err
 	}
 
 	var keys jose.JSONWebKeySet
 	if err := json.Unmarshal(data, &keys); err != nil {
-		return nil, fmt.Errorf("unmarshal certs url body: %v", err)
+		err = fmt.Errorf("unmarshal certs url body: %v", err)
+		logging.LogResultInfo(err, attemptAt, traceID, callType, fields...)
+		return nil, err
 	}
 
 	if len(keys.Keys) == 0 {
-		return nil, errors.New("certs endpoint returned no keys")
+		err = errors.New("certs endpoint returned no keys")
+		logging.LogResultInfo(err, attemptAt, traceID, callType, fields...)
+		return nil, err
 	}
 
-	claims, err := ValidateProviderIDWithJWKS(ctx, &keys, clientID, idToken)
+	claims := ValidateProviderIDWithJWKS(ctx, &keys, clientID, idToken)
 	logging.LogResultInfo(err, attemptAt, traceID, callType, fields...)
-	return claims, err
+	return claims, nil
 }
 
 // ValidateProviderIDWithJWKS verifies that the given id token is valid,
-// with the given JWKS.
+// with the given JWKS. We do not return the error details
+// to avoid bubbling it up to the user by mistake.
 func ValidateProviderIDWithJWKS(
 	ctx context.Context, jwks *jose.JSONWebKeySet, clientID, idToken string,
-) (*ProviderClaims, error) {
+) *ProviderClaims {
 	// logs "invalid token" requests with traceID for debugging
 	traceID, _ := trace.FromContextOrNew(ctx)
 	logger := log.WithFields(log.Fields{logging.KeyTraceID: traceID})
@@ -126,7 +132,7 @@ func ValidateProviderIDWithJWKS(
 	token, err := jwt.ParseSigned(idToken)
 	if err != nil {
 		logger.Warningf("invalid token: parse: %v", err.Error())
-		return nil, nil
+		return nil
 	}
 
 	// https://auth0.com/blog/navigating-rs256-and-jwks/
@@ -141,24 +147,24 @@ func ValidateProviderIDWithJWKS(
 
 	if signingKey == nil {
 		logger.Warningf("could not find suitable key for id token: %v", token.Headers)
-		return nil, nil
+		return nil
 	}
 
 	var claims ProviderClaims
 	if err := token.Claims(signingKey, &claims); err != nil {
 		logger.Warningf("invalid token: failed to verify claims: %v", err)
-		return nil, nil
+		return nil
 	}
 
 	if err := claims.Validate(jwt.Expected{Audience: jwt.Audience{clientID}}); err != nil {
 		logger.Warningf("invalid token: invalid client ID claim: %v", err)
-		return nil, nil
+		return nil
 	}
 
 	if time.Now().After(claims.Expiry.Time()) {
 		logger.Warningf("invalid token: token expired on %s", claims.Expiry.Time().String())
-		return nil, nil
+		return nil
 	}
 
-	return &claims, nil
+	return &claims
 }

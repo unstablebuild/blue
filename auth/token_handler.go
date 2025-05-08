@@ -290,6 +290,7 @@ func fetchProviderToken[T any](
 	}
 
 	var respBody []byte
+	var resStatus int
 	err = retry.Retry(ctx, httpOutboundRetryStrategy, func(ctx context.Context) (bool, error) {
 		res, err := http.DefaultClient.Do(out)
 		if err != nil {
@@ -305,6 +306,7 @@ func fetchProviderToken[T any](
 		if err != nil {
 			return true, fmt.Errorf("read response body: %v", err)
 		}
+		resStatus = res.StatusCode
 		return false, nil
 	})
 	if err != nil {
@@ -319,6 +321,16 @@ func fetchProviderToken[T any](
 		return
 	}
 
+	if ret.IDToken == "" {
+		if resStatus < 300 {
+			resStatus = http.StatusBadRequest
+		}
+		err := errors.New("upstream provider returned no id token")
+		log.Warnf("%v: upstream response: %q", err, string(respBody))
+		writeResponse(ctx, callType, traceID, attemptAt, w, in, resStatus,
+			response{Message: err.Error()})
+		return
+	}
 	ok = true
 	return
 }
