@@ -212,7 +212,7 @@ func writeResponse(
 	}
 	data, err := json.Marshal(r)
 	if err != nil {
-		logging.LogResultInfo(err, attemptAt, traceID, redirectCallType, fields...)
+		logging.LogResultInfo(err, attemptAt, traceID, callType, fields...)
 		return
 	}
 
