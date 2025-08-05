@@ -50,7 +50,7 @@ func (s secretManagerKeys) Sign(ctx context.Context) (auth.Key, error) {
 		return auth.Key{}, err
 	}
 
-	return auth.SymmetricKey(sv.Payload), nil
+	return auth.SymmetricKey(sv.Payload)
 }
 
 func (s secretManagerKeys) Verify(ctx context.Context) ([]auth.Key, error) {
@@ -60,8 +60,13 @@ func (s secretManagerKeys) Verify(ctx context.Context) ([]auth.Key, error) {
 	}
 
 	var ret []auth.Key
+
 	for _, sv := range svs {
-		ret = append(ret, auth.SymmetricKey(sv.Payload))
+		key, err := auth.SymmetricKey(sv.Payload)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, key)
 	}
 	return ret, nil
 }

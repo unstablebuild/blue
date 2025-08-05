@@ -31,7 +31,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"gopkg.in/go-jose/go-jose.v2"
+	"github.com/go-jose/go-jose/v4"
 )
 
 // FetchPublicJWKS returns a set of Keys that are fetched over http

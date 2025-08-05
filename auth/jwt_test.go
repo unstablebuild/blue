@@ -59,7 +59,8 @@ func TestSignVerify(t *testing.T) {
 	rsaPriv := loadKey(t, "./testdata/rsa.key")
 	jwkPriv := loadKey(t, "./testdata/jwk-priv.json")
 	jwkPub := loadKey(t, "./testdata/jwk-pub2.json.pub")
-	strKey := SymmetricKey([]byte("1234"))
+	strKey, err := SymmetricKey([]byte(symmetricKey))
+	require.NoError(t, err)
 
 	suite := []struct {
 		description string

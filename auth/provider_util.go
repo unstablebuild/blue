@@ -32,12 +32,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/logging"
 	"github.com/unstablebuild/blue/logging/trace"
 	"github.com/unstablebuild/blue/retry"
-	"gopkg.in/go-jose/go-jose.v2"
-	"gopkg.in/go-jose/go-jose.v2/jwt"
 )
 
 var (
@@ -129,7 +129,7 @@ func ValidateProviderIDWithJWKS(
 	traceID, _ := trace.FromContextOrNew(ctx)
 	logger := log.WithFields(log.Fields{logging.KeyTraceID: traceID})
 
-	token, err := jwt.ParseSigned(idToken)
+	token, err := jwt.ParseSigned(idToken, validAlgorithms)
 	if err != nil {
 		logger.Warningf("invalid token: parse: %v", err.Error())
 		return nil
@@ -156,7 +156,7 @@ func ValidateProviderIDWithJWKS(
 		return nil
 	}
 
-	if err := claims.Validate(jwt.Expected{Audience: jwt.Audience{clientID}}); err != nil {
+	if err := claims.Validate(jwt.Expected{AnyAudience: jwt.Audience{clientID}}); err != nil {
 		logger.Warningf("invalid token: invalid client ID claim: %v", err)
 		return nil
 	}

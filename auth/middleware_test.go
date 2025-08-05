@@ -30,13 +30,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/go-jose/go-jose.v2/jwt"
 )
 
 func TestAuthMiddleware(t *testing.T) {
-	testSignKey := SymmetricKey([]byte("1234"))
+	testSignKey, err := SymmetricKey([]byte(symmetricKey))
+	require.NoError(t, err)
 	testSignKeys := StaticSymmetricKeys(testSignKey)
 	denyAll := FuncAuthorizer(func(context.Context, UserClaims[User], string) error {
 		return ErrForbidden
