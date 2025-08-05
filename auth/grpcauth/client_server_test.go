@@ -46,9 +46,8 @@ import (
 type user struct{}
 
 func TestClientServerUnary(t *testing.T) {
-	testSignKey, err := auth.SymmetricKey([]byte("12345678901234567890123456789012"))
+	testSignKeys, err := auth.GenerateKeys()
 	require.NoError(t, err)
-	testSignKeys := auth.StaticSymmetricKeys(testSignKey)
 	denyAll := auth.FuncAuthorizer(func(context.Context, auth.UserClaims[user], string) error {
 		return auth.ErrForbidden
 	})
