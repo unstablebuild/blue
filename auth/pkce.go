@@ -63,9 +63,9 @@ func codeChallengeS256(in string) string {
 
 func encode(msg []byte) string {
 	encoded := base64.StdEncoding.EncodeToString(msg)
-	encoded = strings.Replace(encoded, "+", "-", -1)
-	encoded = strings.Replace(encoded, "/", "_", -1)
-	encoded = strings.Replace(encoded, "=", "", -1)
+	encoded = strings.ReplaceAll(encoded, "+", "-")
+	encoded = strings.ReplaceAll(encoded, "/", "_")
+	encoded = strings.ReplaceAll(encoded, "=", "")
 	return encoded
 }
 

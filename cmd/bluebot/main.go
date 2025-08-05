@@ -43,9 +43,11 @@ const (
 )
 
 var (
-	// compile-time variables
+	// Tag is a compile-time variable.
 	Tag     = "development"
+	// Commit is a compile-time variable.
 	Commit  = "HEAD"
+	// Version is a compile-time variable.
 	Version string
 
 	gcCredsFile = flag.String("c", "",

@@ -57,22 +57,22 @@ func (k Key) PrimaryIdentity() *openpgp.Identity {
 func decodeSignature(in io.Reader) (*packet.Signature, error) {
 	block, err := armor.Decode(in)
 	if err != nil {
-		return nil, fmt.Errorf("Error decoding OpenPGP Armor: %s", err)
+		return nil, fmt.Errorf("decode OpenPGP Armor: %s", err)
 	}
 
 	if block.Type != openpgp.SignatureType {
-		return nil, errors.New("Error decoding signature: Invalid signature file")
+		return nil, errors.New("invalid signature file")
 	}
 
 	reader := packet.NewReader(block.Body)
 	pkt, err := reader.Next()
 	if err != nil {
-		return nil, fmt.Errorf("Error reading signature: %s", err)
+		return nil, fmt.Errorf("read signature: %s", err)
 	}
 
 	sig, ok := pkt.(*packet.Signature)
 	if !ok {
-		return nil, errors.New("Error parsing signature: Invalid signature")
+		return nil, errors.New("interpret signature: invalid type")
 	}
 	return sig, nil
 }
@@ -83,25 +83,25 @@ func decodeSignature(in io.Reader) (*packet.Signature, error) {
 func FindKeysInArmoredKeyRing(keyringFile, ID, passphrase string) (e []Key, err error) {
 	keyringFileBuffer, err := os.Open(keyringFile)
 	if err != nil {
-		err = fmt.Errorf("Error opening armored keyring: %s", err)
+		err = fmt.Errorf("open armored keyring: %s", err)
 		return nil, err
 	}
 	defer keyringFileBuffer.Close()
 	entityList, err := openpgp.ReadArmoredKeyRing(keyringFileBuffer)
 	if err != nil {
-		err = fmt.Errorf("Error reading armored keyring: %s", err)
+		err = fmt.Errorf("read armored keyring: %s", err)
 		return
 	}
 
 	uintID, err := strconv.ParseUint(fmt.Sprintf("0x%s", ID), 0, 64)
 	if err != nil {
-		err = fmt.Errorf("Error parsing key ID: %s", err)
+		err = fmt.Errorf("parse key ID: %s", err)
 		return
 	}
 
 	keys := entityList.KeysById(uintID)
 	if len(keys) == 0 {
-		err = fmt.Errorf("Error key with ID %s not found in keyring %s", ID, keyringFile)
+		err = fmt.Errorf("key with ID %s not found in keyring %s", ID, keyringFile)
 		return
 	}
 
@@ -115,7 +115,7 @@ func FindKeysInArmoredKeyRing(keyringFile, ID, passphrase string) (e []Key, err 
 		if k.PrivateKey.Encrypted && passphrase != "" {
 			err = k.PrivateKey.Decrypt([]byte(passphrase))
 			if err != nil {
-				err = fmt.Errorf("Error decrypting key with ID '%s' with given passphrase: %s", ID, err)
+				err = fmt.Errorf("decrypt key with ID '%s' with given passphrase: %s", ID, err)
 				return
 			}
 		}
@@ -130,7 +130,7 @@ func FindKeysInArmoredKeyRing(keyringFile, ID, passphrase string) (e []Key, err 
 func ArmoredSign(in io.Reader, out io.Writer, key Key) error {
 	err := openpgp.ArmoredDetachSign(out, (openpgp.Key)(key).Entity, in, nil)
 	if err != nil {
-		return fmt.Errorf("Error signing input: %s", err)
+		return fmt.Errorf("sign input: %s", err)
 	}
 
 	return nil
@@ -149,7 +149,7 @@ func Verify(in, sig io.Reader, key Key) error {
 
 	err = key.Entity.PrimaryKey.VerifySignature(h, signature)
 	if err != nil {
-		return fmt.Errorf("Error signing input: %s", err)
+		return fmt.Errorf("sign input: %s", err)
 	}
 
 	return nil

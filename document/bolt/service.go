@@ -68,7 +68,7 @@ func New(dbPath string, collectionID string) (*Store, error) {
 		db, err := bolt.Open(dbPath, 0600, &options)
 		mu.Lock()
 		if err != nil {
-			err = fmt.Errorf("Could not open DB at path %s: %v", dbPath, err)
+			err = fmt.Errorf("could not open DB at path %s: %v", dbPath, err)
 			return nil, err
 		}
 		dbs[dbPath] = db

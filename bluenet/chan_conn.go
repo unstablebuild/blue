@@ -257,7 +257,7 @@ func (c *chanConn) SetReadDeadline(t time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	close(c.newReadDeadline)
-	if t == (time.Time{}) {
+	if t.Equal(time.Time{}) {
 		t = time.Now().Add(math.MaxInt64)
 	}
 	c.readDeadline = t
@@ -269,7 +269,7 @@ func (c *chanConn) SetWriteDeadline(t time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	close(c.newWriteDeadline)
-	if t == (time.Time{}) {
+	if t.Equal(time.Time{}) {
 		t = time.Now().Add(math.MaxInt64)
 	}
 	c.writeDeadline = t

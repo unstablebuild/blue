@@ -258,7 +258,7 @@ func (d *documentTracker) CloseReport(ctx context.Context, id string) error {
 	err := d.db.Update(ctx, id, updates)
 	if err != nil {
 		if err == document.ErrNotFound {
-			err = fmt.Errorf("Issue %q does not exist", id)
+			err = fmt.Errorf("issue %q does not exist", id)
 		}
 		return err
 	}
@@ -357,9 +357,9 @@ func makeReportFilters(
 		if len(ks) == 1 && ks[0] == "Closed" {
 			switch v {
 			case "True", "true", "TRUE":
-				filter.Field.Value = true
+				filter.Value = true
 			case "False", "false", "FALSE":
-				filter.Field.Value = false
+				filter.Value = false
 			}
 		}
 		ret = append(ret, filter)

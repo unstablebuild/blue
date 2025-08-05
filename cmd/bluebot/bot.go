@@ -62,11 +62,11 @@ func newBot(
 	channelID, botToken, appToken string,
 ) (*bot, error) {
 	if !strings.HasPrefix(appToken, "xapp-") {
-		return nil, errors.New("appToken must have the prefix \"xapp-\".")
+		return nil, errors.New("appToken must have the prefix \"xapp-\"")
 	}
 
 	if !strings.HasPrefix(botToken, "xoxb-") {
-		return nil, errors.New("botToken must have the prefix \"xoxb-\".")
+		return nil, errors.New("botToken must have the prefix \"xoxb-\"")
 	}
 
 	name, err := os.Hostname()

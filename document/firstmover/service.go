@@ -38,7 +38,6 @@ import (
 	"time"
 
 	"github.com/ernestrc/go-multierror"
-	multierr "github.com/ernestrc/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/document/docrpc"
@@ -324,11 +323,11 @@ func (s *Service) Close() (ret error) {
 	}
 
 	if err := s.svc.Close(); err != nil {
-		ret = multierr.Append(ret, err)
+		ret = multierror.Append(ret, err)
 	}
 
 	if err := s.pubsub.Close(); err != nil {
-		ret = multierr.Append(ret, err)
+		ret = multierror.Append(ret, err)
 	}
 	s.mu.Unlock()
 
