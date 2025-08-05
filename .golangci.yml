@@ -1,5 +1,46 @@
-run:
-  timeout: 5m
-  exclude-dirs:
-    - bin
-    - target
+version: "2"
+linters:
+  enable:
+    - revive
+  settings:
+    revive:
+      rules:
+        - name: unused-parameter
+          disabled: true
+        - name: exported
+          severity: error
+  exclusions:
+    generated: lax
+    presets:
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - errcheck
+          - funlen
+          - govet
+          - ineffassign
+          - revive
+          - staticcheck
+          - unused
+        path: (.+)_test.go
+      - path: (.+)\.go$
+        text: SA1019
+      - path: (.+)\.go$
+        text: QF1008
+      - path: (.+)\.go$
+        text: QF1001
+      - path: (.+)\.go$
+        text: S1024
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

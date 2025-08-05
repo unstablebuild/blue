@@ -126,7 +126,7 @@ func (c *licenseCli) Run(ctx context.Context, args []string) error {
 
 	if c.errorOnChanges {
 		if added != 0 || updated != 0 {
-			err = multierror.Append(err, fmt.Errorf("Would have updated %d files "+
+			err = multierror.Append(err, fmt.Errorf("would have updated %d files "+
 				"and added license header to %d files", updated, added))
 		}
 		return err

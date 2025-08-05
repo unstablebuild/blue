@@ -165,8 +165,7 @@ func testDatastoreCreate(t *testing.T, serviceFactory FnServiceFactory) {
 
 		assert.Error(t, s.Create(ctx, "my1234", 1234))
 
-		var myReaper Reaper //nolint:gosimple
-		myReaper = &bob
+		var myReaper Reaper = &bob
 		assert.Error(t, s.Create(ctx, "my1234", &myReaper))
 	})
 
@@ -248,8 +247,7 @@ func testDatastoreSet(t *testing.T, serviceFactory FnServiceFactory) {
 
 		assert.Error(t, s.Set(ctx, "my1234", 1234))
 
-		var myReaper Reaper //nolint:gosimple
-		myReaper = &bob
+		var myReaper Reaper = &bob
 		assert.Error(t, s.Set(ctx, "my1234", &myReaper))
 	})
 
@@ -949,7 +947,7 @@ func TestDocumentServicePreconditions(t *testing.T, serviceFactory FnServiceFact
 
 		n := 100
 		retryStrategy := retry.CombinedStrategy(
-			retry.LimitStrategy(uint(n+1)),
+			retry.LimitStrategy(uint(n + 1)),
 		)
 		var wg sync.WaitGroup
 		start := make(chan struct{})
