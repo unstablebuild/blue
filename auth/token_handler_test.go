@@ -36,12 +36,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/go-jose/go-jose.v2"
-	"gopkg.in/go-jose/go-jose.v2/jwt"
 )
 
 const (
@@ -54,7 +54,8 @@ func TestTokenHandler(t *testing.T) {
 	grantAll := FuncGranter(func(context.Context, *ProviderClaims) (User, error) {
 		return User{Role: "admin"}, nil
 	})
-	testSignKey := SymmetricKey([]byte("1234"))
+	testSignKey, err := SymmetricKey([]byte(symmetricKey))
+	require.NoError(t, err)
 	testSignKeys := StaticSymmetricKeys(testSignKey)
 	rsaPrivateKey, _ := rsa.GenerateKey(rand.Reader, 4096)
 	rsaPublicKey := &rsaPrivateKey.PublicKey
@@ -245,7 +246,7 @@ func writeTestRedeemResponse(
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	raw, err := jwt.Signed(sig).Claims(claims).CompactSerialize()
+	raw, err := jwt.Signed(sig).Claims(claims).Serialize()
 	if err != nil {
 		logrus.Errorf("signer sign: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)

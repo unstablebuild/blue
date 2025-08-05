@@ -27,10 +27,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/go-jose/go-jose.v2"
-	"gopkg.in/go-jose/go-jose.v2/jwt"
 )
 
 const (
@@ -71,7 +71,7 @@ func SignToken[T any](key Key, userID, email string, extraClaims T, expiry time.
 	if err != nil {
 		return "", fmt.Errorf("new jwt signer: %v", err)
 	}
-	raw, err := jwt.Signed(sig).Claims(claims).CompactSerialize()
+	raw, err := jwt.Signed(sig).Claims(claims).Serialize()
 	if err != nil {
 		return "", fmt.Errorf("sign token: %v", err)
 	}
@@ -80,7 +80,7 @@ func SignToken[T any](key Key, userID, email string, extraClaims T, expiry time.
 
 // VerifyToken verifies that the given token was signed by key.
 func VerifyToken[T any](key Key, token string) (UserClaims[T], error) {
-	tok, err := jwt.ParseSigned(token)
+	tok, err := jwt.ParseSigned(token, validAlgorithms)
 	if err != nil {
 		return UserClaims[T]{}, fmt.Errorf("parse signed: %v", err)
 	}

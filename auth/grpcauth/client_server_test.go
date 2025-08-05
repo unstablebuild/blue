@@ -32,21 +32,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/unstablebuild/blue/auth"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/unstablebuild/blue/auth"
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/examples/data"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
-	"gopkg.in/go-jose/go-jose.v2/jwt"
 )
 
 type user struct{}
 
 func TestClientServerUnary(t *testing.T) {
-	testSignKey := auth.SymmetricKey([]byte("1234"))
+	testSignKey, err := auth.SymmetricKey([]byte("12345678901234567890123456789012"))
+	require.NoError(t, err)
 	testSignKeys := auth.StaticSymmetricKeys(testSignKey)
 	denyAll := auth.FuncAuthorizer(func(context.Context, auth.UserClaims[user], string) error {
 		return auth.ErrForbidden

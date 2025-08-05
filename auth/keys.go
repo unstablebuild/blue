@@ -25,6 +25,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	//nolint:all
 	"crypto/dsa"
 	"crypto/ecdsa"
@@ -34,7 +35,7 @@ import (
 	"encoding/pem"
 	"errors"
 
-	"gopkg.in/go-jose/go-jose.v2"
+	"github.com/go-jose/go-jose/v4"
 )
 
 // Key is one of the signing key types used by go-jose.
@@ -62,8 +63,12 @@ func StaticAsymmetricKeys(priv Key, pub ...Key) Keys {
 }
 
 // SymmetricKey returns a symmetric Key with str set as the key.
-func SymmetricKey(data []byte) Key {
-	return Key{key: data, algo: jose.HS256}
+func SymmetricKey(data []byte) (Key, error) {
+	// See jose.SigningKey for more details.
+	if len(data) < 32 {
+		return Key{}, fmt.Errorf("key must at least have 32 bytes")
+	}
+	return Key{key: data, algo: jose.HS256}, nil
 }
 
 // LoadPublicKey loads a public key from PEM/DER/JWK-encoded data.
@@ -172,6 +177,20 @@ func getKeyAlgo(key interface{}) jose.SignatureAlgorithm {
 	default: // assume symmetric
 		return jose.HS256
 	}
+}
+
+var validAlgorithms = []jose.SignatureAlgorithm{
+	jose.RS256,
+	jose.RS384,
+	jose.RS512,
+	jose.ES256,
+	jose.ES384,
+	jose.ES512,
+	jose.PS256,
+	jose.PS384,
+	jose.PS512,
+	jose.EdDSA,
+	jose.HS256,
 }
 
 func certAlgo(algo x509.SignatureAlgorithm) (jose.SignatureAlgorithm, error) {

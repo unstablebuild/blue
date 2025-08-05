@@ -1,8 +1,8 @@
 module github.com/unstablebuild/blue
 
-go 1.22.0
+go 1.23.0
 
-toolchain go1.23.0
+toolchain go1.24.3
 
 require (
 	cloud.google.com/go/firestore v1.9.0
@@ -27,9 +27,9 @@ require (
 	go.uber.org/config v1.4.0
 	go.uber.org/goleak v1.2.0
 	go.uber.org/mock v0.4.0
-	golang.org/x/net v0.29.0
+	golang.org/x/net v0.40.0
 	golang.org/x/oauth2 v0.7.0
-	golang.org/x/term v0.24.0
+	golang.org/x/term v0.32.0
 	google.golang.org/api v0.114.0
 	google.golang.org/grpc v1.54.0
 	google.golang.org/grpc/examples v0.0.0-20230426190518-e853dbf004c3
@@ -52,6 +52,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/fatih/color v1.10.0 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.2 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
@@ -71,15 +72,15 @@ require (
 	go.uber.org/multierr v1.4.0 // indirect
 	go.uber.org/tools v0.0.0-20190618225709-2cfd321de3ee // indirect
 	golang.org/x/arch v0.0.0-20190927153633-4e8777c89be4 // indirect
-	golang.org/x/crypto v0.27.0 // indirect
+	golang.org/x/crypto v0.39.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20220722155223-a9213eeb770e // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
-	golang.org/x/mod v0.21.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.25.0 // indirect
-	golang.org/x/text v0.18.0 // indirect
+	golang.org/x/mod v0.25.0 // indirect
+	golang.org/x/sync v0.15.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/text v0.26.0 // indirect
 	golang.org/x/time v0.1.0 // indirect
-	golang.org/x/tools v0.25.0 // indirect
+	golang.org/x/tools v0.33.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect

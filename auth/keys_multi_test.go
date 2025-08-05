@@ -31,11 +31,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const symmetricKey = "12345678901234567890123456789012"
+
 func TestCombineKeys(t *testing.T) {
 	t.Run("with two args", func(t *testing.T) {
-		testSignKey1 := SymmetricKey([]byte("1234"))
+		testSignKey1, err := SymmetricKey([]byte(symmetricKey))
+		require.NoError(t, err)
 		testSignKeys1 := StaticSymmetricKeys(testSignKey1)
-		testSignKey2 := SymmetricKey([]byte("1235"))
+		testSignKey2, err := SymmetricKey([]byte(symmetricKey + "1"))
+		require.NoError(t, err)
 		testSignKeys2 := StaticSymmetricKeys(testSignKey2)
 		combined := CombineKeys(testSignKeys1, testSignKeys2)
 
@@ -52,7 +56,8 @@ func TestCombineKeys(t *testing.T) {
 		})
 	})
 	t.Run("with one key", func(t *testing.T) {
-		testSignKey1 := SymmetricKey([]byte("1234"))
+		testSignKey1, err := SymmetricKey([]byte(symmetricKey))
+		require.NoError(t, err)
 		testSignKeys1 := StaticSymmetricKeys(testSignKey1)
 		combined := CombineKeys(testSignKeys1)
 
