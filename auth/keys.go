@@ -26,10 +26,12 @@ package auth
 import (
 	"context"
 	"fmt"
+
 	//nolint:all
 	"crypto/dsa"
 	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
@@ -40,7 +42,7 @@ import (
 
 // Key is one of the signing key types used by go-jose.
 type Key struct {
-	key  interface{}
+	key  any
 	algo jose.SignatureAlgorithm
 }
 
@@ -48,6 +50,18 @@ type Key struct {
 type Keys interface {
 	Sign(context.Context) (Key, error)
 	Verify(context.Context) ([]Key, error)
+}
+
+// GenerateKeys generates cryptographic key pair, and packages it as a set of Keys.
+func GenerateKeys() (Keys, error) {
+	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("generate rsa key: %w", err)
+	}
+	return StaticAsymmetricKeys(
+		Key{key: privKey, algo: getKeyAlgo(privKey)},
+		Key{key: pubKey, algo: getKeyAlgo(pubKey)},
+	), nil
 }
 
 // StaticSymmetricKeys returns an implementation of Keys that returns
@@ -172,7 +186,7 @@ func getKeyAlgo(key interface{}) jose.SignatureAlgorithm {
 		*dsa.PublicKey, *dsa.PrivateKey:
 		// one of ES256, ES384, ES512:
 		return jose.ES256
-	case ed25519.PrivateKey:
+	case ed25519.PrivateKey, ed25519.PublicKey:
 		return jose.EdDSA
 	default: // assume symmetric
 		return jose.HS256

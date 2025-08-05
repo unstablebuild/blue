@@ -54,9 +54,8 @@ func TestTokenHandler(t *testing.T) {
 	grantAll := FuncGranter(func(context.Context, *ProviderClaims) (User, error) {
 		return User{Role: "admin"}, nil
 	})
-	testSignKey, err := SymmetricKey([]byte(symmetricKey))
+	testSignKeys, err := GenerateKeys()
 	require.NoError(t, err)
-	testSignKeys := StaticSymmetricKeys(testSignKey)
 	rsaPrivateKey, _ := rsa.GenerateKey(rand.Reader, 4096)
 	rsaPublicKey := &rsaPrivateKey.PublicKey
 
@@ -210,7 +209,9 @@ func TestTokenHandler(t *testing.T) {
 			err := json.Unmarshal(body, &actualOut)
 			require.NoError(t, err)
 
-			_, err = VerifyToken[User](testSignKey, actualOut.AccessToken)
+			keys, err := testSignKeys.Verify(context.Background())
+			require.NoError(t, err)
+			_, err = VerifyToken[User](keys[0], actualOut.AccessToken)
 			require.NoError(t, err)
 
 			assert.Equal(t, int(tokenExpiresIn.Seconds()), actualOut.ExpiresIn)
