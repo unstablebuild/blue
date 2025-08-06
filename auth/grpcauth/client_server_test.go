@@ -26,6 +26,7 @@ package grpcauth
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509/pkix"
 	"net"
 	"os"
 	"strings"
@@ -39,7 +40,6 @@ import (
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/examples/data"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
@@ -74,7 +74,28 @@ func TestClientServerUnary(t *testing.T) {
 	for _, test := range suite {
 		test := test
 		t.Run(test.description, func(t *testing.T) {
-			cert, err := tls.LoadX509KeyPair(data.Path("x509/server_cert.pem"), data.Path("x509/server_key.pem"))
+			keyFile, err := os.CreateTemp("", "")
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = os.Remove(keyFile.Name()) })
+
+			certFile, err := os.CreateTemp("", "")
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = os.Remove(certFile.Name()) })
+
+			certPem, keyPem, err := auth.GenerateSelfSignedCert([]string{
+				"x.test.example.com",
+				"127.0.0.1",
+				"localhost",
+			}, pkix.Name{CommonName: "example"}, 1*time.Hour)
+			require.NoError(t, err)
+
+			_, err = keyFile.Write(keyPem)
+			require.NoError(t, err)
+
+			_, err = certFile.Write(certPem)
+			require.NoError(t, err)
+
+			cert, err := tls.LoadX509KeyPair(certFile.Name(), keyFile.Name())
 			require.NoError(t, err)
 
 			serverOpts := GRPCServerWithOauth2(test.keys, test.authorizer, credentials.NewServerTLSFromCert(&cert))
@@ -92,7 +113,7 @@ func TestClientServerUnary(t *testing.T) {
 				_ = s.Serve(lis)
 			}()
 
-			clientCreds, err := credentials.NewClientTLSFromFile(data.Path("x509/ca_cert.pem"), "x.test.example.com")
+			clientCreds, err := credentials.NewClientTLSFromFile(certFile.Name(), "localhost")
 			require.NoError(t, err)
 
 			signKey, err := test.keys.Sign(context.Background())
