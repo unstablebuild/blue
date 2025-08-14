@@ -171,6 +171,7 @@ func (p *pubsub) subscribe(
 	p.mu.Lock()
 	quitCtx := p.ctx
 	stream, ok := p.clientStreams[topic]
+	client := p.client
 	p.mu.Unlock()
 	if ok {
 		if excl {
@@ -186,7 +187,7 @@ func (p *pubsub) subscribe(
 	msg := pubsubpb.ReceiveMessage{
 		Req: &req,
 	}
-	pbStream, err := p.client.Receive(subscriptionCtx)
+	pbStream, err := client.Receive(subscriptionCtx)
 	if err != nil {
 		return quitCtx, nil, err
 	}
