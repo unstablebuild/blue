@@ -207,8 +207,10 @@ func (p *pubsub) subscribe(
 	p.mu.Lock()
 	select {
 	case <-quitCtx.Done():
+		p.mu.Unlock()
 		return quitCtx, nil, quitCtx.Err()
 	case <-subscriptionCtx.Done():
+		p.mu.Unlock()
 		return quitCtx, nil, subscriptionCtx.Err()
 	default:
 	}
