@@ -415,7 +415,11 @@ loop:
 			s.log(log.DebugLevel, "Successfully connected to leader. Unlocking API...")
 			break loop
 		case connectivity.Connecting, connectivity.Idle:
-			conn.WaitForStateChange(ctx, state)
+			didChange := conn.WaitForStateChange(ctx, state)
+			if !didChange {
+				s.log(log.TraceLevel, "Stopped monitoring for state changes. ctx is canceled")
+				return false, nil
+			}
 		case connectivity.TransientFailure:
 			failureCtx, cancelFn := context.WithTimeout(ctx, s.cfg.TransientFailureRecoverTimeout)
 			didChange := conn.WaitForStateChange(failureCtx, connectivity.TransientFailure)
