@@ -21,7 +21,7 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package release
+package signedrelease
 
 import (
 	"bytes"
@@ -36,6 +36,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/crypto"
 	"github.com/unstablebuild/blue/crypto/cryptotest"
+	"github.com/unstablebuild/blue/release"
+	"github.com/unstablebuild/blue/release/releasetest"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -53,10 +55,10 @@ func makeReleaseContent(t *testing.T, content string) *os.File {
 }
 
 func signReleaseContent(
-	t *testing.T, key crypto.Key, man Bundle, outContent, signedContent string,
-) func(ctx context.Context, Package string, ver Version, in io.Writer) (Bundle, error) {
-	return func(ctx context.Context, pack string, ver Version, in io.Writer) (
-		Bundle, error,
+	t *testing.T, key crypto.Key, man release.Bundle, outContent, signedContent string,
+) func(ctx context.Context, Package string, ver release.Version, in io.Writer) (release.Bundle, error) {
+	return func(ctx context.Context, pack string, ver release.Version, in io.Writer) (
+		release.Bundle, error,
 	) {
 		assert.Equal(t, man.Package, pack)
 		assert.Equal(t, man.Version, ver)
@@ -77,11 +79,11 @@ func signReleaseContent(
 }
 
 func expectUpload(
-	t *testing.T, mock *MockManager, key crypto.Key, man Bundle,
+	t *testing.T, mock *releasetest.MockManager, key crypto.Key, man release.Bundle,
 	expectStat bool,
 ) {
 	mock.EXPECT().Upload(gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(ctx context.Context, _man Bundle, in io.Reader) error {
+		DoAndReturn(func(ctx context.Context, _man release.Bundle, in io.Reader) error {
 			assert.Equal(t, man.Package, _man.Package)
 			assert.Equal(t, man.Version, _man.Version)
 			assert.Equal(t, man.Notes, _man.Notes)
@@ -105,7 +107,7 @@ func expectUpload(
 func TestSigningManager(t *testing.T) {
 	ctx := context.Background()
 	key := crypto.Key(cryptotest.GenerateTestKey(t))
-	man := Bundle{
+	man := release.Bundle{
 		Package: "bla",
 		Version: "blo",
 		Notes:   "blublu",
@@ -115,11 +117,11 @@ func TestSigningManager(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := NewMockManager(ctrl)
-		m := NewSigningManager(mock, key)
+		mock := releasetest.NewMockManager(ctrl)
+		m := NewManager(mock, key)
 
 		// does not satisfy io.Seeker
-		in := NopProgressReader(strings.NewReader("we want buffered I/O!"))
+		in := release.NopProgressReader(strings.NewReader("we want buffered I/O!"))
 
 		// NOTE: last arg should be false.
 		// Should refactor delegate to install delegate without
@@ -135,8 +137,8 @@ func TestSigningManager(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := NewMockManager(ctrl)
-		m := NewSigningManager(mock, key)
+		mock := releasetest.NewMockManager(ctrl)
+		m := NewManager(mock, key)
 
 		// satisfies io.Seeker
 		in := makeReleaseContent(t, "wasup")
@@ -144,7 +146,7 @@ func TestSigningManager(t *testing.T) {
 
 		expectUpload(t, mock, key, man, true)
 
-		err := m.Upload(ctx, man, NopProgressReader(in))
+		err := m.Upload(ctx, man, release.NopProgressReader(in))
 		require.NoError(t, err)
 	})
 
@@ -152,14 +154,14 @@ func TestSigningManager(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := NewMockManager(ctrl)
+		mock := releasetest.NewMockManager(ctrl)
 		encryptedKey := crypto.Key(cryptotest.GenerateTestKey(t))
 		encryptedKey.Entity.PrivateKey.Encrypted = true
-		m := NewSigningManager(mock, encryptedKey)
+		m := NewManager(mock, encryptedKey)
 		in := makeReleaseContent(t, "wasup")
 		defer in.Close()
 
-		err := m.Upload(ctx, man, NopProgressReader(in))
+		err := m.Upload(ctx, man, release.NopProgressReader(in))
 		require.Equal(t, ErrEncryptedKey, err)
 	})
 
@@ -167,15 +169,15 @@ func TestSigningManager(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := NewMockManager(ctrl)
-		m := NewSigningManager(mock, key)
+		mock := releasetest.NewMockManager(ctrl)
+		m := NewManager(mock, key)
 		in := makeReleaseContent(t, "T****")
 		defer in.Close()
 
 		mock.EXPECT().Upload(gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(errors.New("capitol insurrectionists")).Times(1)
 
-		err := m.Upload(ctx, man, NopProgressReader(in))
+		err := m.Upload(ctx, man, release.NopProgressReader(in))
 		assert.Error(t, err)
 	})
 
@@ -183,15 +185,15 @@ func TestSigningManager(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := NewMockManager(ctrl)
-		m := NewSigningManager(mock, key)
+		mock := releasetest.NewMockManager(ctrl)
+		m := NewManager(mock, key)
 		contentStr := "super buffered important data"
 
 		mock.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(signReleaseContent(t, key, man, contentStr, contentStr)).Times(1)
 
 		var out bytes.Buffer
-		ret, err := m.Get(ctx, man.Package, man.Version, NopProgressWriter(&out))
+		ret, err := m.Get(ctx, man.Package, man.Version, release.NopProgressWriter(&out))
 		require.NoError(t, err)
 		assert.Equal(t, man.Package, ret.Package)
 		assert.Equal(t, man.Version, ret.Version)
@@ -204,8 +206,8 @@ func TestSigningManager(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := NewMockManager(ctrl)
-		m := NewSigningManager(mock, key)
+		mock := releasetest.NewMockManager(ctrl)
+		m := NewManager(mock, key)
 		contentStr := "super important data"
 
 		mock.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -213,7 +215,7 @@ func TestSigningManager(t *testing.T) {
 
 		out := makeReleaseContent(t, "")
 		defer out.Close()
-		ret, err := m.Get(ctx, man.Package, man.Version, NopProgressWriter(out))
+		ret, err := m.Get(ctx, man.Package, man.Version, release.NopProgressWriter(out))
 		require.NoError(t, err)
 		assert.Equal(t, man.Package, ret.Package)
 		assert.Equal(t, man.Version, ret.Version)
@@ -233,14 +235,14 @@ func TestSigningManager(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := NewMockManager(ctrl)
-		m := NewSigningManager(mock, key)
+		mock := releasetest.NewMockManager(ctrl)
+		m := NewManager(mock, key)
 
 		mock.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(Bundle{}, errors.New("oopsie daisy")).Times(1)
+			Return(release.Bundle{}, errors.New("oopsie daisy")).Times(1)
 
 		_, err := m.Get(ctx, man.Package, man.Version,
-			NopProgressWriter(io.Discard))
+			release.NopProgressWriter(io.Discard))
 		require.Error(t, err)
 	})
 
@@ -248,8 +250,8 @@ func TestSigningManager(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := NewMockManager(ctrl)
-		m := NewSigningManager(mock, key)
+		mock := releasetest.NewMockManager(ctrl)
+		m := NewManager(mock, key)
 
 		mock.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(signReleaseContent(t, key, man, "something REAL bad", "something good")).
@@ -257,7 +259,7 @@ func TestSigningManager(t *testing.T) {
 
 		out := makeReleaseContent(t, "")
 		defer out.Close()
-		_, err := m.Get(ctx, man.Package, man.Version, NopProgressWriter(out))
+		_, err := m.Get(ctx, man.Package, man.Version, release.NopProgressWriter(out))
 		require.Error(t, err)
 	})
 
@@ -265,21 +267,21 @@ func TestSigningManager(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := NewMockManager(ctrl)
-		m := NewSigningManager(mock, key)
+		mock := releasetest.NewMockManager(ctrl)
+		m := NewManager(mock, key)
 		pack := "myID"
-		ver := Version("1.0.0")
+		ver := release.Version("1.0.0")
 
 		mock.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			DoAndReturn(func(ctx context.Context, _ string, _ Version, in io.Writer) (Bundle, error) {
-				return Bundle{Package: pack, Version: ver}, nil
+			DoAndReturn(func(ctx context.Context, _ string, _ release.Version, in io.Writer) (release.Bundle, error) {
+				return release.Bundle{Package: pack, Version: ver}, nil
 			}).
 			Times(1)
 
 		out := makeReleaseContent(t, "")
 		defer out.Close()
 		_, err := m.Get(ctx, man.Package,
-			man.Version, NopProgressWriter(out))
+			man.Version, release.NopProgressWriter(out))
 		require.Error(t, err)
 	})
 }

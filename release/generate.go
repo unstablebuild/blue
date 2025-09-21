@@ -23,4 +23,4 @@
 
 package release
 
-//go:generate mockgen -destination=./manager_gomock.go -package release -self_package github.com/unstablebuild/blue/release -source manager.go
+//go:generate mockgen -destination=./releasetest/manager_gomock.go -package releasetest -self_package github.com/unstablebuild/blue/releasetest -source manager.go

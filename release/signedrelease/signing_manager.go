@@ -21,7 +21,7 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package release
+package signedrelease
 
 import (
 	"bytes"
@@ -33,6 +33,7 @@ import (
 
 	"github.com/unstablebuild/blue/crypto"
 	"github.com/unstablebuild/blue/iterator"
+	"github.com/unstablebuild/blue/release"
 )
 
 // ErrEncryptedKey is returned when provided key is encrypted and needs decrypting first.
@@ -46,14 +47,14 @@ const (
 )
 
 type signingManager struct {
-	root Manager
+	root release.Manager
 	key  crypto.Key
 }
 
-// NewSigningManager returns a Manager that wraps anoter manager to provide
+// NewManager returns a Manager that wraps anoter manager to provide
 // PGP signing of release artifacts with Create and PGP verification
 // with Get requests.
-func NewSigningManager(other Manager, key crypto.Key) Manager {
+func NewManager(other release.Manager, key crypto.Key) release.Manager {
 	ret := new(signingManager)
 	ret.root = other
 	ret.key = key
@@ -61,7 +62,7 @@ func NewSigningManager(other Manager, key crypto.Key) Manager {
 }
 
 func (m *signingManager) Upload(
-	ctx context.Context, man Bundle, in ProgressReader,
+	ctx context.Context, man release.Bundle, in release.ProgressReader,
 ) error {
 	var out bytes.Buffer
 	var relayIn io.Reader
@@ -101,14 +102,14 @@ func (m *signingManager) Upload(
 			return err
 		}
 	}
-	progReader := newRelayProgressReader(in, relayIn)
+	progReader := release.NewRelayProgressReader(relayIn, in)
 	return m.root.Upload(ctx, man, progReader)
 }
 
 func (m *signingManager) Get(
 	ctx context.Context, pack string,
-	ver Version, out ProgressWriter,
-) (Bundle, error) {
+	ver release.Version, out release.ProgressWriter,
+) (release.Bundle, error) {
 	var relayIn io.Writer
 	var verifyReader io.Reader
 
@@ -124,10 +125,10 @@ func (m *signingManager) Get(
 		relayIn = &buf
 	}
 
-	progWriter := progressDelegate{writeDelegate: relayIn, progressDelegate: out}
+	progWriter := release.NewRelayProgressWriter(relayIn, out)
 	man, err := m.root.Get(ctx, pack, ver, progWriter)
 	if err != nil {
-		return Bundle{}, err
+		return release.Bundle{}, err
 	}
 
 	const templateMissingMetadata = "WARNING: Failed to check data integrity: " +
@@ -135,45 +136,45 @@ func (m *signingManager) Get(
 	signature, ok := man.Metadata[pgpSignedMetadata]
 	if !ok {
 		err := fmt.Errorf(templateMissingMetadata, pgpSignedMetadata)
-		return Bundle{}, err
+		return release.Bundle{}, err
 	}
 
 	if isReadWriteSeeker {
 		_, err = readWriteSeeker.Seek(0, 0)
 		if err != nil {
 			err = fmt.Errorf("failed to seek release artifact file: %s", err)
-			return Bundle{}, err
+			return release.Bundle{}, err
 		}
 	}
 
 	sig := strings.NewReader(signature)
 	err = crypto.Verify(verifyReader, sig, m.key)
 	if err != nil {
-		return Bundle{}, err
+		return release.Bundle{}, err
 	}
 
 	return man, err
 }
 
-func (m *signingManager) Create(ctx context.Context, pack Package) error {
+func (m *signingManager) Create(ctx context.Context, pack release.Package) error {
 	return m.root.Create(ctx, pack)
 }
 
 func (m *signingManager) Delete(
-	ctx context.Context, pack string, ver Version,
+	ctx context.Context, pack string, ver release.Version,
 ) error {
 	return m.root.Delete(ctx, pack, ver)
 }
 
 func (m *signingManager) List(
 	ctx context.Context, pack string, filters map[string]string,
-) (iterator.Iterator[Bundle], error) {
+) (iterator.Iterator[release.Bundle], error) {
 	return m.root.List(ctx, pack, filters)
 }
 
 func (m *signingManager) ListPackages(
 	ctx context.Context, filters map[string]string,
-) (iterator.Iterator[Package], error) {
+) (iterator.Iterator[release.Package], error) {
 	return m.root.ListPackages(ctx, filters)
 }
 
@@ -185,6 +186,6 @@ func (m *signingManager) DeletePackage(
 
 func (m *signingManager) GetPackage(
 	ctx context.Context, pack string,
-) (Package, error) {
+) (release.Package, error) {
 	return m.root.GetPackage(ctx, pack)
 }

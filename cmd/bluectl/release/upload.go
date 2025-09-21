@@ -39,6 +39,7 @@ import (
 	"github.com/unstablebuild/blue/cmd/bluectl/options"
 	"github.com/unstablebuild/blue/crypto"
 	"github.com/unstablebuild/blue/release"
+	"github.com/unstablebuild/blue/release/signedrelease"
 	"golang.org/x/term"
 )
 
@@ -161,7 +162,7 @@ func (s *releaseUpload) uploadSignedRelease(
 
 		out.Reset()
 
-		sm := release.NewSigningManager(s.m, key)
+		sm := signedrelease.NewManager(s.m, key)
 
 		ctx, cancel := context.WithTimeout(ctx, uploadTimeout)
 		defer cancel()
@@ -172,7 +173,7 @@ func (s *releaseUpload) uploadSignedRelease(
 		if err == nil {
 			return nil
 		}
-		if err != release.ErrEncryptedKey {
+		if err != signedrelease.ErrEncryptedKey {
 			return err
 		}
 

@@ -32,6 +32,7 @@ import (
 	"github.com/unstablebuild/blue/cli"
 	"github.com/unstablebuild/blue/crypto"
 	"github.com/unstablebuild/blue/release"
+	"github.com/unstablebuild/blue/release/signedrelease"
 )
 
 const (
@@ -120,7 +121,7 @@ func (s *releaseGet) Run(ctx context.Context, args []string) error {
 			return err
 		}
 	} else {
-		sm := release.NewSigningManager(s.m, key)
+		sm := signedrelease.NewManager(s.m, key)
 		m, err = sm.Get(ctx, pack, version, newBarProgress(f))
 		if err != nil {
 			return err
