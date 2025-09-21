@@ -21,7 +21,7 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package release
+package docrelease
 
 import (
 	"context"
@@ -36,6 +36,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/iterator"
+	"github.com/unstablebuild/blue/release"
 )
 
 // ErrDataIntegrity is returned when downloaded release data is compromised.
@@ -62,14 +63,14 @@ type documentManager struct {
 type releaseDocument struct {
 	Type       documentType
 	Package    string
-	Bundle     Bundle
+	Bundle     release.Bundle
 	DataChunks []string
 	Checksum   string
 }
 
 type packageDocument struct {
 	Type    documentType
-	Package Package
+	Package release.Package
 }
 
 type releaseData struct {
@@ -77,8 +78,8 @@ type releaseData struct {
 	Data []byte
 }
 
-// NewDocumentManager returns a Manager backed by a document.Service.
-func NewDocumentManager(db document.Service) Manager {
+// NewManager returns a Manager backed by a document.Service.
+func NewManager(db document.Service) release.Manager {
 	ret := new(documentManager)
 	ret.db = db
 	return ret
@@ -107,12 +108,12 @@ func (d *documentManager) forceRemoveChunks(err error, releaseID string, ids []s
 	return err
 }
 
-func makeChunkID(pkg string, ver Version, i int) string {
+func makeChunkID(pkg string, ver release.Version, i int) string {
 	return fmt.Sprintf("%s:%s:chunk:%d", pkg, ver, i)
 }
 
 func (d *documentManager) createDataChunks(
-	ctx context.Context, m Bundle, r ProgressReader,
+	ctx context.Context, m release.Bundle, r release.ProgressReader,
 ) ([]string, string, error) {
 	ids := make([]string, 0)
 	buffer := make([]byte, maxDocSizeBytes)
@@ -181,7 +182,7 @@ func (d *documentManager) removeChunks(ctx context.Context, ids []string) error 
 }
 
 func (d *documentManager) Create(
-	ctx context.Context, m Package,
+	ctx context.Context, m release.Package,
 ) error {
 	if m.Name == "" {
 		return errors.New("invalid package: missing package name")
@@ -198,7 +199,7 @@ func (d *documentManager) Create(
 	return nil
 }
 
-func makeReleaseDocID(pkg string, ver Version) string {
+func makeReleaseDocID(pkg string, ver release.Version) string {
 	return fmt.Sprintf("release:%s:%s", pkg, ver)
 }
 
@@ -207,7 +208,7 @@ func makePackageDocID(pkg string) string {
 }
 
 func (d *documentManager) Upload(
-	ctx context.Context, m Bundle, r ProgressReader,
+	ctx context.Context, m release.Bundle, r release.ProgressReader,
 ) error {
 	if m.Package == "" || m.Version == "" {
 		return errors.New("invalid bundle: missing version or package")
@@ -253,7 +254,7 @@ func (d *documentManager) Upload(
 }
 
 func (d *documentManager) writeChunks(
-	ctx context.Context, doc releaseDocument, out ProgressWriter,
+	ctx context.Context, doc releaseDocument, out release.ProgressWriter,
 ) error {
 	var dataDoc releaseData
 	hasher := sha256.New()
@@ -281,32 +282,32 @@ func (d *documentManager) writeChunks(
 
 func (d *documentManager) Get(
 	ctx context.Context, pkg string,
-	ver Version, out ProgressWriter,
-) (Bundle, error) {
+	ver release.Version, out release.ProgressWriter,
+) (release.Bundle, error) {
 	var doc releaseDocument
 
 	id := makeReleaseDocID(pkg, ver)
 	err := d.db.Get(ctx, id, &doc)
 	if err != nil {
-		return Bundle{}, err
+		return release.Bundle{}, err
 	}
 
-	if del, ok := out.(progressDelegate); ok {
-		if del.writeDelegate == io.Discard {
+	if del, ok := out.(release.IsDiscard); ok {
+		if del.IsDiscard() {
 			return doc.Bundle, nil
 		}
 	}
 
 	err = d.writeChunks(ctx, doc, out)
 	if err != nil {
-		return Bundle{}, err
+		return release.Bundle{}, err
 	}
 
 	return doc.Bundle, nil
 }
 
 func (d *documentManager) Delete(
-	ctx context.Context, pkg string, ver Version,
+	ctx context.Context, pkg string, ver release.Version,
 ) error {
 	var doc releaseDocument
 
@@ -361,14 +362,14 @@ func makeDocumentBundleFilter(
 func (d *documentManager) List(
 	ctx context.Context, pkg string,
 	filters map[string]string,
-) (iterator.Iterator[Bundle], error) {
+) (iterator.Iterator[release.Bundle], error) {
 	it, err := d.db.List(ctx, makeDocumentBundleFilter(pkg, filters))
 	if err != nil {
 		return nil, err
 	}
 	docIter := iterator.FromDocumentIterator[releaseDocument](it)
-	bundleIter := iterator.Map[releaseDocument, Bundle](docIter,
-		func(doc releaseDocument) Bundle {
+	bundleIter := iterator.Map[releaseDocument, release.Bundle](docIter,
+		func(doc releaseDocument) release.Bundle {
 			return doc.Bundle
 		})
 	return bundleIter, nil
@@ -403,14 +404,14 @@ func makeDocumentPackageFilter(
 
 func (d *documentManager) ListPackages(
 	ctx context.Context, filters map[string]string,
-) (iterator.Iterator[Package], error) {
+) (iterator.Iterator[release.Package], error) {
 	it, err := d.db.List(ctx, makeDocumentPackageFilter(filters))
 	if err != nil {
 		return nil, err
 	}
 	pkgDocIter := iterator.FromDocumentIterator[packageDocument](it)
-	pkgIter := iterator.Map[packageDocument, Package](pkgDocIter,
-		func(doc packageDocument) Package {
+	pkgIter := iterator.Map[packageDocument, release.Package](pkgDocIter,
+		func(doc packageDocument) release.Package {
 			return doc.Package
 		})
 	return pkgIter, nil
@@ -429,13 +430,13 @@ func (d *documentManager) DeletePackage(
 
 func (d *documentManager) GetPackage(
 	ctx context.Context, pkg string,
-) (Package, error) {
+) (release.Package, error) {
 	var doc packageDocument
 
 	id := makePackageDocID(pkg)
 	err := d.db.Get(ctx, id, &doc)
 	if err != nil {
-		return Package{}, err
+		return release.Package{}, err
 	}
 
 	return doc.Package, nil

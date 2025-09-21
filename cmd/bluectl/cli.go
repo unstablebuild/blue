@@ -39,7 +39,7 @@ import (
 	"github.com/unstablebuild/blue/document/firestore"
 	"github.com/unstablebuild/blue/issue"
 	"github.com/unstablebuild/blue/logging"
-	"github.com/unstablebuild/blue/release"
+	"github.com/unstablebuild/blue/release/docrelease"
 )
 
 type blueCtl struct {
@@ -134,7 +134,7 @@ func (c *blueCtl) initializeCli() error {
 				return nil, fmt.Errorf("firestore: %w", err)
 			}
 			c.closers = append(c.closers, docDB)
-			releaseManager := release.NewDocumentManager(docDB)
+			releaseManager := docrelease.NewManager(docDB)
 			return releaseCLI.NewCLI(releaseManager), nil
 		}),
 		"package": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
@@ -148,7 +148,7 @@ func (c *blueCtl) initializeCli() error {
 				return nil, fmt.Errorf("firestore: %w", err)
 			}
 			c.closers = append(c.closers, docDB)
-			releaseManager := release.NewDocumentManager(docDB)
+			releaseManager := docrelease.NewManager(docDB)
 			return packageCLI.NewCLI(releaseManager), nil
 		}),
 		"secret": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {

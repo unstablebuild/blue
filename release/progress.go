@@ -29,14 +29,68 @@ import (
 	"os"
 )
 
-var _ io.ReadWriteSeeker = seekerProgressDelegate{}
-
-type progresser interface {
+// IOProgress is implemented by both ProgressReader and ProgressWriter.
+type IOProgress interface {
 	Progress(progress, total int64, units string)
 }
 
+// IsDiscard is satisfied by all ProgressReader and ProgressWriter
+// returned by this package so release.Manager implementations can
+// optimize better.
+type IsDiscard interface {
+	IsDiscard() bool
+}
+
+// NopProgressReader wraps r to satisfy ProgressReader, discarding
+// any calls to Progress.
+//
+// If r satisfies io.ReadWriteSeeker then the returned ProgressReader
+// will satisfy io.ReadWriteSeeker as well.
+func NopProgressReader(r io.Reader) ProgressReader {
+	if rws, ok := r.(io.ReadWriteSeeker); ok {
+		return newSeekerProgressDelegate(rws)
+	}
+	return progressDelegate{readDelegate: r}
+}
+
+// NopProgressWriter wraps w to satisfy ProgressWriter, discarding
+// any calls to Progress.
+//
+// If w satisfies io.ReadWriteSeeker then the returned ProgressWriter
+// will satisfy io.ReadWriteSeeker as well.
+func NopProgressWriter(w io.Writer) ProgressWriter {
+	if rws, ok := w.(io.ReadWriteSeeker); ok {
+		return newSeekerProgressDelegate(rws)
+	}
+	return progressDelegate{writeDelegate: w}
+}
+
+// NewRelayProgressWriter returns a ProgressWriter that relays writes
+// to the given io.Writer and relays progress to the given IOProgress.
+func NewRelayProgressWriter(w io.Writer, out IOProgress) ProgressWriter {
+	return progressDelegate{writeDelegate: w, progressDelegate: out}
+}
+
+// NewRelayProgressReader returns a ProgressReader that relays reads
+// to the given io.Reader and relays progress to the given IOProgress.
+func NewRelayProgressReader(r io.Reader, in IOProgress) ProgressReader {
+	statDelegate, _ := in.(interface{ Stat() (os.FileInfo, error) })
+	return seekerProgressDelegate{
+		progressDelegate: progressDelegate{
+			readDelegate:     r,
+			progressDelegate: in,
+		},
+		statDelegate: statDelegate,
+	}
+}
+
+var _ io.ReadWriteSeeker = seekerProgressDelegate{}
+
+var _ IsDiscard = progressDelegate{}
+var _ IsDiscard = seekerProgressDelegate{}
+
 type progressDelegate struct {
-	progressDelegate progresser
+	progressDelegate IOProgress
 	readDelegate     io.Reader
 	writeDelegate    io.Writer
 }
@@ -58,15 +112,8 @@ func newSeekerProgressDelegate(rws io.ReadWriteSeeker) seekerProgressDelegate {
 	}
 }
 
-func newRelayProgressReader(in ProgressReader, relayIn io.Reader) ProgressReader {
-	statDelegate, _ := in.(interface{ Stat() (os.FileInfo, error) })
-	return seekerProgressDelegate{
-		progressDelegate: progressDelegate{
-			readDelegate:     relayIn,
-			progressDelegate: in,
-		},
-		statDelegate: statDelegate,
-	}
+func (d progressDelegate) IsDiscard() bool {
+	return d.writeDelegate == io.Discard
 }
 
 func (d progressDelegate) Progress(progress, total int64, units string) {
@@ -93,28 +140,4 @@ func (d seekerProgressDelegate) Stat() (os.FileInfo, error) {
 		return nil, errors.New("cannot stat non os.File")
 	}
 	return d.statDelegate.Stat()
-}
-
-// NopProgressReader wraps r to satisfy ProgressReader, discarding
-// any calls to Progress.
-//
-// If r satisfies io.ReadWriteSeeker then the returned ProgressReader
-// will satisfy io.ReadWriteSeeker as well.
-func NopProgressReader(r io.Reader) ProgressReader {
-	if rws, ok := r.(io.ReadWriteSeeker); ok {
-		return newSeekerProgressDelegate(rws)
-	}
-	return progressDelegate{readDelegate: r}
-}
-
-// NopProgressWriter wraps w to satisfy ProgressWriter, discarding
-// any calls to Progress.
-//
-// If w satisfies io.ReadWriteSeeker then the returned ProgressWriter
-// will satisfy io.ReadWriteSeeker as well.
-func NopProgressWriter(w io.Writer) ProgressWriter {
-	if rws, ok := w.(io.ReadWriteSeeker); ok {
-		return newSeekerProgressDelegate(rws)
-	}
-	return progressDelegate{writeDelegate: w}
 }
