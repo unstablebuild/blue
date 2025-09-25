@@ -46,7 +46,7 @@ type Version string
 // Latest is a reserved Version that
 // references the latest version uploaded
 // for a package.
-const Latest = "latest"
+const Latest Version = "latest"
 
 // Bundle represents a package release bundle.
 type Bundle struct {
