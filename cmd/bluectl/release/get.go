@@ -97,7 +97,7 @@ func (s *releaseGet) Run(ctx context.Context, args []string) error {
 
 	pack := args[0]
 	version := release.Version(args[1])
-	if version == "latest" {
+	if version == release.Latest {
 		version, err = s.getLatestVersion(ctx, pack)
 		if err != nil {
 			return err
