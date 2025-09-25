@@ -26,7 +26,9 @@ package document
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"runtime"
+	"strconv"
 )
 
 // WithPartition wraps a service and creates a partition with the given name.
@@ -36,15 +38,16 @@ func WithPartition(other Service, partition string) Service {
 	c := new(partitionedService)
 	c.other = other
 	c.partition = partition
+	// field key needs to be random so partitions can be nested
+	c.partitionField = "__partition_" + strconv.Itoa(rand.Int())
 	runtime.SetFinalizer(c, func(c *partitionedService) { c.Close() })
 	return c
 }
 
-const partitionField = "__partition"
-
 type partitionedService struct {
-	other     Service
-	partition string
+	other          Service
+	partition      string
+	partitionField string
 }
 
 func (c *partitionedService) makePartitionID(ID string) string {
@@ -53,7 +56,7 @@ func (c *partitionedService) makePartitionID(ID string) string {
 
 func (c *partitionedService) setPartitionField(ctx context.Context, ID string) error {
 	// enable list to filter document of this partition only
-	updates := []Update{{FieldPath: []string{partitionField}, Value: c.partition}}
+	updates := []Update{{FieldPath: []string{c.partitionField}, Value: c.partition}}
 	if err := c.other.Update(ctx, ID, updates); err != nil {
 		_ = c.other.Delete(ctx, ID) // best effort
 		return err
@@ -99,7 +102,7 @@ func (c *partitionedService) List(
 	partFilter := Filter{
 		Op: OpEqual,
 		Field: Field{
-			FieldPath: []string{partitionField},
+			FieldPath: []string{c.partitionField},
 			Value:     c.partition,
 		},
 	}
