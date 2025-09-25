@@ -65,6 +65,17 @@ func TestPartitionService(t *testing.T) {
 				})
 			})
 		})
+
+		t.Run("nested partitions", func(t *testing.T) {
+			t.Run(tcase.encoding, func(t *testing.T) {
+				TestDocumentService(t, func(t *testing.T) document.Service {
+					other := document.NewInMemoryServiceWithMarshaler(tcase.marshaler)
+					return document.WithPartition(
+						document.WithPartition(other, "lower"),
+						"upper")
+				})
+			})
+		})
 	}
 
 	// simple tests to make debuggin easier, but complete test is above in "multiple partitions"
