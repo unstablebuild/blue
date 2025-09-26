@@ -27,7 +27,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"runtime"
 	"strconv"
 )
 
@@ -40,7 +39,6 @@ func WithPartition(other Service, partition string) Service {
 	c.partition = partition
 	// field key needs to be random so partitions can be nested
 	c.partitionField = "__partition_" + strconv.Itoa(rand.Int())
-	runtime.SetFinalizer(c, func(c *partitionedService) { c.Close() })
 	return c
 }
 

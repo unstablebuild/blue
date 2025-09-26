@@ -77,7 +77,6 @@ func NewClient(
 	}
 
 	ret := new(Client)
-	runtime.SetFinalizer(ret, func(c *Client) { c.Close() })
 	ret.Init(cc, m)
 	return ret, nil
 }
@@ -258,7 +257,6 @@ func (c *Client) Close() error {
 	if closer, ok := c.cc.(io.Closer); ok {
 		return closer.Close()
 	}
-	runtime.SetFinalizer(c, nil)
 	return nil
 }
 
