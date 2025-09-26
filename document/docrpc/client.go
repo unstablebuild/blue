@@ -41,9 +41,10 @@ import (
 )
 
 type Client struct {
-	marshaler docmarshal.Marshaler
-	cc        grpc.ClientConnInterface
-	pb        docpb.DocumentStoreClient
+	marshaler      docmarshal.Marshaler
+	cc             grpc.ClientConnInterface
+	pb             docpb.DocumentStoreClient
+	ownsConnection bool
 }
 
 // NewClient returns a grpc-based client that satisfies Service
@@ -76,6 +77,7 @@ func NewClient(
 	}
 
 	ret := new(Client)
+	ret.ownsConnection = true
 	ret.Init(cc, m)
 	return ret, nil
 }
@@ -247,7 +249,7 @@ func (c *Client) List(
 }
 
 func (c *Client) Close() error {
-	if closer, ok := c.cc.(io.Closer); ok {
+	if closer, ok := c.cc.(io.Closer); ok && c.ownsConnection {
 		return closer.Close()
 	}
 	return nil
