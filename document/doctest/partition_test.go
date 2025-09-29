@@ -26,8 +26,10 @@ package doctest
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 
+	"github.com/ernestrc/go-multierror"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/document/docmarshal"
@@ -76,6 +78,17 @@ func TestPartitionService(t *testing.T) {
 				})
 			})
 		})
+
+		t.Run("same partition different instances", func(t *testing.T) {
+			t.Run(tcase.encoding, func(t *testing.T) {
+				TestDocumentService(t, func(t *testing.T) document.Service {
+					underlying := document.NewInMemoryServiceWithMarshaler(tcase.marshaler)
+					a := document.WithPartition(underlying, "default")
+					b := document.WithPartition(underlying, "default")
+					return &abTester{a: a, b: b}
+				})
+			})
+		})
 	}
 
 	// simple tests to make debuggin easier, but complete test is above in "multiple partitions"
@@ -99,4 +112,65 @@ func TestPartitionService(t *testing.T) {
 		require.NoError(t, err)
 		assertListResults(t, it2, 1)
 	})
+}
+
+type abTester struct {
+	a document.Service
+	b document.Service
+	i atomic.Int64
+}
+
+func (ab *abTester) Create(ctx context.Context, ID string, doc interface{}) error {
+	if ab.i.Add(1)%2 == 0 {
+		return ab.a.Create(ctx, ID, doc)
+	}
+	return ab.b.Create(ctx, ID, doc)
+}
+
+func (ab *abTester) Set(ctx context.Context, ID string, doc interface{}) error {
+	if ab.i.Add(1)%2 == 0 {
+		return ab.a.Set(ctx, ID, doc)
+	}
+	return ab.b.Set(ctx, ID, doc)
+}
+
+func (ab *abTester) Update(ctx context.Context, ID string,
+	updates []document.Update, precond ...document.Precondition) error {
+	if ab.i.Add(1)%2 == 0 {
+		return ab.a.Update(ctx, ID, updates, precond...)
+	}
+	return ab.b.Update(ctx, ID, updates, precond...)
+}
+
+func (ab *abTester) Get(ctx context.Context, ID string, doc interface{}) error {
+	if ab.i.Add(1)%2 == 0 {
+		return ab.a.Get(ctx, ID, doc)
+	}
+	return ab.b.Get(ctx, ID, doc)
+}
+
+func (ab *abTester) Delete(ctx context.Context, ID string) error {
+	if ab.i.Add(1)%2 == 0 {
+		return ab.a.Delete(ctx, ID)
+	}
+	return ab.b.Delete(ctx, ID)
+}
+
+func (ab *abTester) List(
+	ctx context.Context, filters []document.Filter,
+) (document.Iterator, error) {
+	if ab.i.Add(1)%2 == 0 {
+		return ab.a.List(ctx, filters)
+	}
+	return ab.b.List(ctx, filters)
+}
+
+func (ab *abTester) Close() (ret error) {
+	if err := ab.a.Close(); err != nil {
+		ret = multierror.Append(ret, err)
+	}
+	if err := ab.b.Close(); err != nil {
+		ret = multierror.Append(ret, err)
+	}
+	return
 }
