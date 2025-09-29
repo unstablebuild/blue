@@ -26,8 +26,6 @@ package document
 import (
 	"context"
 	"fmt"
-	"math/rand"
-	"strconv"
 )
 
 // WithPartition wraps a service and creates a partition with the given name.
@@ -37,8 +35,8 @@ func WithPartition(other Service, partition string) Service {
 	c := new(partitionedService)
 	c.other = other
 	c.partition = partition
-	// field key needs to be random so partitions can be nested
-	c.partitionField = "__partition_" + strconv.Itoa(rand.Int())
+	// field key needs to be unique so partitions can be nested
+	c.partitionField = "__partition_" + partition
 	return c
 }
 
