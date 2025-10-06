@@ -35,16 +35,17 @@ import (
 func TestCapturePanic(t *testing.T) {
 	t.Run("allows func to complete successfully", func(t *testing.T) {
 		var ok bool
-		actualOk, actualReport := CapturePanic(log.New(), "pkg", "v1.0.0", func() {
+		actualReport, panicValue, actualOk := CapturePanic(log.New(), "pkg", "v1.0.0", func() {
 			ok = true
 		})
+		assert.Zero(t, panicValue)
 		assert.True(t, actualOk)
 		assert.Zero(t, actualReport)
 		assert.True(t, ok)
 	})
 
 	t.Run("captures panic and returns report", func(t *testing.T) {
-		actualOk, actualReport := CapturePanic(log.New(), "pkg", "v1.0.0", func() {
+		actualReport, panicValue, actualOk := CapturePanic(log.New(), "pkg", "v1.0.0", func() {
 			panic("ralfing")
 		})
 		assert.False(t, actualOk)
@@ -57,5 +58,6 @@ func TestCapturePanic(t *testing.T) {
 		require.True(t, ok)
 		assert.NotNil(t, err)
 		assert.True(t, strings.Contains(err, "ralfing"))
+		assert.Equal(t, "ralfing", panicValue)
 	})
 }

@@ -43,11 +43,11 @@ const (
 // and returns a Report and false, or returns true if f returned
 // successfully.
 func CapturePanic(log *log.Logger, pkg, version string, f func()) (
-	ok bool, report issue.Report,
+	report issue.Report, panicValue any, ok bool,
 ) {
 	defer func() {
-		r := recover()
-		if r == nil {
+		panicValue = recover()
+		if panicValue == nil {
 			return
 		}
 		report = issue.Report{
@@ -64,13 +64,13 @@ func CapturePanic(log *log.Logger, pkg, version string, f func()) (
 		}
 
 		var errStr string
-		switch x := r.(type) {
+		switch x := panicValue.(type) {
 		case string:
 			errStr = x
 		case error:
 			errStr = x.Error()
 		default:
-			errStr = fmt.Sprintf("unknown: %v", r)
+			errStr = fmt.Sprintf("unknown: %v", panicValue)
 		}
 		report.Metadata[reportMetadataStackTraceField] = string(debug.Stack())
 		report.Metadata[reportMetadataBugField] = ""
