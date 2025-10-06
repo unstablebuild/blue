@@ -73,7 +73,7 @@ func (s *panicReportPanic) Run(ctx context.Context, args []string) error {
 	discard := log.New()
 	discard.Out = io.Discard
 
-	ok, report := debug.CapturePanic(discard, "blue", s.version, func() {
+	report, _, ok := debug.CapturePanic(discard, "blue", s.version, func() {
 		panic("this is a simulation")
 	})
 	if ok {
