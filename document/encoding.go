@@ -25,11 +25,11 @@ package document
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"strings"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/unstablebuild/blue/document/docmarshal"
 )
@@ -154,8 +154,7 @@ func SafeDecode(m docmarshal.Marshaler, rcv any, raw []byte) error {
 	if !IsEncodeable(rcv) {
 		return errors.New("receiver is not a pointer and not a map or is nil")
 	}
-	Decode(m, rcv, raw)
-	return nil
+	return decode(m, rcv, raw)
 }
 
 // IsEncodeable returns true if doc is a structure that can be safely
@@ -163,18 +162,6 @@ func SafeDecode(m docmarshal.Marshaler, rcv any, raw []byte) error {
 func IsEncodeable(doc any) bool {
 	v := reflect.ValueOf(doc)
 	return (v.Kind() == reflect.Ptr || v.Kind() == reflect.Map) && !v.IsNil()
-}
-
-// Decode decotes raw into rcv and panics if there's an error decoding.
-// Use SafeDecode if you are not sure if the structure rcv is safe to be
-// encoded/decoded.
-func Decode(m docmarshal.Marshaler, rcv any, raw []byte) {
-	err := m.Unmarshal(raw, rcv)
-	if err != nil {
-		// this is a progammer error anyway so add more information
-		err := fmt.Errorf("%v: %s", err, string(raw))
-		panic(err)
-	}
 }
 
 // ListIterator returns an iterator that iterates over docs.
@@ -220,8 +207,13 @@ func (l *ListIterator) Close() error {
 // structure satisfies all filters.
 func (l *ListIterator) Extend(filters []Filter, v []byte) {
 	var proto map[string]any
-	Decode(l.marshaler, &proto, v)
-
+	// if bogus data is inserted into the DB oob,
+	// then we ignore it here, rather than failing a list operation
+	err := decode(l.marshaler, &proto, v)
+	if err != nil {
+		log.Warnf("failed to add value to iterator: decode error: %v", err)
+		return
+	}
 	if !MatchesAllFilters(l.marshaler, proto, filters) {
 		return
 	}
@@ -436,6 +428,7 @@ func MatchFilter(proto map[string]any, f Filter) bool {
 	return MatchFilter(m, f)
 }
 
+// MatchesAllFilters returns true if proto satisfies all of the give filters.
 func MatchesAllFilters(
 	m docmarshal.Marshaler, proto map[string]any,
 	filters []Filter,
@@ -454,4 +447,8 @@ func MatchesAllFilters(
 		}
 	}
 	return true
+}
+
+func decode(m docmarshal.Marshaler, rcv any, raw []byte) error {
+	return m.Unmarshal(raw, rcv)
 }

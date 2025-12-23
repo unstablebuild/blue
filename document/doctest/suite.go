@@ -184,6 +184,28 @@ func testDatastoreCreate(t *testing.T, serviceFactory FnServiceFactory) {
 		assert.EqualValues(t, bob, myVal)
 	})
 
+	t.Run("Create/Get does not panic if data contains non valid UTF-8 characters", func(t *testing.T) {
+		// whether it succeeds or not is storage dependent
+		s := serviceFactory(t)
+		defer s.Close()
+
+		assert.NotPanics(t, func() {
+			val := Bob()
+			val.Name = "sheit\x00\xef"
+			_ = s.Create(ctx, "bobID", val)
+
+			var myVal Segador
+			_ = s.Get(ctx, "bobID", &myVal)
+
+			it, err := s.List(ctx, nil)
+			require.NoError(t, err)
+			defer it.Close()
+			for it.HasNext() {
+				_ = it.NextTo(&myVal)
+			}
+		})
+	})
+
 	t.Run("Create returns ErrAlreadyExists if attempt to create a document that already exists", func(t *testing.T) {
 		s := serviceFactory(t)
 		defer s.Close()
