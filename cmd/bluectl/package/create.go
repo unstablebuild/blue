@@ -51,7 +51,7 @@ func (i *metadataFlag) Set(value string) error {
 	return nil
 }
 
-type releaseCreate struct {
+type packageCreate struct {
 	m         release.Manager
 	fs        *cli.FlagSet
 	mdataFlag metadataFlag
@@ -70,7 +70,7 @@ func getDefaultAuthor() string {
 }
 
 func newReleaseCreateCLI(m release.Manager) cli.CLI {
-	c := &releaseCreate{
+	c := &packageCreate{
 		m: m,
 	}
 	c.fs = cli.NewFlagSet("create")
@@ -78,7 +78,7 @@ func newReleaseCreateCLI(m release.Manager) cli.CLI {
 	return c
 }
 
-func (s *releaseCreate) Man() cli.Manual {
+func (s *packageCreate) Man() cli.Manual {
 	return cli.Manual{
 		Name:     "create",
 		Summary:  "Create a package to group releases",
@@ -87,7 +87,7 @@ func (s *releaseCreate) Man() cli.Manual {
 	}
 }
 
-func (s *releaseCreate) parseMetadataFlag() (map[string]string, error) {
+func (s *packageCreate) parseMetadataFlag() (map[string]string, error) {
 	ret := make(map[string]string)
 	for _, arg := range s.mdataFlag {
 		kv := strings.Split(arg, "=")
@@ -99,7 +99,7 @@ func (s *releaseCreate) parseMetadataFlag() (map[string]string, error) {
 	return ret, nil
 }
 
-func (s *releaseCreate) Run(ctx context.Context, args []string) error {
+func (s *packageCreate) Run(ctx context.Context, args []string) error {
 	args, _, ok, err := cli.ParseUsage(s, s.fs, 1, args)
 	if err != nil || !ok {
 		return err
@@ -112,7 +112,16 @@ func (s *releaseCreate) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	m, err := tempPackage(pack, getDefaultAuthor(), mdata)
+	var notes string
+	for _, field := range []string{"notes", "Notes"} {
+		notes, ok = mdata[field]
+		if ok {
+			delete(mdata, field)
+			break
+		}
+	}
+
+	m, err := tempPackage(pack, getDefaultAuthor(), mdata, notes)
 	if err != nil {
 		return err
 	}

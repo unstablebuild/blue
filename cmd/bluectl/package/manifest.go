@@ -84,6 +84,7 @@ func (m manifest) toYAML() (string, error) {
 
 func tempPackage(
 	pack string, author string, extraMdata map[string]string,
+	notes string,
 ) (ret release.Package, err error) {
 	log.Debugf("decoding package %q manifest from temp file with metadata: %#v",
 		pack, extraMdata)
@@ -102,7 +103,7 @@ func tempPackage(
 		mdata[k] = v
 	}
 
-	m := manifest{Name: pack, Metadata: mdata}
+	m := manifest{Name: pack, Metadata: mdata, Notes: notes}
 	dataIn, err := yaml.Marshal(&m)
 	if err != nil {
 		panic(err)
@@ -114,10 +115,12 @@ func tempPackage(
 		return
 	}
 
-	err = editor.Edit(f)
-	if err != nil {
-		err = fmt.Errorf("failed to edit manifest: %v", err)
-		return
+	if notes == "" {
+		err = editor.Edit(f)
+		if err != nil {
+			err = fmt.Errorf("failed to edit manifest: %v", err)
+			return
+		}
 	}
 
 	err = f.Sync()
