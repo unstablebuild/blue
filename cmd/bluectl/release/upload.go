@@ -62,12 +62,13 @@ func (i *metadataFlag) Set(value string) error {
 }
 
 type releaseUpload struct {
-	m           release.Manager
-	fs          *cli.FlagSet
-	privKeyID   string
-	keyRingFile string
-	noEdit      bool
-	mdataFlag   metadataFlag
+	m                 release.Manager
+	fs                *cli.FlagSet
+	privKeyID         string
+	privKeyPassphrase string
+	keyRingFile       string
+	noEdit            bool
+	mdataFlag         metadataFlag
 }
 
 func getDefaultAuthor() string {
@@ -90,6 +91,7 @@ func newReleaseUploadCLI(m release.Manager) cli.CLI {
 	c.fs.StringVar(&c.privKeyID, "k", "", "Sign release with PGP private key. "+
 		"This forces clients to provide a public key upon downloading release.")
 	c.fs.BoolVar(&c.noEdit, "y", false, "Do not prompt user to edit file manifest.")
+	c.fs.StringVar(&c.privKeyPassphrase, "p", "", "Use the given passphrase rather than prompt user via stdio.")
 	c.fs.StringVar(&c.keyRingFile, "r", "secring.gpg",
 		"Armored keyring file to use to find private key.")
 	c.fs.Var(&c.mdataFlag, "d", "Add default metadata to manifest. Expects format to be <key>=<value>")
@@ -179,9 +181,13 @@ func (s *releaseUpload) uploadSignedRelease(
 
 		log.Debugf("found key %s but requires passphrase", s.privKeyID)
 
-		passphrase, err = readPasswordFromStdin()
-		if err != nil {
-			return err
+		if s.privKeyPassphrase == "" {
+			passphrase, err = readPasswordFromStdin()
+			if err != nil {
+				return err
+			}
+		} else {
+			passphrase = s.privKeyPassphrase
 		}
 
 		pb.Close()
