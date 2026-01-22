@@ -43,6 +43,7 @@ type licenseCli struct {
 	fs             *cli.FlagSet
 	regexpStr      string
 	errorOnChanges bool
+	forceReplace   bool
 }
 
 func newLicenseCli() *licenseCli {
@@ -50,6 +51,9 @@ func newLicenseCli() *licenseCli {
 	ret := &licenseCli{fs: fs}
 	ret.fs.StringVar(&ret.regexpStr, "e", defaultRegexpStr,
 		"Regexp to use to search and replace the license header")
+	ret.fs.BoolVar(&ret.forceReplace, "f", false,
+		"Force update license header. If this flag is not passed, "+
+			"then license headers are only added, not updated.")
 	ret.fs.BoolVar(&ret.errorOnChanges, "d", false,
 		"Exit with non-zero status instead of making changes if any "+
 			"of the given files need to be updated.")
@@ -102,7 +106,8 @@ func (c *licenseCli) Run(ctx context.Context, args []string) error {
 	for i, filename := range files {
 		go func(i int, license, filename string) {
 			defer wg.Done()
-			results[i] = processFile(ctx, r, license, filename, c.errorOnChanges)
+			results[i] = processFile(ctx, r, license, filename,
+				c.errorOnChanges, c.forceReplace)
 		}(i, license, filename)
 	}
 	wg.Wait()
@@ -157,7 +162,7 @@ type result struct {
 
 func processFile(
 	ctx context.Context, r *regexp.Regexp,
-	license, filename string, dryRun bool,
+	license, filename string, dryRun, forceReplace bool,
 ) (ret result) {
 	ret.filename = filename
 
@@ -172,24 +177,28 @@ func processFile(
 	}
 
 	header := r.FindString(content)
-	if containsLicenseHeader(header, content) {
-		newContent := replaceHeader(content, header, license)
+	if !containsLicenseHeader(header, content) {
+		newContent := insertHeader(content, license)
 		if dryRun {
-			ret.updated = true
+			ret.added = true
 			return
 		}
-		err := os.WriteFile(filename, []byte(newContent), 0666)
+		err = os.WriteFile(filename, []byte(newContent), 0666)
 		if err != nil {
 			ret.err = fmt.Errorf("write: %w", err)
 			return
 		}
-		ret.updated = true
+		ret.added = true
 		return
 	}
 
-	newContent := insertHeader(content, license)
+	if !forceReplace {
+		return
+	}
+
+	newContent := replaceHeader(content, header, license)
 	if dryRun {
-		ret.added = true
+		ret.updated = true
 		return
 	}
 	err = os.WriteFile(filename, []byte(newContent), 0666)
@@ -197,7 +206,7 @@ func processFile(
 		ret.err = fmt.Errorf("write: %w", err)
 		return
 	}
-	ret.added = true
+	ret.updated = true
 	return
 }
 
