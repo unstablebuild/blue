@@ -50,38 +50,48 @@ func CapturePanic(log *log.Logger, pkg, version string, f func()) (
 		if panicValue == nil {
 			return
 		}
-		report = issue.Report{
-			Author:    "debug.CapturePanic",
-			Package:   pkg,
-			Version:   version,
-			CreatedAt: time.Now(),
-			Metadata:  make(map[string]string),
-		}
-
-		bi, ok := debug.ReadBuildInfo()
-		if ok {
-			report.Build = *bi
-		}
-
-		var errStr string
-		switch x := panicValue.(type) {
-		case string:
-			errStr = x
-		case error:
-			errStr = x.Error()
-		default:
-			errStr = fmt.Sprintf("unknown: %v", panicValue)
-		}
-		report.Metadata[reportMetadataStackTraceField] = string(debug.Stack())
-		report.Metadata[reportMetadataBugField] = ""
-		report.Metadata[reportMetadataPanicField] = ""
-		report.Subject = fmt.Sprintf("%20s", errStr)
-		report.Metadata[reportMetadataErrorField] = errStr
+		report = BuildCrashReport(pkg, version, panicValue)
 
 		log.Errorf("CapturePanic: panic: %v", report.Metadata[reportMetadataErrorField])
 	}()
 
 	f()
 	ok = true
+	return
+}
+
+// BuildCrashReport builds a crash report with the given panic value, for
+// the given package and version.
+func BuildCrashReport(pkg, version string, panicValue any) (
+	report issue.Report,
+) {
+	report = issue.Report{
+		Author:    "debug.CapturePanic",
+		Package:   pkg,
+		Version:   version,
+		CreatedAt: time.Now(),
+		Metadata:  make(map[string]string),
+	}
+
+	bi, ok := debug.ReadBuildInfo()
+	if ok {
+		report.Build = *bi
+	}
+
+	var errStr string
+	switch x := panicValue.(type) {
+	case string:
+		errStr = x
+	case error:
+		errStr = x.Error()
+	default:
+		errStr = fmt.Sprintf("unknown: %v", panicValue)
+	}
+	report.Metadata[reportMetadataStackTraceField] = string(debug.Stack())
+	report.Metadata[reportMetadataBugField] = ""
+	report.Metadata[reportMetadataPanicField] = ""
+	report.Subject = fmt.Sprintf("%20s", errStr)
+	report.Metadata[reportMetadataErrorField] = errStr
+
 	return
 }
