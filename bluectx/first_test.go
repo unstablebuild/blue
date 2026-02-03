@@ -41,7 +41,8 @@ func TestFirt(t *testing.T) {
 		//nolint:staticcheck
 		ctx = context.WithValue(ctx, "a", "A")
 		ctx, cancel := context.WithDeadline(ctx, tt)
-		fctx := First(ctx)
+		fctx, cancelf := First(ctx)
+		defer cancelf()
 
 		actualValue := fctx.Value("a")
 		assert.Equal(t, "A", actualValue)
@@ -70,7 +71,8 @@ func TestFirt(t *testing.T) {
 	})
 
 	t.Run("returns false if none have a deadline set", func(t *testing.T) {
-		fctx := First(context.Background(), context.TODO())
+		fctx, cancelf := First(context.Background(), context.TODO())
+		defer cancelf()
 
 		_, ok := fctx.Deadline()
 		assert.False(t, ok)
@@ -88,7 +90,8 @@ func TestFirt(t *testing.T) {
 		ctx3, cancel3 := context.WithDeadline(context.Background(), tt3)
 		defer cancel3()
 
-		fctx := First(ctx1, ctx2, ctx3)
+		fctx, cancelf := First(ctx1, ctx2, ctx3)
+		defer cancelf()
 
 		d, ok := fctx.Deadline()
 		assert.True(t, ok)
@@ -105,7 +108,8 @@ func TestFirt(t *testing.T) {
 		// nolint:staticcheck
 		ctx3 = context.WithValue(ctx3, "b", "B")
 
-		fctx := First(ctx1, ctx2, ctx3)
+		fctx, cancelf := First(ctx1, ctx2, ctx3)
+		defer cancelf()
 
 		actualValue := fctx.Value("a")
 		assert.Equal(t, "A", actualValue)
@@ -118,7 +122,8 @@ func TestFirt(t *testing.T) {
 		ctx1, cancel1 := context.WithCancel(context.Background())
 		ctx2, cancel2 := context.WithCancel(context.Background())
 		ctx3, cancel3 := context.WithCancel(context.Background())
-		fctx := First(ctx1, ctx2, ctx3)
+		fctx, cancelf := First(ctx1, ctx2, ctx3)
+		defer cancelf()
 
 		defer cancel2()
 		defer cancel3()
