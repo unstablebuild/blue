@@ -19,7 +19,8 @@ require (
 	github.com/sirupsen/logrus v1.6.0
 	github.com/slack-go/slack v0.13.0
 	github.com/stretchr/testify v1.11.1
-	github.com/unstablebuild/rune-go-sdk v0.0.21
+	github.com/unstablebuild/rune-go-sdk v0.0.22
+	github.com/unstablebuild/tcell/v3 v3.6.2
 	github.com/willf/pad v0.0.0-20200313202418-172aa767f2a4
 	go.etcd.io/bbolt v1.3.4
 	go.uber.org/config v1.4.0
@@ -71,7 +72,6 @@ require (
 	github.com/olekukonko/ll v0.1.4-0.20260115111900-9e59c2286df0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/unstablebuild/tcell/v3 v3.6.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.61.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect

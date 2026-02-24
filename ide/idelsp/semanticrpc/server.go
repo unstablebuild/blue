@@ -29,6 +29,7 @@ import (
 
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi/semanticrpc"
+	"github.com/unstablebuild/rune-go-sdk/joincontext"
 )
 
 type Server struct {
@@ -45,7 +46,7 @@ func NewServer(impl semanticapi.LSP) *Server {
 }
 
 func (s *Server) Initialize(ctx context.Context, req *semanticrpc.InitializeRequest) (*semanticrpc.InitializeResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.InitializeParams{
 		RootURI:          req.GetRootUri(),
@@ -67,7 +68,7 @@ func (s *Server) Initialize(ctx context.Context, req *semanticrpc.InitializeRequ
 }
 
 func (s *Server) Initialized(ctx context.Context, req *semanticrpc.InitializedRequest) (*semanticrpc.InitializedResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	err := s.impl.Initialized(ctx)
 	if err != nil {
@@ -77,7 +78,7 @@ func (s *Server) Initialized(ctx context.Context, req *semanticrpc.InitializedRe
 }
 
 func (s *Server) Shutdown(ctx context.Context, req *semanticrpc.ShutdownRequest) (*semanticrpc.ShutdownResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	err := s.impl.Shutdown(ctx)
 	if err != nil {
@@ -87,7 +88,7 @@ func (s *Server) Shutdown(ctx context.Context, req *semanticrpc.ShutdownRequest)
 }
 
 func (s *Server) Exit(ctx context.Context, req *semanticrpc.ExitRequest) (*semanticrpc.ExitResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	err := s.impl.Exit(ctx)
 	if err != nil {
@@ -97,7 +98,7 @@ func (s *Server) Exit(ctx context.Context, req *semanticrpc.ExitRequest) (*seman
 }
 
 func (s *Server) DidOpen(ctx context.Context, req *semanticrpc.DidOpenRequest) (*semanticrpc.DidOpenResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DidOpenTextDocumentParams{
 		TextDocument: semanticrpc.TextDocumentItemFromProto(req.GetTextDocument()),
@@ -110,7 +111,7 @@ func (s *Server) DidOpen(ctx context.Context, req *semanticrpc.DidOpenRequest) (
 }
 
 func (s *Server) DidChange(ctx context.Context, req *semanticrpc.DidChangeRequest) (*semanticrpc.DidChangeResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DidChangeTextDocumentParams{
 		TextDocument:   semanticrpc.VersionedTextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -124,7 +125,7 @@ func (s *Server) DidChange(ctx context.Context, req *semanticrpc.DidChangeReques
 }
 
 func (s *Server) DidClose(ctx context.Context, req *semanticrpc.DidCloseRequest) (*semanticrpc.DidCloseResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DidCloseTextDocumentParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -137,7 +138,7 @@ func (s *Server) DidClose(ctx context.Context, req *semanticrpc.DidCloseRequest)
 }
 
 func (s *Server) DidSave(ctx context.Context, req *semanticrpc.DidSaveRequest) (*semanticrpc.DidSaveResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DidSaveTextDocumentParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -151,7 +152,7 @@ func (s *Server) DidSave(ctx context.Context, req *semanticrpc.DidSaveRequest) (
 }
 
 func (s *Server) Completion(ctx context.Context, req *semanticrpc.CompletionRequest) (*semanticrpc.CompletionResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.CompletionParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -171,7 +172,7 @@ func (s *Server) Completion(ctx context.Context, req *semanticrpc.CompletionRequ
 }
 
 func (s *Server) Hover(ctx context.Context, req *semanticrpc.HoverRequest) (*semanticrpc.HoverResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.HoverParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -186,7 +187,7 @@ func (s *Server) Hover(ctx context.Context, req *semanticrpc.HoverRequest) (*sem
 }
 
 func (s *Server) SignatureHelp(ctx context.Context, req *semanticrpc.SignatureHelpRequest) (*semanticrpc.SignatureHelpResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.SignatureHelpParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -284,7 +285,7 @@ func (s *Server) References(ctx context.Context, req *semanticrpc.ReferencesRequ
 }
 
 func (s *Server) DocumentHighlight(ctx context.Context, req *semanticrpc.DocumentHighlightRequest) (*semanticrpc.DocumentHighlightResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DocumentHighlightParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -328,7 +329,7 @@ func (s *Server) CodeAction(ctx context.Context, req *semanticrpc.CodeActionRequ
 }
 
 func (s *Server) CodeLens(ctx context.Context, req *semanticrpc.CodeLensRequest) (*semanticrpc.CodeLensResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.CodeLensParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -341,7 +342,7 @@ func (s *Server) CodeLens(ctx context.Context, req *semanticrpc.CodeLensRequest)
 }
 
 func (s *Server) Formatting(ctx context.Context, req *semanticrpc.FormattingRequest) (*semanticrpc.FormattingResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DocumentFormattingParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -358,7 +359,7 @@ func (s *Server) Formatting(ctx context.Context, req *semanticrpc.FormattingRequ
 }
 
 func (s *Server) RangeFormatting(ctx context.Context, req *semanticrpc.RangeFormattingRequest) (*semanticrpc.RangeFormattingResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DocumentRangeFormattingParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -376,7 +377,7 @@ func (s *Server) RangeFormatting(ctx context.Context, req *semanticrpc.RangeForm
 }
 
 func (s *Server) Rename(ctx context.Context, req *semanticrpc.RenameRequest) (*semanticrpc.RenameResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.RenameParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -394,7 +395,7 @@ func (s *Server) Rename(ctx context.Context, req *semanticrpc.RenameRequest) (*s
 }
 
 func (s *Server) PrepareRename(ctx context.Context, req *semanticrpc.PrepareRenameRequest) (*semanticrpc.PrepareRenameResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.PrepareRenameParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -409,7 +410,7 @@ func (s *Server) PrepareRename(ctx context.Context, req *semanticrpc.PrepareRena
 }
 
 func (s *Server) FoldingRange(ctx context.Context, req *semanticrpc.FoldingRangeRequest) (*semanticrpc.FoldingRangeResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.FoldingRangeParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -422,7 +423,7 @@ func (s *Server) FoldingRange(ctx context.Context, req *semanticrpc.FoldingRange
 }
 
 func (s *Server) SelectionRange(ctx context.Context, req *semanticrpc.SelectionRangeRequest) (*semanticrpc.SelectionRangeResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	positions := make([]semanticapi.Position, len(req.GetPositions()))
 	for i, p := range req.GetPositions() {
@@ -440,7 +441,7 @@ func (s *Server) SelectionRange(ctx context.Context, req *semanticrpc.SelectionR
 }
 
 func (s *Server) SemanticTokensFull(ctx context.Context, req *semanticrpc.SemanticTokensFullRequest) (*semanticrpc.SemanticTokensFullResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.SemanticTokensParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -454,7 +455,7 @@ func (s *Server) SemanticTokensFull(ctx context.Context, req *semanticrpc.Semant
 }
 
 func (s *Server) SemanticTokensRange(ctx context.Context, req *semanticrpc.SemanticTokensRangeRequest) (*semanticrpc.SemanticTokensRangeResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.SemanticTokensRangeParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -469,7 +470,7 @@ func (s *Server) SemanticTokensRange(ctx context.Context, req *semanticrpc.Seman
 }
 
 func (s *Server) Diagnostic(ctx context.Context, req *semanticrpc.DiagnosticRequest) (*semanticrpc.DiagnosticResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DocumentDiagnosticParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -484,7 +485,7 @@ func (s *Server) Diagnostic(ctx context.Context, req *semanticrpc.DiagnosticRequ
 func (s *Server) WorkspaceDiagnostic(
 	ctx context.Context, req *semanticrpc.WorkspaceDiagnosticRequest,
 ) (*semanticrpc.WorkspaceDiagnosticResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	prevProtos := req.GetPreviousResultIds()
 	prevIDs := make([]semanticapi.PreviousResultID, len(prevProtos))
@@ -516,7 +517,7 @@ func (s *Server) WorkspaceDiagnostic(
 }
 
 func (s *Server) WorkspaceSymbol(ctx context.Context, req *semanticrpc.WorkspaceSymbolRequest) (*semanticrpc.WorkspaceSymbolResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.WorkspaceSymbolParams{Query: req.GetQuery()}
 	result, err := s.impl.WorkspaceSymbol(ctx, params)
@@ -527,7 +528,7 @@ func (s *Server) WorkspaceSymbol(ctx context.Context, req *semanticrpc.Workspace
 }
 
 func (s *Server) ExecuteCommand(ctx context.Context, req *semanticrpc.ExecuteCommandRequest) (*semanticrpc.ExecuteCommandResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	args := make([]json.RawMessage, len(req.GetArguments()))
 	for i, a := range req.GetArguments() {
@@ -545,7 +546,7 @@ func (s *Server) ExecuteCommand(ctx context.Context, req *semanticrpc.ExecuteCom
 }
 
 func (s *Server) PrepareCallHierarchy(ctx context.Context, req *semanticrpc.PrepareCallHierarchyRequest) (*semanticrpc.PrepareCallHierarchyResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.CallHierarchyPrepareParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -559,7 +560,7 @@ func (s *Server) PrepareCallHierarchy(ctx context.Context, req *semanticrpc.Prep
 }
 
 func (s *Server) CallHierarchyIncomingCalls(ctx context.Context, req *semanticrpc.CallHierarchyIncomingCallsRequest) (*semanticrpc.CallHierarchyIncomingCallsResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.CallHierarchyIncomingCallsParams{
 		Item: semanticrpc.CallHierarchyItemFromProto(req.GetItem()),
@@ -572,7 +573,7 @@ func (s *Server) CallHierarchyIncomingCalls(ctx context.Context, req *semanticrp
 }
 
 func (s *Server) CallHierarchyOutgoingCalls(ctx context.Context, req *semanticrpc.CallHierarchyOutgoingCallsRequest) (*semanticrpc.CallHierarchyOutgoingCallsResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.CallHierarchyOutgoingCallsParams{
 		Item: semanticrpc.CallHierarchyItemFromProto(req.GetItem()),
@@ -585,7 +586,7 @@ func (s *Server) CallHierarchyOutgoingCalls(ctx context.Context, req *semanticrp
 }
 
 func (s *Server) CompletionResolve(ctx context.Context, req *semanticrpc.CompletionResolveRequest) (*semanticrpc.CompletionResolveResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	item := semanticrpc.CompletionItemFromProto(req.GetItem())
 	result, err := s.impl.CompletionResolve(ctx, item)
@@ -596,7 +597,7 @@ func (s *Server) CompletionResolve(ctx context.Context, req *semanticrpc.Complet
 }
 
 func (s *Server) CodeLensResolve(ctx context.Context, req *semanticrpc.CodeLensResolveRequest) (*semanticrpc.CodeLensResolveResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	lens := semanticrpc.CodeLensFromProto(req.GetLens())
 	result, err := s.impl.CodeLensResolve(ctx, lens)
@@ -607,7 +608,7 @@ func (s *Server) CodeLensResolve(ctx context.Context, req *semanticrpc.CodeLensR
 }
 
 func (s *Server) DocumentColor(ctx context.Context, req *semanticrpc.DocumentColorRequest) (*semanticrpc.DocumentColorResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DocumentColorParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -620,7 +621,7 @@ func (s *Server) DocumentColor(ctx context.Context, req *semanticrpc.DocumentCol
 }
 
 func (s *Server) ColorPresentation(ctx context.Context, req *semanticrpc.ColorPresentationRequest) (*semanticrpc.ColorPresentationResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.ColorPresentationParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -635,7 +636,7 @@ func (s *Server) ColorPresentation(ctx context.Context, req *semanticrpc.ColorPr
 }
 
 func (s *Server) DocumentLink(ctx context.Context, req *semanticrpc.DocumentLinkRequest) (*semanticrpc.DocumentLinkResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DocumentLinkParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -648,7 +649,7 @@ func (s *Server) DocumentLink(ctx context.Context, req *semanticrpc.DocumentLink
 }
 
 func (s *Server) DocumentLinkResolve(ctx context.Context, req *semanticrpc.DocumentLinkResolveRequest) (*semanticrpc.DocumentLinkResolveResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	link := semanticrpc.DocumentLinkFromProto(req.GetLink())
 	result, err := s.impl.DocumentLinkResolve(ctx, link)
@@ -659,7 +660,7 @@ func (s *Server) DocumentLinkResolve(ctx context.Context, req *semanticrpc.Docum
 }
 
 func (s *Server) OnTypeFormatting(ctx context.Context, req *semanticrpc.OnTypeFormattingRequest) (*semanticrpc.OnTypeFormattingResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DocumentOnTypeFormattingParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -678,7 +679,7 @@ func (s *Server) OnTypeFormatting(ctx context.Context, req *semanticrpc.OnTypeFo
 }
 
 func (s *Server) LinkedEditingRange(ctx context.Context, req *semanticrpc.LinkedEditingRangeRequest) (*semanticrpc.LinkedEditingRangeResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.LinkedEditingRangeParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -693,7 +694,7 @@ func (s *Server) LinkedEditingRange(ctx context.Context, req *semanticrpc.Linked
 }
 
 func (s *Server) Moniker(ctx context.Context, req *semanticrpc.MonikerRequest) (*semanticrpc.MonikerResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.MonikerParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -707,7 +708,7 @@ func (s *Server) Moniker(ctx context.Context, req *semanticrpc.MonikerRequest) (
 }
 
 func (s *Server) WillSaveWaitUntil(ctx context.Context, req *semanticrpc.WillSaveWaitUntilRequest) (*semanticrpc.WillSaveWaitUntilResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.WillSaveTextDocumentParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -721,7 +722,7 @@ func (s *Server) WillSaveWaitUntil(ctx context.Context, req *semanticrpc.WillSav
 }
 
 func (s *Server) SemanticTokensFullDelta(ctx context.Context, req *semanticrpc.SemanticTokensFullDeltaRequest) (*semanticrpc.SemanticTokensFullDeltaResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.SemanticTokensDeltaParams{
 		TextDocument:     semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -736,7 +737,7 @@ func (s *Server) SemanticTokensFullDelta(ctx context.Context, req *semanticrpc.S
 }
 
 func (s *Server) PrepareTypeHierarchy(ctx context.Context, req *semanticrpc.PrepareTypeHierarchyRequest) (*semanticrpc.PrepareTypeHierarchyResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.TypeHierarchyPrepareParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -750,7 +751,7 @@ func (s *Server) PrepareTypeHierarchy(ctx context.Context, req *semanticrpc.Prep
 }
 
 func (s *Server) TypeHierarchySupertypes(ctx context.Context, req *semanticrpc.TypeHierarchySupertypesRequest) (*semanticrpc.TypeHierarchySupertypesResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.TypeHierarchySupertypesParams{
 		Item: semanticrpc.TypeHierarchyItemFromProto(req.GetItem()),
@@ -763,7 +764,7 @@ func (s *Server) TypeHierarchySupertypes(ctx context.Context, req *semanticrpc.T
 }
 
 func (s *Server) TypeHierarchySubtypes(ctx context.Context, req *semanticrpc.TypeHierarchySubtypesRequest) (*semanticrpc.TypeHierarchySubtypesResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.TypeHierarchySubtypesParams{
 		Item: semanticrpc.TypeHierarchyItemFromProto(req.GetItem()),
@@ -776,7 +777,7 @@ func (s *Server) TypeHierarchySubtypes(ctx context.Context, req *semanticrpc.Typ
 }
 
 func (s *Server) InlayHint(ctx context.Context, req *semanticrpc.InlayHintRequest) (*semanticrpc.InlayHintResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.InlayHintParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -790,7 +791,7 @@ func (s *Server) InlayHint(ctx context.Context, req *semanticrpc.InlayHintReques
 }
 
 func (s *Server) InlayHintResolve(ctx context.Context, req *semanticrpc.InlayHintResolveRequest) (*semanticrpc.InlayHintResolveResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	hint := semanticrpc.InlayHintFromProto(req.GetHint())
 	result, err := s.impl.InlayHintResolve(ctx, hint)
@@ -801,7 +802,7 @@ func (s *Server) InlayHintResolve(ctx context.Context, req *semanticrpc.InlayHin
 }
 
 func (s *Server) InlineValue(ctx context.Context, req *semanticrpc.InlineValueRequest) (*semanticrpc.InlineValueResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.InlineValueParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -815,7 +816,7 @@ func (s *Server) InlineValue(ctx context.Context, req *semanticrpc.InlineValueRe
 }
 
 func (s *Server) WillCreateFiles(ctx context.Context, req *semanticrpc.WillCreateFilesRequest) (*semanticrpc.WillCreateFilesResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.CreateFilesParams{
 		Files: semanticrpc.FileCreatesFromProto(req.GetFiles()),
@@ -831,7 +832,7 @@ func (s *Server) WillCreateFiles(ctx context.Context, req *semanticrpc.WillCreat
 }
 
 func (s *Server) WillRenameFiles(ctx context.Context, req *semanticrpc.WillRenameFilesRequest) (*semanticrpc.WillRenameFilesResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.RenameFilesParams{
 		Files: semanticrpc.FileRenamesFromProto(req.GetFiles()),
@@ -847,7 +848,7 @@ func (s *Server) WillRenameFiles(ctx context.Context, req *semanticrpc.WillRenam
 }
 
 func (s *Server) WillDeleteFiles(ctx context.Context, req *semanticrpc.WillDeleteFilesRequest) (*semanticrpc.WillDeleteFilesResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DeleteFilesParams{
 		Files: semanticrpc.FileDeletesFromProto(req.GetFiles()),
@@ -863,7 +864,7 @@ func (s *Server) WillDeleteFiles(ctx context.Context, req *semanticrpc.WillDelet
 }
 
 func (s *Server) WillSave(ctx context.Context, req *semanticrpc.WillSaveRequest) (*semanticrpc.WillSaveResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.WillSaveTextDocumentParams{
 		TextDocument: semanticrpc.TextDocumentIdentifierFromProto(req.GetTextDocument()),
@@ -877,7 +878,7 @@ func (s *Server) WillSave(ctx context.Context, req *semanticrpc.WillSaveRequest)
 }
 
 func (s *Server) DidChangeConfiguration(ctx context.Context, req *semanticrpc.DidChangeConfigurationRequest) (*semanticrpc.DidChangeConfigurationResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DidChangeConfigurationParams{
 		Settings: json.RawMessage(req.GetSettings()),
@@ -890,7 +891,7 @@ func (s *Server) DidChangeConfiguration(ctx context.Context, req *semanticrpc.Di
 }
 
 func (s *Server) DidChangeWatchedFiles(ctx context.Context, req *semanticrpc.DidChangeWatchedFilesRequest) (*semanticrpc.DidChangeWatchedFilesResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DidChangeWatchedFilesParams{
 		Changes: semanticrpc.FileEventsFromProto(req.GetChanges()),
@@ -903,7 +904,7 @@ func (s *Server) DidChangeWatchedFiles(ctx context.Context, req *semanticrpc.Did
 }
 
 func (s *Server) DidChangeWorkspaceFolders(ctx context.Context, req *semanticrpc.DidChangeWorkspaceFoldersRequest) (*semanticrpc.DidChangeWorkspaceFoldersResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DidChangeWorkspaceFoldersParams{
 		Event: semanticapi.WorkspaceFoldersChangeEvent{
@@ -919,7 +920,7 @@ func (s *Server) DidChangeWorkspaceFolders(ctx context.Context, req *semanticrpc
 }
 
 func (s *Server) WorkDoneProgressCancel(ctx context.Context, req *semanticrpc.WorkDoneProgressCancelRequest) (*semanticrpc.WorkDoneProgressCancelResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.WorkDoneProgressCancelParams{
 		Token: req.GetToken(),
@@ -932,7 +933,7 @@ func (s *Server) WorkDoneProgressCancel(ctx context.Context, req *semanticrpc.Wo
 }
 
 func (s *Server) SetTrace(ctx context.Context, req *semanticrpc.SetTraceRequest) (*semanticrpc.SetTraceResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.SetTraceParams{
 		Value: semanticapi.TraceValue(req.GetValue()),
@@ -945,7 +946,7 @@ func (s *Server) SetTrace(ctx context.Context, req *semanticrpc.SetTraceRequest)
 }
 
 func (s *Server) DidCreateFiles(ctx context.Context, req *semanticrpc.DidCreateFilesRequest) (*semanticrpc.DidCreateFilesResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.CreateFilesParams{
 		Files: semanticrpc.FileCreatesFromProto(req.GetFiles()),
@@ -958,7 +959,7 @@ func (s *Server) DidCreateFiles(ctx context.Context, req *semanticrpc.DidCreateF
 }
 
 func (s *Server) DidRenameFiles(ctx context.Context, req *semanticrpc.DidRenameFilesRequest) (*semanticrpc.DidRenameFilesResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.RenameFilesParams{
 		Files: semanticrpc.FileRenamesFromProto(req.GetFiles()),
@@ -971,7 +972,7 @@ func (s *Server) DidRenameFiles(ctx context.Context, req *semanticrpc.DidRenameF
 }
 
 func (s *Server) DidDeleteFiles(ctx context.Context, req *semanticrpc.DidDeleteFilesRequest) (*semanticrpc.DidDeleteFilesResponse, error) {
-	ctx, cancel := joinContexts(ctx, s.ctx)
+	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.DeleteFilesParams{
 		Files: semanticrpc.FileDeletesFromProto(req.GetFiles()),
