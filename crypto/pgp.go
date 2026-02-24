@@ -86,7 +86,7 @@ func FindKeysInArmoredKeyRing(keyringFile, ID, passphrase string) (e []Key, err 
 		err = fmt.Errorf("open armored keyring: %s", err)
 		return nil, err
 	}
-	defer keyringFileBuffer.Close()
+	defer func() { _ = keyringFileBuffer.Close() }()
 	entityList, err := openpgp.ReadArmoredKeyRing(keyringFileBuffer)
 	if err != nil {
 		err = fmt.Errorf("read armored keyring: %s", err)

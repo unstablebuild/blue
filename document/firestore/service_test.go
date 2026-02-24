@@ -81,7 +81,7 @@ func TestFirestorePreconditions(t *testing.T) {
 		collection := uuid.New().String()
 		s, err := New(uuid.New().String(), collection, "")
 		require.NoError(t, err)
-		defer s.Close()
+		defer func() { _ = s.Close() }()
 
 		err = s.Create(ctx, myID, entity)
 		require.NoError(t, err)

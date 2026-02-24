@@ -109,7 +109,7 @@ func (s *releaseGet) Run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var m release.Bundle
 	key, err := s.findKeyInArmoredKeyRing()

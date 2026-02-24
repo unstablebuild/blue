@@ -45,11 +45,11 @@ func TestRPCDatastoreCustomServiceDesc(t *testing.T) {
 		cache := document.NewInMemoryServiceWithMarshaler(marshaler)
 
 		opts := []grpc.ServerOption{
-			grpc.UnaryInterceptor(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+			grpc.UnaryInterceptor(func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 				assert.Equal(t, 1, strings.Count(info.FullMethod, collectionName))
 				return handler(ctx, req)
 			}),
-			grpc.StreamInterceptor(func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+			grpc.StreamInterceptor(func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 				assert.Equal(t, 1, strings.Count(info.FullMethod, collectionName))
 				return handler(srv, ss)
 			}),
@@ -62,7 +62,7 @@ func TestRPCDatastoreCustomServiceDesc(t *testing.T) {
 			}, opts...)
 
 		opt := grpc.WithTransportCredentials(insecure.NewCredentials())
-		cc, err := grpc.Dial(addr.String(), opt)
+		cc, err := grpc.NewClient(addr.String(), opt)
 		require.NoError(t, err)
 
 		store := new(Client)

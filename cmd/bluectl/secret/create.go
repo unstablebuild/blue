@@ -111,8 +111,8 @@ func (s *secretCreate) Run(ctx context.Context, args []string) error {
 
 	err = s.store.CreateSecret(ctx, id, mdata)
 	if err == nil {
-		fmt.Fprint(os.Stdout, id)
-		fmt.Fprint(os.Stdout, "\n")
+		_, _ = fmt.Fprint(os.Stdout, id)
+		_, _ = fmt.Fprint(os.Stdout, "\n")
 	}
 	return err
 }

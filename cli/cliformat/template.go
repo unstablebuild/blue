@@ -63,7 +63,7 @@ func (f templateFormatter[T]) Format(
 		if err != nil {
 			return err
 		}
-		fmt.Fprint(w, "\n")
+		_, _ = fmt.Fprint(w, "\n")
 	}
 	return nil
 }

@@ -135,7 +135,7 @@ func TestServiceIntegration(t *testing.T) {
 			err = follower.Get(context.Background(), "random", &temp)
 			require.NoError(t, err)
 			require.Equal(t, "1234", temp.A)
-			leader.Close()
+			_ = leader.Close()
 
 			// cleanup
 			err = follower.Delete(context.Background(), "random")
@@ -164,7 +164,7 @@ func TestServiceIntegration(t *testing.T) {
 			require.NoError(t, err)
 
 			// remove lock
-			os.Remove(lockFile)
+			_ = os.Remove(lockFile)
 			return follower
 		})
 	})
@@ -197,7 +197,7 @@ func TestServiceIntegration(t *testing.T) {
 			require.NoError(t, err)
 
 			// remove lock
-			os.Remove(lockFile)
+			_ = os.Remove(lockFile)
 
 			// returns a diff follower for each call
 			return &alternatingService{svc: followers}
@@ -227,7 +227,7 @@ func TestServiceIntegration(t *testing.T) {
 					time.Sleep(cfg.DialTimeout + cfg.ConnectRetryCadence)
 					for idx, instance := range instances {
 						if instance.IsLeader() {
-							instance.Close()
+							_ = instance.Close()
 							if idx == len(instances)-1 {
 								instances = instances[:idx]
 							} else {
@@ -305,8 +305,8 @@ func makeFollower(svc document.Service, lockFile string, cfg Config) (document.S
 	// ensure follower is ready
 	_ = follower.Get(context.Background(), "bla", &temp)
 	return follower, func() {
-		leader.Close()
-		follower.Close()
+		_ = leader.Close()
+		_ = follower.Close()
 	}
 }
 
@@ -387,7 +387,7 @@ func makeTempLockFile(t *testing.T) string {
 	require.NoError(t, f.Close())
 	require.NoError(t, os.Remove(f.Name()))
 	t.Cleanup(func() {
-		os.Remove(f.Name())
+		_ = os.Remove(f.Name())
 	})
 	return f.Name()
 }

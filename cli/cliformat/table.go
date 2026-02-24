@@ -49,7 +49,7 @@ type tableFormatter[T any] struct {
 	set    map[string]int
 }
 
-func isEncodeable(t interface{}) (reflect.Value, bool) {
+func isEncodeable(t any) (reflect.Value, bool) {
 	v := reflect.ValueOf(t)
 	t, err := document.DerefCreateValue(v)
 	if err != nil {
@@ -97,8 +97,8 @@ func (f tableFormatter[T]) Format(
 				row[pos] = fmt.Sprintf("%v", field.Interface())
 			}
 		}
-		table.Append(row)
+		_ = table.Append(row)
 	}
-	table.Render()
+	_ = table.Render()
 	return nil
 }

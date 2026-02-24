@@ -83,7 +83,7 @@ func ValidateProviderIDWithCertsURL(
 		if err != nil {
 			return true, fmt.Errorf("get certs url: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode >= 500 {
 			return true, fmt.Errorf("status code: %v", resp.StatusCode)

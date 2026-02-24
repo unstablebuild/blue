@@ -124,7 +124,7 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 	log.Debugf("received reports: %#v", reports)
 
 	reports = &filterDuplicatesIterator{it: reports, seen: make(map[string]struct{})}
-	defer reports.Close()
+	defer func() { _ = reports.Close() }()
 
 	switch strings.ToLower(s.format) {
 	case "json":
@@ -141,7 +141,7 @@ func (s *reportList) Run(ctx context.Context, args []string) error {
 		}
 
 		table := cliformat.Table[outIssue]([]string{"ID", "Subject", "Author", "Labels", "CreatedAt", "ClosedAt"})
-		return table.Format(ctx, os.Stdout, iterator.Map[issue.Report, outIssue](reports,
+		return table.Format(ctx, os.Stdout, iterator.Map(reports,
 			func(report issue.Report) outIssue {
 				var labels []string
 				for k := range report.Metadata {

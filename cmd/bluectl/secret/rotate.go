@@ -111,7 +111,7 @@ func (s *secretRotate) Run(ctx context.Context, args []string) error {
 	}
 
 	if s.disablePrevious {
-		fmt.Fprintf(os.Stdout, "disabled %d versions", disabled)
+		_, _ = fmt.Fprintf(os.Stdout, "disabled %d versions", disabled)
 	}
 
 	return nil

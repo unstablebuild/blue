@@ -58,7 +58,7 @@ func initializeConfig(init initializer, configPath string) (*cliConfig, error) {
 	}
 
 	if !exists {
-		fmt.Fprint(os.Stdout,
+		_, _ = fmt.Fprint(os.Stdout,
 			"It looks like it's the first time using bluectl.\n")
 		err := init.Run(context.Background(), nil)
 		if err != nil {

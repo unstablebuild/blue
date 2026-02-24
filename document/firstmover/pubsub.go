@@ -100,7 +100,7 @@ func (p *pubsub) reset() {
 // called after Serve is called, but the dial below will always fail
 // if Serve has not been called yet.
 func (p *pubsub) initLeader(
-	ctx context.Context, srv *grpc.Server, listener net.Listener,
+	_ context.Context, _ *grpc.Server, listener net.Listener,
 ) error {
 	_ = p.Close()
 	p.reset()
@@ -118,7 +118,7 @@ func (p *pubsub) initLeader(
 			return d.DialContext(ctx, addr.Network(), addr.String())
 		},
 	))
-	conn, err := grpc.DialContext(ctx, "", opts...)
+	conn, err := grpc.NewClient("passthrough:///", opts...)
 	if err != nil {
 		return fmt.Errorf("dial leader server: %v", err)
 	}
@@ -496,7 +496,7 @@ func (p *pubsub) Close() (err error) {
 	return err
 }
 
-func (s *pubsub) log(level log.Level, msg string, args ...interface{}) {
+func (s *pubsub) log(level log.Level, msg string, args ...any) {
 	if !log.IsLevelEnabled(level) {
 		return
 	}

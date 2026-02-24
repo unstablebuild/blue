@@ -59,7 +59,7 @@ func New(projectID, collectionID, credsFile string) (
 	// in a GCP runtime or VM, the SDK knows how to fetch credentials.
 	// For local development, we need to pass a file manually
 	if credsFile != "" {
-		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credsFile)
+		_ = os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credsFile)
 	}
 
 	var client *firestore.Client
@@ -72,7 +72,7 @@ func New(projectID, collectionID, credsFile string) (
 }
 
 func (f *fireStore) Set(
-	ctx context.Context, docID string, data interface{},
+	ctx context.Context, docID string, data any,
 ) (err error) {
 	if data == nil {
 		panic("invalid nil data argument to Set")
@@ -87,7 +87,7 @@ func (f *fireStore) Set(
 }
 
 func (f *fireStore) Create(
-	ctx context.Context, docID string, data interface{},
+	ctx context.Context, docID string, data any,
 ) (err error) {
 	if data == nil {
 		panic("invalid nil data argument to Create")
@@ -164,7 +164,7 @@ func (f *fireStore) Update(
 }
 
 func (f *fireStore) Get(
-	ctx context.Context, docID string, doc interface{},
+	ctx context.Context, docID string, doc any,
 ) (err error) {
 	coll := f.client.Collection(f.collID)
 
@@ -213,7 +213,7 @@ func (f *fireStoreIterator) HasNext() bool {
 	return f.next != nil
 }
 
-func (f *fireStoreIterator) NextTo(doc interface{}) error {
+func (f *fireStoreIterator) NextTo(doc any) error {
 	err := f.next.DataTo(doc)
 	if err != nil {
 		return err

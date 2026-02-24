@@ -49,7 +49,7 @@ func TestSync(t *testing.T) {
 		mem := NewInMemoryService()
 		mem.(*inMemoryService).m = nopLocker{}
 		svc := Sync(mem)
-		defer svc.Close()
+		defer func() { _ = svc.Close() }()
 		bob := Segador{Name: "hello", Traits: map[string]interface{}{"a": "b"}}
 
 		var wg sync.WaitGroup

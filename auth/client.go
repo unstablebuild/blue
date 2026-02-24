@@ -78,7 +78,7 @@ func NewClientWithPorts(
 	usePKCE := conf.ClientSecret == ""
 
 	var srv http.Server
-	defer srv.Close()
+	defer func() { _ = srv.Close() }()
 
 	go serveRedirects(ctx, &srv, csrfToken, resChan,
 		readyChan, successBrowserCopy, tryPorts)
@@ -198,7 +198,7 @@ func logAttempt(callType string, req *http.Request, traceID trace.ID) time.Time 
 }
 
 func writeResponse(
-	ctx context.Context, callType string, traceID trace.ID,
+	_ context.Context, callType string, traceID trace.ID,
 	attemptAt time.Time, w http.ResponseWriter,
 	req *http.Request, status int, r response,
 ) {

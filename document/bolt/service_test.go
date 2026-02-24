@@ -39,7 +39,7 @@ func TestBolt(t *testing.T) {
 	doctest.TestDocumentService(t, func(t *testing.T) document.Service {
 		f, err := os.CreateTemp("", "barnack_bolt_test")
 		require.NoError(t, err)
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		store, err := New(f.Name(), "test")
 		require.NoError(t, err)
@@ -50,7 +50,7 @@ func TestBolt(t *testing.T) {
 	doctest.TestDocumentServicePreconditions(t, func(t *testing.T) document.Service {
 		f, err := os.CreateTemp("", "preconds_bolt_test")
 		require.NoError(t, err)
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		store, err := New(f.Name(), "test")
 		require.NoError(t, err)
@@ -63,7 +63,7 @@ func TestBolt(t *testing.T) {
 		f, err := os.CreateTemp("", "blue_is_gold")
 		require.NoError(t, err)
 
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		store, err := New(f.Name(), "test")
 		require.NoError(t, err)
 
@@ -81,7 +81,7 @@ func TestBolt(t *testing.T) {
 		ctx := context.Background()
 		f, err := os.CreateTemp("", "what_is_barnack_test")
 		require.NoError(t, err)
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		store1, err := New(f.Name(), "test-1")
 		require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestBolt(t *testing.T) {
 		t.Run("is safe to use two instances of the service with same database file", func(t *testing.T) {
 			var wg sync.WaitGroup
 			var m sync.Mutex
-			for i := 0; i < 20; i++ {
+			for range 20 {
 				wg.Add(2)
 				go func() {
 					defer wg.Done()

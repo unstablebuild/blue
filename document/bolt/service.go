@@ -104,7 +104,7 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-func (s *Store) getData(ID string, doc interface{}) (
+func (s *Store) getData(ID string, doc any) (
 	err error,
 ) {
 	return s.db.View(func(tx *bolt.Tx) error {
@@ -121,20 +121,20 @@ func (s *Store) getData(ID string, doc interface{}) (
 
 // Set satisfies document.Service.
 func (s *Store) Set(
-	ctx context.Context, ID string, doc interface{},
+	ctx context.Context, ID string, doc any,
 ) error {
 	return s.set(ctx, ID, doc, false)
 }
 
 // Create satisfies document.Service.
 func (s *Store) Create(
-	ctx context.Context, ID string, doc interface{},
+	ctx context.Context, ID string, doc any,
 ) error {
 	return s.set(ctx, ID, doc, true)
 }
 
 func (s *Store) set(
-	ctx context.Context, ID string, doc interface{},
+	_ context.Context, ID string, doc any,
 	errAlreadyExists bool,
 ) error {
 	if doc == nil {
@@ -172,7 +172,7 @@ func (s *Store) Update(
 			return document.ErrNotFound
 		}
 
-		var doc map[string]interface{}
+		var doc map[string]any
 		err := document.SafeDecode(s.marshaler, &doc, data)
 		if err != nil {
 			return err
@@ -189,7 +189,7 @@ func (s *Store) Update(
 
 // Get satisfies document.Service.
 func (s *Store) Get(
-	ctx context.Context, ID string, doc interface{},
+	ctx context.Context, ID string, doc any,
 ) error {
 	return s.getData(ID, doc)
 }

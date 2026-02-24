@@ -41,7 +41,7 @@ const (
 func skipIfServerNotRunning(t *testing.T, addr string) {
 	conn, err := net.Dial("tcp", addr)
 	if err == nil {
-		conn.Close()
+		_ = conn.Close()
 		return
 	}
 	t.Logf("server not running on %s, skipping test '%s'", addr, t.Name())

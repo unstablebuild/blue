@@ -300,7 +300,7 @@ func runDatastoreServerOverListener(
 
 	teardown := func() {
 		gsrv.Stop()
-		lis.Close()
+		_ = lis.Close()
 	}
 
 	go func() {

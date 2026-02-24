@@ -63,7 +63,7 @@ func runDatastoreServerOverListener(
 
 	teardown := func() {
 		gsrv.Stop()
-		lis.Close()
+		_ = lis.Close()
 	}
 
 	go func() {
@@ -145,11 +145,11 @@ type interopHelper struct {
 	write document.Service
 }
 
-func (h interopHelper) Create(ctx context.Context, ID string, doc interface{}) error {
+func (h interopHelper) Create(ctx context.Context, ID string, doc any) error {
 	return h.write.Create(ctx, ID, doc)
 }
 
-func (h interopHelper) Set(ctx context.Context, ID string, doc interface{}) error {
+func (h interopHelper) Set(ctx context.Context, ID string, doc any) error {
 	return h.write.Set(ctx, ID, doc)
 }
 
@@ -160,7 +160,7 @@ func (h interopHelper) Update(
 	return h.write.Update(ctx, ID, updates, preconds...)
 }
 
-func (h interopHelper) Get(ctx context.Context, ID string, doc interface{}) error {
+func (h interopHelper) Get(ctx context.Context, ID string, doc any) error {
 	return h.read.Get(ctx, ID, doc)
 }
 
