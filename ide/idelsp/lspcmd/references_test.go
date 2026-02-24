@@ -1,0 +1,167 @@
+// Unstable Build LLC ("COMPANY") CONFIDENTIAL
+//
+// Unpublished Copyright (c) 2017-2026 Unstable Build, All Rights Reserved.
+//
+// NOTICE: All information contained herein is, and remains the property of COMPANY.
+// The intellectual and technical concepts contained herein are proprietary to
+// COMPANY and may be covered by U.S. and Foreign Patents, patents in process,
+// and are protected by trade secret or copyright law. Dissemination of this information
+// or reproduction of this material is strictly forbidden unless prior written permission
+// is obtained from COMPANY. Access to the source code contained herein is hereby
+// forbidden to anyone except current COMPANY employees, managers or contractors who
+// have executed Confidentiality and Non-disclosure agreements explicitly covering such access.
+//
+// The copyright notice above does not evidence any actual or intended publication or
+// disclosure of this source code, which includes information that is confidential and/or
+// proprietary, and is a trade secret, of COMPANY. ANY REPRODUCTION, MODIFICATION,
+// DISTRIBUTION, PUBLIC  PERFORMANCE, OR PUBLIC DISPLAY OF OR THROUGH USE OF THIS SOURCE CODE
+// WITHOUT  THE EXPRESS WRITTEN CONSENT OF COMPANY IS STRICTLY PROHIBITED, AND IN
+// VIOLATION OF APPLICABLE LAWS AND INTERNATIONAL TREATIES. THE RECEIPT OR POSSESSION OF
+// THIS SOURCE CODE AND/OR RELATED INFORMATION DOES NOT CONVEY OR IMPLY ANY RIGHTS TO
+// REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
+// ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
+
+package lspcmd
+
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
+	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
+	"github.com/unstablebuild/rune-go-sdk/api/textapi"
+	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
+	"github.com/unstablebuild/rune-go-sdk/term"
+)
+
+var _ textapi.CommandHandler = (*referencesHandler)(nil)
+
+func TestReferencesEnrichedDisplay(t *testing.T) {
+	rootURI, err := workspaceapi.ParseURI("file:///project")
+	require.NoError(t, err)
+
+	locs := []semanticapi.Location{
+		{
+			URI: "file:///project/a.go",
+			Range: semanticapi.Range{
+				Start: semanticapi.Position{Line: 0, Character: 5},
+				End:   semanticapi.Position{Line: 0, Character: 8},
+			},
+		},
+	}
+	lsp := &mockLSP{
+		referencesFn: func(_ context.Context, _ semanticapi.ReferenceParams) ([]semanticapi.Location, error) {
+			return locs, nil
+		},
+	}
+	cells := term.StringToCells("func Add(a, b int) int")
+	editor := &mockEditor{
+		editorFn: func(u workspaceapi.URI) (textapi.Handler, error) {
+			return &mockHandler{uri: u}, nil
+		},
+		cellViewFn: func(_ textapi.Handler) textapi.CellView {
+			return &mockCellView{rawCellsFn: func() ([][]term.Cell, error) { return cells, nil }}
+		},
+	}
+	var fh browserapi.Floating
+	wm := &mockWindowManager{
+		floatingFn: func(h browserapi.Floating, _ browserapi.FloatingConfig) (browserapi.Window, error) {
+			fh = h
+			return nil, nil
+		},
+	}
+	h := ReferencesHandler(
+		lsp, editor, wm, &mockResourceOpener{}, &mockNotifications{}, &mockFileSystem{},
+		ReferencesConfig{RootURI: rootURI},
+	)
+
+	uri, _ := workspaceapi.ParseURI("file:///project/a.go")
+	cmd := textapi.Command{Name: "references", URI: uri, Resource: &mockHandler{uri: uri}}
+	cmd.Cursor.Content = term.Coordinates{X: 5, Y: 0}
+
+	err = h.HandleCommand(context.Background(), cmd)
+	require.NoError(t, err)
+	require.NotNil(t, fh)
+
+	lh := fh.(*locationsFloatingHandler)
+	assert.Equal(t, "a.go:1 Add", lh.entries[0].display)
+}
+
+func TestReferencesHandler(t *testing.T) {
+	rootURI, err := workspaceapi.ParseURI("file:///project")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		locs        []semanticapi.Location
+		nilResource bool
+		wantFloat   bool
+		wantEntries int
+	}{
+		{
+			name: "multiple references",
+			locs: []semanticapi.Location{
+				{
+					URI: "file:///project/a.go",
+					Range: semanticapi.Range{
+						Start: semanticapi.Position{Line: 10, Character: 5},
+						End:   semanticapi.Position{Line: 10, Character: 8},
+					},
+				},
+				{
+					URI: "file:///project/b.go",
+					Range: semanticapi.Range{
+						Start: semanticapi.Position{Line: 20, Character: 0},
+						End:   semanticapi.Position{Line: 20, Character: 3},
+					},
+				},
+			},
+			wantFloat:   true,
+			wantEntries: 2,
+		},
+		{name: "zero references", locs: nil, wantFloat: false},
+		{name: "nil resource", nilResource: true, wantFloat: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lsp := &mockLSP{
+				referencesFn: func(_ context.Context, _ semanticapi.ReferenceParams) ([]semanticapi.Location, error) {
+					return tt.locs, nil
+				},
+			}
+			editor := &mockEditor{
+				editorFn: func(u workspaceapi.URI) (textapi.Handler, error) {
+					return &mockHandler{uri: u}, nil
+				},
+			}
+			var fh browserapi.Floating
+			wm := &mockWindowManager{
+				floatingFn: func(h browserapi.Floating, _ browserapi.FloatingConfig) (browserapi.Window, error) {
+					fh = h
+					return nil, nil
+				},
+			}
+			h := ReferencesHandler(
+				lsp, editor, wm, &mockResourceOpener{}, &mockNotifications{}, &mockFileSystem{},
+				ReferencesConfig{RootURI: rootURI},
+			)
+
+			uri, _ := workspaceapi.ParseURI("file:///project/a.go")
+			cmd := textapi.Command{Name: "references", URI: uri}
+			if !tt.nilResource {
+				cmd.Resource = &mockHandler{uri: uri}
+			}
+			cmd.Cursor.Content = term.Coordinates{X: 5, Y: 10}
+
+			err := h.HandleCommand(context.Background(), cmd)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantFloat, fh != nil)
+			if tt.wantEntries > 0 {
+				lh := fh.(*locationsFloatingHandler)
+				assert.Equal(t, tt.wantEntries, len(lh.entries))
+			}
+		})
+	}
+}

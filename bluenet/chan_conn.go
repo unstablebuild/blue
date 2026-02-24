@@ -124,7 +124,7 @@ func (c *chanConn) Read(b []byte) (n int, err error) {
 			if !timer.Stop() {
 				<-timer.C
 			}
-			timer.Reset(deadline.Sub(time.Now()))
+			timer.Reset(time.Until(deadline))
 		case <-timer.C:
 			err = &timeoutError{}
 			return
@@ -201,7 +201,7 @@ func (c *chanConn) Write(b []byte) (n int, err error) {
 			if !timer.Stop() {
 				<-timer.C
 			}
-			timer.Reset(deadline.Sub(time.Now()))
+			timer.Reset(time.Until(deadline))
 		case <-c.closeCtx.Done():
 			err = net.ErrClosed
 			return
@@ -221,7 +221,7 @@ func (c *chanConn) Write(b []byte) (n int, err error) {
 					if !timer.Stop() {
 						<-timer.C
 					}
-					timer.Reset(deadline.Sub(time.Now()))
+					timer.Reset(time.Until(deadline))
 					continue
 				case <-c.closeCtx.Done():
 					err = net.ErrClosed

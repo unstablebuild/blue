@@ -177,7 +177,7 @@ func makeProtoFilters(m docmarshal.Marshaler, filters []document.Filter) (
 ) {
 	slab := make(map[string]interface{})
 	for _, f := range filters {
-		if len(f.Field.FieldPath) == 0 {
+		if len(f.FieldPath) == 0 {
 			panic("invalid List filter: empty zero-valued FieldPath")
 		}
 		pf := new(docpb.ListDocumentRequest_Filter)

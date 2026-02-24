@@ -34,8 +34,7 @@ import (
 )
 
 func TestTemplate(t *testing.T) {
-	var ifc any //nolint:gosimple
-	ifc = testStruct1{Public: "hello"}
+	var ifc any = testStruct1{Public: "hello"}
 	tsuite := []struct {
 		desc        string
 		inTemplate  string

@@ -334,7 +334,7 @@ func TestReadWritable(t *testing.T) {
 			require.NoError(t, err)
 
 			for i := 0; i < 10; i++ {
-				n, err := f.Write([]byte(fmt.Sprintf("%d", i)))
+				n, err := fmt.Fprintf(f, "%d", i)
 				require.NoError(t, err)
 				assert.Equal(t, 1, n)
 

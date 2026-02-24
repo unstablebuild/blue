@@ -47,8 +47,7 @@ type testStruct1 struct {
 
 func TestTable(t *testing.T) {
 	//nolint:gosimple
-	var ifc interface{}
-	ifc = testStruct1{Public: "hello"}
+	var ifc interface{} = testStruct1{Public: "hello"}
 	tsuite := []struct {
 		desc        string
 		inFields    []string
