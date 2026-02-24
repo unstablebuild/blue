@@ -44,10 +44,7 @@ import (
 )
 
 const (
-	uploadTimeout             = 10 * time.Minute
-	pgpSignedMetadata         = "pgp-signature"
-	pgpSignedMetadataKey      = "pgp-signing-key-id"
-	pgpSignedMetadataIdentity = "pgp-signing-primary-identity"
+	uploadTimeout = 10 * time.Minute
 )
 
 type metadataFlag []string
@@ -126,13 +123,13 @@ func findPrivateKeyInKeyRing(
 }
 
 func readPasswordFromStdin() (string, error) {
-	fmt.Fprintf(os.Stdout, "PGP key passphrase:")
+	_, _ = fmt.Fprintf(os.Stdout, "PGP key passphrase:")
 	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 	if err != nil {
 		err = fmt.Errorf("failed to read passphrase from stdin: %s", err)
 		return "", err
 	}
-	fmt.Fprintf(os.Stdout, "\r")
+	_, _ = fmt.Fprintf(os.Stdout, "\r")
 	return string(bytePassword), nil
 }
 
@@ -145,7 +142,7 @@ func (s *releaseUpload) uploadSignedRelease(
 	var pb *barProgress
 	defer func() {
 		if pb != nil {
-			pb.Close()
+			_ = pb.Close()
 		}
 	}()
 	for {
@@ -190,7 +187,7 @@ func (s *releaseUpload) uploadSignedRelease(
 			passphrase = s.privKeyPassphrase
 		}
 
-		pb.Close()
+		_ = pb.Close()
 		pb = nil
 	}
 }
@@ -223,7 +220,7 @@ func (s *releaseUpload) Run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	mdata, err := s.parseMetadataFlag()
 	if err != nil {
@@ -244,7 +241,7 @@ func (s *releaseUpload) Run(ctx context.Context, args []string) error {
 	defer cancel()
 
 	pb := newBarProgress(file)
-	defer pb.Close()
+	defer func() { _ = pb.Close() }()
 
 	return s.m.Upload(ctx, m, pb)
 }

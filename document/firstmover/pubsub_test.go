@@ -418,7 +418,7 @@ func TestPubSub(t *testing.T) {
 				}
 			}
 			require.NoError(t, newLeader.Publish(ctx, topic, []byte("block")))
-			newLeader.Close()
+			_ = newLeader.Close()
 		}
 
 		wg.Wait()
@@ -459,7 +459,7 @@ func TestPubSub(t *testing.T) {
 				time.Sleep(cfg.DialTimeout + cfg.ConnectRetryCadence)
 				for _, instance := range instances {
 					if instance.IsLeader() && instance != instance1 && instance != instance2 {
-						instance.Close()
+						_ = instance.Close()
 						break
 					}
 				}

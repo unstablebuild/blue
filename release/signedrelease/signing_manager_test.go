@@ -142,7 +142,7 @@ func TestSigningManager(t *testing.T) {
 
 		// satisfies io.Seeker
 		in := makeReleaseContent(t, "wasup")
-		defer in.Close()
+		defer func() { _ = in.Close() }()
 
 		expectUpload(t, mock, key, man, true)
 
@@ -159,7 +159,7 @@ func TestSigningManager(t *testing.T) {
 		encryptedKey.Entity.PrivateKey.Encrypted = true
 		m := NewManager(mock, encryptedKey)
 		in := makeReleaseContent(t, "wasup")
-		defer in.Close()
+		defer func() { _ = in.Close() }()
 
 		err := m.Upload(ctx, man, release.NopProgressReader(in))
 		require.Equal(t, ErrEncryptedKey, err)
@@ -172,7 +172,7 @@ func TestSigningManager(t *testing.T) {
 		mock := releasetest.NewMockManager(ctrl)
 		m := NewManager(mock, key)
 		in := makeReleaseContent(t, "T****")
-		defer in.Close()
+		defer func() { _ = in.Close() }()
 
 		mock.EXPECT().Upload(gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(errors.New("capitol insurrectionists")).Times(1)
@@ -214,7 +214,7 @@ func TestSigningManager(t *testing.T) {
 			DoAndReturn(signReleaseContent(t, key, man, contentStr, contentStr)).Times(1)
 
 		out := makeReleaseContent(t, "")
-		defer out.Close()
+		defer func() { _ = out.Close() }()
 		ret, err := m.Get(ctx, man.Package, man.Version, release.NopProgressWriter(out))
 		require.NoError(t, err)
 		assert.Equal(t, man.Package, ret.Package)
@@ -258,7 +258,7 @@ func TestSigningManager(t *testing.T) {
 			Times(1)
 
 		out := makeReleaseContent(t, "")
-		defer out.Close()
+		defer func() { _ = out.Close() }()
 		_, err := m.Get(ctx, man.Package, man.Version, release.NopProgressWriter(out))
 		require.Error(t, err)
 	})
@@ -279,7 +279,7 @@ func TestSigningManager(t *testing.T) {
 			Times(1)
 
 		out := makeReleaseContent(t, "")
-		defer out.Close()
+		defer func() { _ = out.Close() }()
 		_, err := m.Get(ctx, man.Package,
 			man.Version, release.NopProgressWriter(out))
 		require.Error(t, err)

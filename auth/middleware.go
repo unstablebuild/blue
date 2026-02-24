@@ -139,7 +139,7 @@ func (m *middleware[T]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *middleware[T]) forbidden(
-	err error, w http.ResponseWriter, r *http.Request, attemptAt time.Time,
+	err error, w http.ResponseWriter, _ *http.Request, attemptAt time.Time,
 	traceID trace.ID, fields ...logging.Field,
 ) {
 	http.Error(w, err.Error(), http.StatusForbidden)

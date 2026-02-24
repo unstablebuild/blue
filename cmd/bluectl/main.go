@@ -58,7 +58,7 @@ func main() {
 	if err != nil {
 		exitWithError(err)
 	}
-	defer ctl.Close()
+	defer func() { _ = ctl.Close() }()
 
 	err = cli.Run(context.Background(), ctl)
 	if err != nil {

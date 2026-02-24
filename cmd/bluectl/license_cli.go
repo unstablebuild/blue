@@ -161,7 +161,7 @@ type result struct {
 }
 
 func processFile(
-	ctx context.Context, r *regexp.Regexp,
+	_ context.Context, r *regexp.Regexp,
 	license, filename string, dryRun, forceReplace bool,
 ) (ret result) {
 	ret.filename = filename
@@ -210,7 +210,7 @@ func processFile(
 	return
 }
 
-func containsLicenseHeader(header, content string) bool {
+func containsLicenseHeader(header, _ string) bool {
 	header = strings.ToLower(header)
 	containsCopyright := strings.Contains(header, "copyright")
 	containsLicense := strings.Contains(header, "license")
@@ -282,14 +282,14 @@ func replaceHeader(content, oldHeader, header string) (res string) {
 	// NOTE: 1, 2, 3 line number indicators needed here otherwise to prevent
 	// gofmt to remove the L5 on the block above.
 	//
-	preservedDirectives := ""
+	var preservedDirectives strings.Builder
 
-	for _, line := range strings.Split(oldHeader, "\n") {
-		if strings.HasPrefix(line, "//") {
-			directive := strings.TrimPrefix(line, "//")
+	for line := range strings.SplitSeq(oldHeader, "\n") {
+		if directive, ok := strings.CutPrefix(line, "//"); ok {
 			directive = strings.TrimSpace(directive)
 			if isDirective(directive) {
-				preservedDirectives += "\n" + line
+				preservedDirectives.WriteString("\n")
+				preservedDirectives.WriteString(line)
 			}
 		}
 	}
@@ -297,7 +297,7 @@ func replaceHeader(content, oldHeader, header string) (res string) {
 	res = strings.ReplaceAll(
 		content,
 		strings.TrimSpace(oldHeader),
-		strings.TrimSpace(header)+"\n"+preservedDirectives,
+		strings.TrimSpace(header)+"\n"+preservedDirectives.String(),
 	)
 	return res
 }

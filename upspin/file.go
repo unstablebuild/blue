@@ -203,9 +203,7 @@ func (f *File) writeAt(op errors.Op, b []byte, off int64) (n int, err error) {
 	f.dirty = true
 	if end > int64(cap(f.data)) {
 		nLen := end * 3 / 2
-		if nLen > maxInt {
-			nLen = maxInt
-		}
+		nLen = min(nLen, maxInt)
 		ndata := make([]byte, len(f.data), nLen)
 		copy(ndata, f.data)
 		f.data = ndata
@@ -304,7 +302,7 @@ func (f *File) errClosed(op errors.Op) error {
 	return errors.E(op, errors.Invalid, f.name, "is closed")
 }
 
-func (f *File) put(op errors.Op) error {
+func (f *File) put(_ errors.Op) error {
 	entry, err := f.client.Put(f.name, f.data)
 	if err == nil {
 		f.lastPutSeqID = entry.Sequence

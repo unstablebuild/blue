@@ -112,7 +112,7 @@ func (h tokenHandler[T]) ServeHTTP(
 		return
 	}
 
-	claims, ok := validateProviderResponse[T](
+	claims, ok := validateProviderResponse(
 		ctx, logger, traceID, attemptAt, tokenCallType,
 		w, in, certsURL, clientID, providerResponse)
 	if !ok {
@@ -202,8 +202,8 @@ type redeemResponse[T any] struct {
 }
 
 func validateTokenRequest(
-	ctx context.Context, traceID trace.ID, attemptAt time.Time,
-	w http.ResponseWriter, in *http.Request,
+	_ context.Context, _ trace.ID, _ time.Time,
+	_ http.ResponseWriter, in *http.Request,
 ) (body []byte, refreshToken, clientID string, err error) {
 	body, err = io.ReadAll(in.Body)
 	if err != nil {
@@ -271,7 +271,7 @@ func validateClientSecret(
 }
 
 func fetchProviderToken[T any](
-	ctx context.Context, logger *log.Entry, traceID trace.ID, attemptAt time.Time,
+	ctx context.Context, _ *log.Entry, traceID trace.ID, attemptAt time.Time,
 	callType string, w http.ResponseWriter, in *http.Request,
 	redeemURL string, body []byte,
 ) (ret redeemResponse[T], ok bool) {
@@ -300,7 +300,7 @@ func fetchProviderToken[T any](
 			return true, fmt.Errorf("response code %v", res.StatusCode)
 		}
 
-		defer res.Body.Close()
+		defer func() { _ = res.Body.Close() }()
 
 		respBody, err = io.ReadAll(res.Body)
 		if err != nil {
@@ -336,7 +336,7 @@ func fetchProviderToken[T any](
 }
 
 func validateProviderResponse[T any](
-	ctx context.Context, logger *log.Entry,
+	ctx context.Context, _ *log.Entry,
 	traceID trace.ID, attemptAt time.Time, callType string,
 	w http.ResponseWriter, in *http.Request,
 	certsURL, clientID string,

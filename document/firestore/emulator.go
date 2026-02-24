@@ -59,7 +59,7 @@ func RunFirestoreEmulator() (teardown func() error, err error) {
 	if err != nil {
 		_ = teardown()
 	} else {
-		os.Setenv("FIRESTORE_EMULATOR_HOST", addr)
+		_ = os.Setenv("FIRESTORE_EMULATOR_HOST", addr)
 	}
 
 	logging.LogResult(err, start, traceID, callType, field)
@@ -70,10 +70,10 @@ func waitForEmulator(addr string) (err error) {
 	const tries = 20
 	const backoff = 500 * time.Millisecond
 	var conn net.Conn
-	for i := 0; i < tries; i++ {
+	for range tries {
 		conn, err = net.Dial("tcp", addr)
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 			return
 		}
 		time.Sleep(backoff)

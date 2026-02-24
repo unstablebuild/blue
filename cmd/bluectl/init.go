@@ -89,7 +89,7 @@ func updateConfig(filePath string, auth authConfig) error {
 		return err
 	}
 
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	provider, err := config.NewReaderProvider(f)
 	if err != nil {
@@ -116,7 +116,7 @@ func createDefaultConfig(filePath string, auth authConfig) error {
 		return err
 	}
 
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	provider, err := config.NewStringProvider(defaultReferenceConfig)
 	if err != nil {
@@ -133,7 +133,7 @@ func createDefaultConfig(filePath string, auth authConfig) error {
 }
 
 func (i initializer) readLine(header string) (str string, err error) {
-	fmt.Fprint(i.outputWriter, header)
+	_, _ = fmt.Fprint(i.outputWriter, header)
 	r := bufio.NewReader(i.inputReader)
 	str, err = r.ReadString('\n')
 	if err == io.EOF {

@@ -245,7 +245,7 @@ func (d *documentManager) Upload(
 	err = d.db.Update(ctx, packageDocID, updates)
 	if err != nil {
 		if err == document.ErrNotFound {
-			err = fmt.Errorf("Package %q does not exist", m.Package)
+			err = fmt.Errorf("package %q does not exist", m.Package)
 		}
 		return d.forceDelete(err, id)
 	}

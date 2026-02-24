@@ -49,41 +49,41 @@ func commandStats(fs FlagSet, cmds []Manual) (
 }
 
 func printCommandsUsage(output io.Writer, padding int, commands []Manual) {
-	fmt.Fprint(output, "Commands:\n")
+	_, _ = fmt.Fprint(output, "Commands:\n")
 	for _, man := range commands {
-		fmt.Fprint(output,
+		_, _ = fmt.Fprint(output,
 			pad.Right(fmt.Sprintf("  %s", man.Name), padding, " "))
-		fmt.Fprintf(output, "  %s\n", man.Summary)
+		_, _ = fmt.Fprintf(output, "  %s\n", man.Summary)
 	}
-	fmt.Fprint(output, "\n")
+	_, _ = fmt.Fprint(output, "\n")
 }
 
 func printOptionsUsage(output io.Writer, padding int, options FlagSet) {
-	fmt.Fprint(output, "Options:\n")
+	_, _ = fmt.Fprint(output, "Options:\n")
 	options.VisitAll(func(f *flag.Flag) {
-		fmt.Fprint(output,
+		_, _ = fmt.Fprint(output,
 			pad.Right(fmt.Sprintf("  -%s", f.Name), padding, " "))
-		fmt.Fprintf(output, "  %s [default: %s]\n", f.Usage, f.DefValue)
+		_, _ = fmt.Fprintf(output, "  %s [default: %s]\n", f.Usage, f.DefValue)
 	})
-	fmt.Fprint(output, "\n")
+	_, _ = fmt.Fprint(output, "\n")
 }
 
 func printSummaryUsage(
 	output io.Writer, summary, name, synopsis string,
 ) {
 	if summary != "" {
-		fmt.Fprintf(output, "%s\n\n", summary)
+		_, _ = fmt.Fprintf(output, "%s\n\n", summary)
 	}
 
-	fmt.Fprintf(output, "Usage: %s %s", name, synopsis)
-	fmt.Fprint(output, "\n\n")
+	_, _ = fmt.Fprintf(output, "Usage: %s %s", name, synopsis)
+	_, _ = fmt.Fprint(output, "\n\n")
 }
 
 // UsageError prints err and the cli Usage.
 func UsageError(cli CLI, err error) {
 	opts := cli.Man().Options
 	output := opts.Output()
-	fmt.Fprintf(output, "Error: %s\n\n", err)
+	_, _ = fmt.Fprintf(output, "Error: %s\n\n", err)
 	Usage(cli)
 }
 

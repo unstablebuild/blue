@@ -53,19 +53,19 @@ func NewInMemoryServiceWithMarshaler(m docmarshal.Marshaler) DroppableService {
 }
 
 func (c *inMemoryService) Set(
-	ctx context.Context, ID string, data interface{},
+	ctx context.Context, ID string, data any,
 ) error {
 	return c.set(ctx, ID, data, false)
 }
 
 func (c *inMemoryService) Create(
-	ctx context.Context, ID string, data interface{},
+	ctx context.Context, ID string, data any,
 ) error {
 	return c.set(ctx, ID, data, true)
 }
 
 func (c *inMemoryService) set(
-	ctx context.Context, ID string, data interface{},
+	_ context.Context, ID string, data any,
 	errAlreadyExists bool,
 ) (err error) {
 	if data == nil {
@@ -89,7 +89,7 @@ func (c *inMemoryService) set(
 	return
 }
 
-func (c *inMemoryService) getValue(ID string, doc interface{}) (
+func (c *inMemoryService) getValue(ID string, doc any) (
 	err error,
 ) {
 	var ok bool
@@ -105,7 +105,7 @@ func (c *inMemoryService) getValue(ID string, doc interface{}) (
 }
 
 func (c *inMemoryService) Get(
-	ctx context.Context, ID string, to interface{},
+	ctx context.Context, ID string, to any,
 ) (err error) {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -125,7 +125,7 @@ func (c *inMemoryService) Update(
 	c.m.Lock()
 	defer c.m.Unlock()
 
-	var proto map[string]interface{}
+	var proto map[string]any
 	err := c.getValue(ID, &proto)
 	if err != nil {
 		return err

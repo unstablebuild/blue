@@ -67,13 +67,13 @@ type Service interface {
 	// to a struct. The map keys or exported struct fields become the
 	// fields of the document.
 	//
-	// Pointers and the empty interface{} are permitted as
+	// Pointers and the empty any are permitted as
 	// struct attributes or map values, and their elements processed recursively.
 	//
 	// DefaultCreatedAtField is automatically added and clients can consume it
 	// by adding the corresponding property in the document structure.
 	// Note that certain implementations might require special field tags.
-	Create(ctx context.Context, ID string, doc interface{}) error
+	Create(ctx context.Context, ID string, doc any) error
 
 	// Set creates a document with the given data or updates it if it already exists.
 	//
@@ -81,7 +81,7 @@ type Service interface {
 	// by adding the corresponding property in the document structure.
 	//
 	// See Create for more details.
-	Set(ctx context.Context, ID string, doc interface{}) error
+	Set(ctx context.Context, ID string, doc any) error
 
 	// Update updates the document. The values at the given
 	// field paths are replaced, but other fields of the stored document
@@ -95,8 +95,8 @@ type Service interface {
 	// Get retrieves the document. If the document does not exist,
 	// it returns a ErrNotFound error.
 	// Parameter doc is used to populate the document's fields.
-	// It can be a pointer to a map[string]interface{} or a pointer to a struct.
-	Get(ctx context.Context, ID string, doc interface{}) error
+	// It can be a pointer to a map[string]any or a pointer to a struct.
+	Get(ctx context.Context, ID string, doc any) error
 
 	// Delete deletes the document. If the document doesn't exist,
 	// it does nothing and returns no error.
@@ -132,14 +132,14 @@ type DroppableService interface {
 // implementation.
 type Iterator interface {
 	HasNext() bool
-	NextTo(doc interface{}) error
+	NextTo(doc any) error
 	io.Closer
 }
 
 // Field represents a document field.
 type Field struct {
 	FieldPath []string
-	Value     interface{}
+	Value     any
 }
 
 // Update is used to indicate an update operation to a document field.

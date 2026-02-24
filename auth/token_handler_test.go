@@ -282,7 +282,7 @@ func badRedeemHandler(clientID string) http.Handler {
 	})
 }
 
-func goodRedeemHandlerBadResponse(clientID string) http.Handler {
+func goodRedeemHandlerBadResponse(_ string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var out redeemResponse[User]
 		out.TokenType = "somethingWeird"

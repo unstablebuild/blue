@@ -52,7 +52,9 @@ func NewService(projectID, credsFile string) (*Service, error) {
 	// in a GC runtime, the SDK knows how to fetch credentials
 	// for local development, we need to pass a file manually
 	if credsFile != "" {
-		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credsFile)
+		if err := os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credsFile); err != nil {
+			return nil, fmt.Errorf("set GOOGLE_APPLICATION_CREDENTIALS: %v", err)
+		}
 	}
 
 	ctx := context.Background()

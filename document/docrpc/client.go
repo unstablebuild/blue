@@ -54,9 +54,7 @@ func NewClient(
 	addr net.Addr, m docmarshal.Marshaler, opts ...grpc.DialOption,
 ) (document.Service, error) {
 	opts = append(opts, grpc.WithContextDialer(
-		func(ctx context.Context, _ string) (net.Conn, error) {
-			var d net.Dialer
-			d.Deadline, _ = ctx.Deadline()
+		func(_ context.Context, _ string) (net.Conn, error) {
 			conn, err := net.Dial(addr.Network(), addr.String())
 			if err != nil {
 				return nil, err
@@ -71,7 +69,7 @@ func NewClient(
 			return conn, err
 		},
 	))
-	cc, err := grpc.Dial("", opts...)
+	cc, err := grpc.NewClient("passthrough:///", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +87,7 @@ func (c *Client) Init(cc grpc.ClientConnInterface, m docmarshal.Marshaler) {
 }
 
 func (c *Client) Create(
-	ctx context.Context, ID string, data interface{},
+	ctx context.Context, ID string, data any,
 ) error {
 	bytes, err := c.encodeCreateData(data)
 	if err != nil {
@@ -108,7 +106,7 @@ func (c *Client) Create(
 }
 
 func (c *Client) Set(
-	ctx context.Context, ID string, data interface{},
+	ctx context.Context, ID string, data any,
 ) error {
 	bytes, err := c.encodeCreateData(data)
 	if err != nil {
@@ -147,7 +145,7 @@ func (c *Client) Update(
 }
 
 func (c *Client) Get(
-	ctx context.Context, ID string, doc interface{},
+	ctx context.Context, ID string, doc any,
 ) error {
 	req := docpb.GetDocumentRequest{Id: ID}
 	res, err := c.pb.Get(ctx, &req)
@@ -198,7 +196,7 @@ func (l *rpcIterator) HasNext() bool {
 	return true
 }
 
-func (l *rpcIterator) NextTo(doc interface{}) error {
+func (l *rpcIterator) NextTo(doc any) error {
 	if l.next == nil && l.nextErr == nil {
 		if !l.HasNext() {
 			return io.EOF
@@ -255,7 +253,7 @@ func (c *Client) Close() error {
 	return nil
 }
 
-func (c *Client) encodeCreateData(data interface{}) ([]byte, error) {
+func (c *Client) encodeCreateData(data any) ([]byte, error) {
 	if data == nil {
 		panic("invalid nil data argument to Create/Set")
 	}

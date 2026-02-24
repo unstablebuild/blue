@@ -129,7 +129,7 @@ func TestClientServerUnary(t *testing.T) {
 			} else {
 				clientOpts = []grpc.DialOption{grpc.WithTransportCredentials(clientCreds)}
 			}
-			conn, err := grpc.Dial(lis.Addr().String(), clientOpts...)
+			conn, err := grpc.NewClient(lis.Addr().String(), clientOpts...)
 			require.NoError(t, err)
 
 			rgc := pb.NewEchoClient(conn)

@@ -360,17 +360,18 @@ func (s *Service) follow(ctx context.Context, addr net.Addr) (bool, error) {
 			grpc.MaxCallSendMsgSize(s.cfg.MaxMessageSize),
 			grpc.MaxCallRecvMsgSize(s.cfg.MaxMessageSize),
 		),
-		grpc.WithBlock(),
 	}
-	opts = append(opts, grpc.WithContextDialer(
-		func(ctx context.Context, _ string) (net.Conn, error) {
-			var d net.Dialer
-			return d.DialContext(ctx, addr.Network(), addr.String())
-		},
-	))
+	opts = append(opts,
+		grpc.WithBlock(), //nolint:staticcheck // WithBlock is needed for dial-timeout behavior
+		grpc.WithContextDialer(
+			func(ctx context.Context, _ string) (net.Conn, error) {
+				var d net.Dialer
+				return d.DialContext(ctx, addr.Network(), addr.String())
+			},
+		))
 	// do not override context as we're using it to know when Service is closing
 	dialCtx, cancel := context.WithTimeout(ctx, s.cfg.DialTimeout)
-	conn, err := grpc.DialContext(dialCtx, "", opts...)
+	conn, err := grpc.DialContext(dialCtx, "", opts...) //nolint:staticcheck // NewClient doesn't support blocking dial with timeout
 	cancel()
 	if err != nil {
 		// any Dial errors should always be retried. Any socket specific errors
@@ -473,7 +474,7 @@ func (s *Service) resubscribe(ctx context.Context, subscriptions map[string][][]
 		}
 		s.log(log.DebugLevel, "resubscribe: created stream %p for topic %q, "+
 			"sending %d messages", stream, topic, len(buffered))
-		for i := 0; i < len(buffered); i++ {
+		for i := range len(buffered) {
 			stream <- msgError{msg: &pubsubpb.ReceiveMessage_Data{Data: buffered[i]}}
 		}
 		s.log(log.DebugLevel, "resubscribe: re-published %d messages from topic %q",
@@ -528,7 +529,7 @@ func (s *Service) setActiveAndUnlock(svc document.Service) {
 
 func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bool, err error) {
 	server := docrpc.NewServer(document.SyncWithLocker(s.svc, &s.mu), s.cfg.Marshaler)
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	gsrv := grpc.NewServer(
 		grpc.MaxSendMsgSize(s.cfg.MaxMessageSize),
@@ -591,7 +592,7 @@ func (s *Service) lead(ctx context.Context, listener net.Listener) (reconnect bo
 	}
 }
 
-func (s *Service) log(level log.Level, msg string, args ...interface{}) {
+func (s *Service) log(level log.Level, msg string, args ...any) {
 	if !log.IsLevelEnabled(level) {
 		return
 	}

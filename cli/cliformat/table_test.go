@@ -33,8 +33,8 @@ import (
 )
 
 type testStruct2 struct {
-	Map      map[string]interface{}
-	SliceIfc []interface{}
+	Map      map[string]any
+	SliceIfc []any
 	SliceInt []int
 }
 
@@ -47,24 +47,24 @@ type testStruct1 struct {
 
 func TestTable(t *testing.T) {
 	//nolint:gosimple
-	var ifc interface{} = testStruct1{Public: "hello"}
+	var ifc any = testStruct1{Public: "hello"}
 	tsuite := []struct {
 		desc        string
 		inFields    []string
-		inEls       []interface{}
+		inEls       []any
 		expectedOut string
 		expectedErr bool
 	}{
 		{"empty iterator should print nothing",
-			[]string{}, []interface{}{}, "\n", false},
+			[]string{}, []any{}, "\n", false},
 		{"non-object types should error (string)",
-			[]string{}, []interface{}{"one"}, "", true},
+			[]string{}, []any{"one"}, "", true},
 		{"non-object types should error (int)",
-			[]string{}, []interface{}{1}, "", true},
+			[]string{}, []any{1}, "", true},
 		{"non-object types should error (bool)",
-			[]string{}, []interface{}{true}, "", true},
+			[]string{}, []any{true}, "", true},
 		{"pass map by value",
-			[]string{"Public"}, []interface{}{map[string]interface{}{"Public": "hello"}},
+			[]string{"Public"}, []any{map[string]any{"Public": "hello"}},
 			`
 ┌────────┐
 │ PUBLIC │
@@ -73,7 +73,7 @@ func TestTable(t *testing.T) {
 └────────┘
 `, false},
 		{"pass struct by value",
-			[]string{"Public"}, []interface{}{testStruct1{Public: "hello"}},
+			[]string{"Public"}, []any{testStruct1{Public: "hello"}},
 			`
 ┌────────┐
 │ PUBLIC │
@@ -82,7 +82,7 @@ func TestTable(t *testing.T) {
 └────────┘
 `, false},
 		{"pass struct by ref",
-			[]string{"Public"}, []interface{}{&testStruct1{Public: "hello"}},
+			[]string{"Public"}, []any{&testStruct1{Public: "hello"}},
 			`
 ┌────────┐
 │ PUBLIC │
@@ -90,8 +90,8 @@ func TestTable(t *testing.T) {
 │ hello  │
 └────────┘
 `, false},
-		{"pass struct by interface{}",
-			[]string{"Public"}, []interface{}{ifc},
+		{"pass struct by any",
+			[]string{"Public"}, []any{ifc},
 			`
 ┌────────┐
 │ PUBLIC │
@@ -100,10 +100,10 @@ func TestTable(t *testing.T) {
 └────────┘
 `, false},
 		{"preserve order of headers",
-			[]string{"Public2", "Public"}, []interface{}{
+			[]string{"Public2", "Public"}, []any{
 				&testStruct1{Public: "x", Public2: 0},
 				testStruct1{Public: "deux", Public2: 2},
-				map[string]interface{}{"Public": "trois", "Public2": "3"},
+				map[string]any{"Public": "trois", "Public2": "3"},
 			},
 			`
 ┌──────────┬────────┐
@@ -115,7 +115,7 @@ func TestTable(t *testing.T) {
 └──────────┴────────┘
 `, false},
 		{"private fields should not be printed",
-			[]string{"Public", "private"}, []interface{}{&testStruct1{private: "bla", Public: ""}},
+			[]string{"Public", "private"}, []any{&testStruct1{private: "bla", Public: ""}},
 			`
 ┌────────┬─────────┐
 │ PUBLIC │ PRIVATE │
@@ -124,9 +124,9 @@ func TestTable(t *testing.T) {
 └────────┴─────────┘
 `, false},
 		{"struct field",
-			[]string{"Composite"}, []interface{}{testStruct1{Composite: testStruct2{
-				Map:      map[string]interface{}{"Bootx": "Torn ACL"},
-				SliceIfc: []interface{}{"1", 1, true, false},
+			[]string{"Composite"}, []any{testStruct1{Composite: testStruct2{
+				Map:      map[string]any{"Bootx": "Torn ACL"},
+				SliceIfc: []any{"1", 1, true, false},
 				SliceInt: []int{0},
 			}}},
 			`
@@ -140,10 +140,10 @@ func TestTable(t *testing.T) {
 
 	for _, tcase := range tsuite {
 		t.Run(tcase.desc, func(t *testing.T) {
-			table := Table[interface{}](tcase.inFields)
+			table := Table[any](tcase.inFields)
 			var buf bytes.Buffer
 			buf.WriteString("\n") // make test cases easier to write
-			it := iterator.FromSlice[any](tcase.inEls)
+			it := iterator.FromSlice(tcase.inEls)
 			err := table.Format(context.Background(), &buf, it)
 			if tcase.expectedErr {
 				assert.Error(t, err)

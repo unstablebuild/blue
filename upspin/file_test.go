@@ -200,7 +200,7 @@ func TestFileOverflow(t *testing.T) {
 		fileName = user + "/" + "file"
 	)
 	f := create(t, fileName)
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	buf := make([]byte, maxInt)
 	n, err := f.Write(buf)
 	if err != nil {
@@ -237,7 +237,7 @@ func TestFileOverflow(t *testing.T) {
 	}
 
 	f = create(t, fileName+"x")
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	n64, err = f.Seek(maxInt, 0)
 	if err != nil {
 		t.Fatal("seek maxInt filex:", err)
@@ -327,13 +327,13 @@ func TestReadWritable(t *testing.T) {
 
 	t.Run("write then read", func(t *testing.T) {
 		f, client := makeReadWritableFile(t, "a", "")
-		for j := 0; j < 10; j++ {
+		for range 10 {
 
 			// reset read-side offsets
 			_, err := f.Seek(0, io.SeekStart)
 			require.NoError(t, err)
 
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				n, err := fmt.Fprintf(f, "%d", i)
 				require.NoError(t, err)
 				assert.Equal(t, 1, n)

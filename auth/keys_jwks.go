@@ -45,7 +45,7 @@ func FetchPublicJWKS(endpoint *url.URL) (Keys, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("http get: status code %d", resp.StatusCode)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var jwks jose.JSONWebKeySet
 	if err := json.NewDecoder(resp.Body).Decode(&jwks); err != nil {

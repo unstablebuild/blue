@@ -45,7 +45,7 @@ const (
 	defaultSecretsCollection = "blue-secret"
 )
 
-func newTestInitializer(t *testing.T, dirName string) (
+func newTestInitializer(_ *testing.T, dirName string) (
 	i initializer, reader *bytes.Buffer, writer *bytes.Buffer,
 ) {
 	reader = new(bytes.Buffer)
@@ -140,7 +140,7 @@ func TestInitializerRun(t *testing.T) {
 		f, err := os.Create(path.Join(dirName, configFile))
 		require.NoError(t, err)
 
-		_, err = f.Write([]byte("\rfweklf$!{\n"))
+		_, err = f.Write([]byte("\rfweklf$!\f\f\f\f{\n"))
 		require.NoError(t, err)
 		require.NoError(t, f.Close())
 
