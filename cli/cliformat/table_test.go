@@ -57,7 +57,7 @@ func TestTable(t *testing.T) {
 		expectedErr bool
 	}{
 		{"empty iterator should print nothing",
-			[]string{}, []interface{}{}, "\n+\n+\n", false},
+			[]string{}, []interface{}{}, "\n", false},
 		{"non-object types should error (string)",
 			[]string{}, []interface{}{"one"}, "", true},
 		{"non-object types should error (int)",
@@ -67,38 +67,38 @@ func TestTable(t *testing.T) {
 		{"pass map by value",
 			[]string{"Public"}, []interface{}{map[string]interface{}{"Public": "hello"}},
 			`
-+--------+
-| PUBLIC |
-+--------+
-| hello  |
-+--------+
+┌────────┐
+│ PUBLIC │
+├────────┤
+│ hello  │
+└────────┘
 `, false},
 		{"pass struct by value",
 			[]string{"Public"}, []interface{}{testStruct1{Public: "hello"}},
 			`
-+--------+
-| PUBLIC |
-+--------+
-| hello  |
-+--------+
+┌────────┐
+│ PUBLIC │
+├────────┤
+│ hello  │
+└────────┘
 `, false},
 		{"pass struct by ref",
 			[]string{"Public"}, []interface{}{&testStruct1{Public: "hello"}},
 			`
-+--------+
-| PUBLIC |
-+--------+
-| hello  |
-+--------+
+┌────────┐
+│ PUBLIC │
+├────────┤
+│ hello  │
+└────────┘
 `, false},
 		{"pass struct by interface{}",
 			[]string{"Public"}, []interface{}{ifc},
 			`
-+--------+
-| PUBLIC |
-+--------+
-| hello  |
-+--------+
+┌────────┐
+│ PUBLIC │
+├────────┤
+│ hello  │
+└────────┘
 `, false},
 		{"preserve order of headers",
 			[]string{"Public2", "Public"}, []interface{}{
@@ -107,22 +107,22 @@ func TestTable(t *testing.T) {
 				map[string]interface{}{"Public": "trois", "Public2": "3"},
 			},
 			`
-+---------+--------+
-| PUBLIC2 | PUBLIC |
-+---------+--------+
-|       0 | x      |
-|       2 | deux   |
-|       3 | trois  |
-+---------+--------+
+┌──────────┬────────┐
+│ PUBLIC 2 │ PUBLIC │
+├──────────┼────────┤
+│ 0        │ x      │
+│ 2        │ deux   │
+│ 3        │ trois  │
+└──────────┴────────┘
 `, false},
 		{"private fields should not be printed",
 			[]string{"Public", "private"}, []interface{}{&testStruct1{private: "bla", Public: ""}},
 			`
-+--------+---------+
-| PUBLIC | PRIVATE |
-+--------+---------+
-|        |         |
-+--------+---------+
+┌────────┬─────────┐
+│ PUBLIC │ PRIVATE │
+├────────┼─────────┤
+│        │         │
+└────────┴─────────┘
 `, false},
 		{"struct field",
 			[]string{"Composite"}, []interface{}{testStruct1{Composite: testStruct2{
@@ -131,12 +131,11 @@ func TestTable(t *testing.T) {
 				SliceInt: []int{0},
 			}}},
 			`
-+--------------------------------+
-|           COMPOSITE            |
-+--------------------------------+
-| {map[Bootx:Torn ACL] [1 1 true |
-| false] [0]}                    |
-+--------------------------------+
+┌────────────────────────────────────────────┐
+│                 COMPOSITE                  │
+├────────────────────────────────────────────┤
+│ {map[Bootx:Torn ACL] [1 1 true false] [0]} │
+└────────────────────────────────────────────┘
 `, false},
 	}
 

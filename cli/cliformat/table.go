@@ -70,7 +70,7 @@ func (f tableFormatter[T]) Format(
 	ctx context.Context, w io.Writer, it iterator.Iterator[T],
 ) error {
 	table := tablewriter.NewWriter(w)
-	table.SetHeader(f.fields)
+	table.Header(f.fields)
 
 	for {
 		t, ok := it.Next(ctx)
