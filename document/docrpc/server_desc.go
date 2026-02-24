@@ -28,8 +28,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/unstablebuild/blue/document/docrpc/docpb"
 	"github.com/unstablebuild/blue/document/docmarshal"
+	"github.com/unstablebuild/blue/document/docrpc/docpb"
 	"google.golang.org/grpc"
 )
 
@@ -181,10 +181,10 @@ func (c *documentStoreClient) List(
 		return nil, err
 	}
 	x := &documentStoreListClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
+	if err := x.SendMsg(in); err != nil {
 		return nil, err
 	}
-	if err := x.ClientStream.CloseSend(); err != nil {
+	if err := x.CloseSend(); err != nil {
 		return nil, err
 	}
 	return x, nil
@@ -196,7 +196,7 @@ type documentStoreListClient struct {
 
 func (x *documentStoreListClient) Recv() (*docpb.ListDocumentResponse, error) {
 	m := new(docpb.ListDocumentResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
+	if err := x.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil

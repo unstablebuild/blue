@@ -251,7 +251,7 @@ func isDirective(c string) bool {
 			continue
 		}
 		b := c[i]
-		if !('a' <= b && b <= 'z' || '0' <= b && b <= '9') {
+		if ('a' > b || b > 'z') && ('0' > b || b > '9') {
 			return false
 		}
 	}

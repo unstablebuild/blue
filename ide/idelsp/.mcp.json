@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "rune": {
+      "type": "stdio",
+      "command": "runectl",
+      "args": [
+        "mcp"
+      ],
+      "env": {}
+    }
+  }
+}
