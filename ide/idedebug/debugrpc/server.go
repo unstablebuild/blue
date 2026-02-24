@@ -16,24 +16,30 @@ package debugrpc
 
 import (
 	"context"
+	"io"
 
 	"github.com/google/go-dap"
 	"github.com/unstablebuild/rune-go-sdk/api/debugapi"
 	"github.com/unstablebuild/rune-go-sdk/api/debugapi/debugrpc"
+	"github.com/unstablebuild/rune-go-sdk/joincontext"
 	"google.golang.org/grpc"
 )
 
 var _ debugrpc.DebugServiceServer = (*Server)(nil)
+var _ io.Closer = (*Server)(nil)
 
 // Server implements DebugServiceServer by wrapping a debugapi.Debugger.
 type Server struct {
 	debugrpc.UnimplementedDebugServiceServer
-	debugger debugapi.Debugger
+	debugger  debugapi.Debugger
+	ctx       context.Context
+	cancelCtx func()
 }
 
 // NewServer creates a new Server wrapping the given Debugger.
 func NewServer(d debugapi.Debugger) *Server {
-	return &Server{debugger: d}
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	return &Server{ctx: ctx, cancelCtx: cancelCtx, debugger: d}
 }
 
 // Register registers this server with the given gRPC server.
@@ -43,6 +49,8 @@ func (s *Server) Register(srv *grpc.Server) {
 
 // Initialize implements DebugServiceServer.
 func (s *Server) Initialize(ctx context.Context, req *debugrpc.InitializeRequest) (*debugrpc.InitializeResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.InitializeRequestArguments{
 		ClientID:                     req.GetClientId(),
 		ClientName:                   req.GetClientName(),
@@ -72,6 +80,8 @@ func (s *Server) Initialize(ctx context.Context, req *debugrpc.InitializeRequest
 
 // Launch implements DebugServiceServer.
 func (s *Server) Launch(ctx context.Context, req *debugrpc.LaunchRequest) (*debugrpc.LaunchResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := debugapi.LaunchRequestArguments{
 		Program:     req.GetProgram(),
 		Args:        req.GetArgs(),
@@ -90,6 +100,8 @@ func (s *Server) Launch(ctx context.Context, req *debugrpc.LaunchRequest) (*debu
 
 // Attach implements DebugServiceServer.
 func (s *Server) Attach(ctx context.Context, req *debugrpc.AttachRequest) (*debugrpc.AttachResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := debugapi.AttachRequestArguments{
 		PID:     int(req.GetPid()),
 		Program: req.GetProgram(),
@@ -104,6 +116,8 @@ func (s *Server) Attach(ctx context.Context, req *debugrpc.AttachRequest) (*debu
 
 // ConfigurationDone implements DebugServiceServer.
 func (s *Server) ConfigurationDone(ctx context.Context, req *debugrpc.ConfigurationDoneRequest) (*debugrpc.ConfigurationDoneResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	if err := s.debugger.ConfigurationDone(ctx); err != nil {
 		return nil, err
 	}
@@ -112,6 +126,8 @@ func (s *Server) ConfigurationDone(ctx context.Context, req *debugrpc.Configurat
 
 // Disconnect implements DebugServiceServer.
 func (s *Server) Disconnect(ctx context.Context, req *debugrpc.DisconnectRequest) (*debugrpc.DisconnectResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.DisconnectArguments{
 		Restart:           req.GetRestart(),
 		TerminateDebuggee: req.GetTerminateDebuggee(),
@@ -127,6 +143,8 @@ func (s *Server) Disconnect(ctx context.Context, req *debugrpc.DisconnectRequest
 
 // Terminate implements DebugServiceServer.
 func (s *Server) Terminate(ctx context.Context, req *debugrpc.TerminateRequest) (*debugrpc.TerminateResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.TerminateArguments{
 		Restart: req.GetRestart(),
 	}
@@ -140,6 +158,8 @@ func (s *Server) Terminate(ctx context.Context, req *debugrpc.TerminateRequest) 
 
 // Restart implements DebugServiceServer.
 func (s *Server) Restart(ctx context.Context, req *debugrpc.RestartRequest) (*debugrpc.RestartResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	if err := s.debugger.Restart(ctx); err != nil {
 		return nil, err
 	}
@@ -148,6 +168,8 @@ func (s *Server) Restart(ctx context.Context, req *debugrpc.RestartRequest) (*de
 
 // SetBreakpoints implements DebugServiceServer.
 func (s *Server) SetBreakpoints(ctx context.Context, req *debugrpc.SetBreakpointsRequest) (*debugrpc.SetBreakpointsResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.SetBreakpointsArguments{
 		Source:         sourceFromProto(req.GetSource()),
 		Breakpoints:    sourceBreakpointsFromProto(req.GetBreakpoints()),
@@ -166,6 +188,8 @@ func (s *Server) SetBreakpoints(ctx context.Context, req *debugrpc.SetBreakpoint
 
 // SetFunctionBreakpoints implements DebugServiceServer.
 func (s *Server) SetFunctionBreakpoints(ctx context.Context, req *debugrpc.SetFunctionBreakpointsRequest) (*debugrpc.SetFunctionBreakpointsResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.SetFunctionBreakpointsArguments{
 		Breakpoints: functionBreakpointsFromProto(req.GetBreakpoints()),
 	}
@@ -182,6 +206,8 @@ func (s *Server) SetFunctionBreakpoints(ctx context.Context, req *debugrpc.SetFu
 
 // SetExceptionBreakpoints implements DebugServiceServer.
 func (s *Server) SetExceptionBreakpoints(ctx context.Context, req *debugrpc.SetExceptionBreakpointsRequest) (*debugrpc.SetExceptionBreakpointsResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.SetExceptionBreakpointsArguments{
 		Filters: req.GetFilters(),
 	}
@@ -198,6 +224,8 @@ func (s *Server) SetExceptionBreakpoints(ctx context.Context, req *debugrpc.SetE
 
 // Continue implements DebugServiceServer.
 func (s *Server) Continue(ctx context.Context, req *debugrpc.ContinueRequest) (*debugrpc.ContinueResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.ContinueArguments{
 		ThreadId:     int(req.GetThreadId()),
 		SingleThread: req.GetSingleThread(),
@@ -215,6 +243,8 @@ func (s *Server) Continue(ctx context.Context, req *debugrpc.ContinueRequest) (*
 
 // Pause implements DebugServiceServer.
 func (s *Server) Pause(ctx context.Context, req *debugrpc.PauseRequest) (*debugrpc.PauseResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.PauseArguments{
 		ThreadId: int(req.GetThreadId()),
 	}
@@ -227,6 +257,8 @@ func (s *Server) Pause(ctx context.Context, req *debugrpc.PauseRequest) (*debugr
 
 // Next implements DebugServiceServer.
 func (s *Server) Next(ctx context.Context, req *debugrpc.NextRequest) (*debugrpc.NextResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.NextArguments{
 		ThreadId:     int(req.GetThreadId()),
 		SingleThread: req.GetSingleThread(),
@@ -241,6 +273,8 @@ func (s *Server) Next(ctx context.Context, req *debugrpc.NextRequest) (*debugrpc
 
 // StepIn implements DebugServiceServer.
 func (s *Server) StepIn(ctx context.Context, req *debugrpc.StepInRequest) (*debugrpc.StepInResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.StepInArguments{
 		ThreadId:     int(req.GetThreadId()),
 		SingleThread: req.GetSingleThread(),
@@ -256,6 +290,8 @@ func (s *Server) StepIn(ctx context.Context, req *debugrpc.StepInRequest) (*debu
 
 // StepOut implements DebugServiceServer.
 func (s *Server) StepOut(ctx context.Context, req *debugrpc.StepOutRequest) (*debugrpc.StepOutResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.StepOutArguments{
 		ThreadId:     int(req.GetThreadId()),
 		SingleThread: req.GetSingleThread(),
@@ -270,6 +306,8 @@ func (s *Server) StepOut(ctx context.Context, req *debugrpc.StepOutRequest) (*de
 
 // StepBack implements DebugServiceServer.
 func (s *Server) StepBack(ctx context.Context, req *debugrpc.StepBackRequest) (*debugrpc.StepBackResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.StepBackArguments{
 		ThreadId:     int(req.GetThreadId()),
 		SingleThread: req.GetSingleThread(),
@@ -284,6 +322,8 @@ func (s *Server) StepBack(ctx context.Context, req *debugrpc.StepBackRequest) (*
 
 // ReverseContinue implements DebugServiceServer.
 func (s *Server) ReverseContinue(ctx context.Context, req *debugrpc.ReverseContinueRequest) (*debugrpc.ReverseContinueResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.ReverseContinueArguments{
 		ThreadId:     int(req.GetThreadId()),
 		SingleThread: req.GetSingleThread(),
@@ -297,6 +337,8 @@ func (s *Server) ReverseContinue(ctx context.Context, req *debugrpc.ReverseConti
 
 // Threads implements DebugServiceServer.
 func (s *Server) Threads(ctx context.Context, req *debugrpc.ThreadsRequest) (*debugrpc.ThreadsResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	threads, err := s.debugger.Threads(ctx)
 	if err != nil {
 		return nil, err
@@ -309,6 +351,8 @@ func (s *Server) Threads(ctx context.Context, req *debugrpc.ThreadsRequest) (*de
 
 // StackTrace implements DebugServiceServer.
 func (s *Server) StackTrace(ctx context.Context, req *debugrpc.StackTraceRequest) (*debugrpc.StackTraceResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.StackTraceArguments{
 		ThreadId:   int(req.GetThreadId()),
 		StartFrame: int(req.GetStartFrame()),
@@ -328,6 +372,8 @@ func (s *Server) StackTrace(ctx context.Context, req *debugrpc.StackTraceRequest
 
 // Scopes implements DebugServiceServer.
 func (s *Server) Scopes(ctx context.Context, req *debugrpc.ScopesRequest) (*debugrpc.ScopesResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.ScopesArguments{
 		FrameId: int(req.GetFrameId()),
 	}
@@ -344,6 +390,8 @@ func (s *Server) Scopes(ctx context.Context, req *debugrpc.ScopesRequest) (*debu
 
 // Variables implements DebugServiceServer.
 func (s *Server) Variables(ctx context.Context, req *debugrpc.VariablesRequest) (*debugrpc.VariablesResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.VariablesArguments{
 		VariablesReference: int(req.GetVariablesReference()),
 		Filter:             req.GetFilter(),
@@ -363,6 +411,8 @@ func (s *Server) Variables(ctx context.Context, req *debugrpc.VariablesRequest) 
 
 // SetVariable implements DebugServiceServer.
 func (s *Server) SetVariable(ctx context.Context, req *debugrpc.SetVariableRequest) (*debugrpc.SetVariableResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.SetVariableArguments{
 		VariablesReference: int(req.GetVariablesReference()),
 		Name:               req.GetName(),
@@ -385,6 +435,8 @@ func (s *Server) SetVariable(ctx context.Context, req *debugrpc.SetVariableReque
 
 // Source implements DebugServiceServer.
 func (s *Server) Source(ctx context.Context, req *debugrpc.SourceRequest) (*debugrpc.SourceResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.SourceArguments{
 		SourceReference: int(req.GetSourceReference()),
 		Source:          sourceFromProtoPtr(req.GetSource()),
@@ -403,6 +455,8 @@ func (s *Server) Source(ctx context.Context, req *debugrpc.SourceRequest) (*debu
 
 // Evaluate implements DebugServiceServer.
 func (s *Server) Evaluate(ctx context.Context, req *debugrpc.EvaluateRequest) (*debugrpc.EvaluateResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.EvaluateArguments{
 		Expression: req.GetExpression(),
 		FrameId:    int(req.GetFrameId()),
@@ -426,6 +480,8 @@ func (s *Server) Evaluate(ctx context.Context, req *debugrpc.EvaluateRequest) (*
 
 // SetExpression implements DebugServiceServer.
 func (s *Server) SetExpression(ctx context.Context, req *debugrpc.SetExpressionRequest) (*debugrpc.SetExpressionResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.SetExpressionArguments{
 		Expression: req.GetExpression(),
 		Value:      req.GetValue(),
@@ -448,6 +504,8 @@ func (s *Server) SetExpression(ctx context.Context, req *debugrpc.SetExpressionR
 
 // Completions implements DebugServiceServer.
 func (s *Server) Completions(ctx context.Context, req *debugrpc.CompletionsRequest) (*debugrpc.CompletionsResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.CompletionsArguments{
 		FrameId: int(req.GetFrameId()),
 		Text:    req.GetText(),
@@ -467,6 +525,8 @@ func (s *Server) Completions(ctx context.Context, req *debugrpc.CompletionsReque
 
 // ExceptionInfo implements DebugServiceServer.
 func (s *Server) ExceptionInfo(ctx context.Context, req *debugrpc.ExceptionInfoRequest) (*debugrpc.ExceptionInfoResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.ExceptionInfoArguments{
 		ThreadId: int(req.GetThreadId()),
 	}
@@ -485,6 +545,8 @@ func (s *Server) ExceptionInfo(ctx context.Context, req *debugrpc.ExceptionInfoR
 
 // Modules implements DebugServiceServer.
 func (s *Server) Modules(ctx context.Context, req *debugrpc.ModulesRequest) (*debugrpc.ModulesResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.ModulesArguments{
 		StartModule: int(req.GetStartModule()),
 		ModuleCount: int(req.GetModuleCount()),
@@ -503,6 +565,8 @@ func (s *Server) Modules(ctx context.Context, req *debugrpc.ModulesRequest) (*de
 
 // LoadedSources implements DebugServiceServer.
 func (s *Server) LoadedSources(ctx context.Context, req *debugrpc.LoadedSourcesRequest) (*debugrpc.LoadedSourcesResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	sources, err := s.debugger.LoadedSources(ctx)
 	if err != nil {
 		return nil, err
@@ -515,6 +579,8 @@ func (s *Server) LoadedSources(ctx context.Context, req *debugrpc.LoadedSourcesR
 
 // ReadMemory implements DebugServiceServer.
 func (s *Server) ReadMemory(ctx context.Context, req *debugrpc.ReadMemoryRequest) (*debugrpc.ReadMemoryResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.ReadMemoryArguments{
 		MemoryReference: req.GetMemoryReference(),
 		Offset:          int(req.GetOffset()),
@@ -535,6 +601,8 @@ func (s *Server) ReadMemory(ctx context.Context, req *debugrpc.ReadMemoryRequest
 
 // WriteMemory implements DebugServiceServer.
 func (s *Server) WriteMemory(ctx context.Context, req *debugrpc.WriteMemoryRequest) (*debugrpc.WriteMemoryResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.WriteMemoryArguments{
 		MemoryReference: req.GetMemoryReference(),
 		Offset:          int(req.GetOffset()),
@@ -555,6 +623,8 @@ func (s *Server) WriteMemory(ctx context.Context, req *debugrpc.WriteMemoryReque
 
 // Disassemble implements DebugServiceServer.
 func (s *Server) Disassemble(ctx context.Context, req *debugrpc.DisassembleRequest) (*debugrpc.DisassembleResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.DisassembleArguments{
 		MemoryReference:   req.GetMemoryReference(),
 		Offset:            int(req.GetOffset()),
@@ -575,6 +645,8 @@ func (s *Server) Disassemble(ctx context.Context, req *debugrpc.DisassembleReque
 
 // GotoTargets implements DebugServiceServer.
 func (s *Server) GotoTargets(ctx context.Context, req *debugrpc.GotoTargetsRequest) (*debugrpc.GotoTargetsResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.GotoTargetsArguments{
 		Source: sourceFromProto(req.GetSource()),
 		Line:   int(req.GetLine()),
@@ -593,6 +665,8 @@ func (s *Server) GotoTargets(ctx context.Context, req *debugrpc.GotoTargetsReque
 
 // Goto implements DebugServiceServer.
 func (s *Server) Goto(ctx context.Context, req *debugrpc.GotoRequest) (*debugrpc.GotoResponse, error) {
+	ctx, cancel := joincontext.New(ctx, s.ctx)
+	defer cancel()
 	args := &dap.GotoArguments{
 		ThreadId: int(req.GetThreadId()),
 		TargetId: int(req.GetTargetId()),
@@ -605,14 +679,11 @@ func (s *Server) Goto(ctx context.Context, req *debugrpc.GotoRequest) (*debugrpc
 	return &debugrpc.GotoResponse{}, nil
 }
 
-// SubscribeEvents implements DebugServiceServer.
-// Note: Event subscription is handled via EventSubscriber interface,
-// not through gRPC streaming. This method returns immediately.
-func (s *Server) SubscribeEvents(_ *debugrpc.SubscribeEventsRequest, _ debugrpc.DebugService_SubscribeEventsServer) error {
+// Close closes all resources associated with this Server.
+func (s *Server) Close() error {
+	s.cancelCtx()
 	return nil
 }
-
-// === Conversion Functions ===
 
 func capabilitiesToProto(c *dap.Capabilities) *debugrpc.Capabilities {
 	if c == nil {

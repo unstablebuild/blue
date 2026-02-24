@@ -31,8 +31,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// === Tests (public) ===
-
 func TestClient_Initialize(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -466,8 +464,6 @@ func TestClient_Disassemble(t *testing.T) {
 	assert.Len(t, instructions, 2)
 	assert.Equal(t, "0x1000", instructions[0].Address)
 }
-
-// === Private test helpers ===
 
 type testEnv struct {
 	mock     *mockDebugger
