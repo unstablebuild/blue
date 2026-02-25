@@ -25,12 +25,12 @@ import (
 	"google.golang.org/grpc"
 )
 
-var _ debugrpc.DebugServiceServer = (*Server)(nil)
+var _ debugrpc.DebuggerServer = (*Server)(nil)
 var _ io.Closer = (*Server)(nil)
 
-// Server implements DebugServiceServer by wrapping a debugapi.Debugger.
+// Server implements DebuggerServer by wrapping a debugapi.Debugger.
 type Server struct {
-	debugrpc.UnimplementedDebugServiceServer
+	debugrpc.UnimplementedDebuggerServer
 	debugger  debugapi.Debugger
 	ctx       context.Context
 	cancelCtx func()
@@ -44,10 +44,10 @@ func NewServer(d debugapi.Debugger) *Server {
 
 // Register registers this server with the given gRPC server.
 func (s *Server) Register(srv *grpc.Server) {
-	debugrpc.RegisterDebugServiceServer(srv, s)
+	debugrpc.RegisterDebuggerServer(srv, s)
 }
 
-// Initialize implements DebugServiceServer.
+// Initialize implements DebuggerServer.
 func (s *Server) Initialize(ctx context.Context, req *debugrpc.InitializeRequest) (*debugrpc.InitializeResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -78,7 +78,7 @@ func (s *Server) Initialize(ctx context.Context, req *debugrpc.InitializeRequest
 	}, nil
 }
 
-// Launch implements DebugServiceServer.
+// Launch implements DebuggerServer.
 func (s *Server) Launch(ctx context.Context, req *debugrpc.LaunchRequest) (*debugrpc.LaunchResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -98,7 +98,7 @@ func (s *Server) Launch(ctx context.Context, req *debugrpc.LaunchRequest) (*debu
 	return &debugrpc.LaunchResponse{}, nil
 }
 
-// Attach implements DebugServiceServer.
+// Attach implements DebuggerServer.
 func (s *Server) Attach(ctx context.Context, req *debugrpc.AttachRequest) (*debugrpc.AttachResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -114,7 +114,7 @@ func (s *Server) Attach(ctx context.Context, req *debugrpc.AttachRequest) (*debu
 	return &debugrpc.AttachResponse{}, nil
 }
 
-// ConfigurationDone implements DebugServiceServer.
+// ConfigurationDone implements DebuggerServer.
 func (s *Server) ConfigurationDone(ctx context.Context, req *debugrpc.ConfigurationDoneRequest) (*debugrpc.ConfigurationDoneResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -124,7 +124,7 @@ func (s *Server) ConfigurationDone(ctx context.Context, req *debugrpc.Configurat
 	return &debugrpc.ConfigurationDoneResponse{}, nil
 }
 
-// Disconnect implements DebugServiceServer.
+// Disconnect implements DebuggerServer.
 func (s *Server) Disconnect(ctx context.Context, req *debugrpc.DisconnectRequest) (*debugrpc.DisconnectResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -141,7 +141,7 @@ func (s *Server) Disconnect(ctx context.Context, req *debugrpc.DisconnectRequest
 	return &debugrpc.DisconnectResponse{}, nil
 }
 
-// Terminate implements DebugServiceServer.
+// Terminate implements DebuggerServer.
 func (s *Server) Terminate(ctx context.Context, req *debugrpc.TerminateRequest) (*debugrpc.TerminateResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -156,7 +156,7 @@ func (s *Server) Terminate(ctx context.Context, req *debugrpc.TerminateRequest) 
 	return &debugrpc.TerminateResponse{}, nil
 }
 
-// Restart implements DebugServiceServer.
+// Restart implements DebuggerServer.
 func (s *Server) Restart(ctx context.Context, req *debugrpc.RestartRequest) (*debugrpc.RestartResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -166,7 +166,7 @@ func (s *Server) Restart(ctx context.Context, req *debugrpc.RestartRequest) (*de
 	return &debugrpc.RestartResponse{}, nil
 }
 
-// SetBreakpoints implements DebugServiceServer.
+// SetBreakpoints implements DebuggerServer.
 func (s *Server) SetBreakpoints(ctx context.Context, req *debugrpc.SetBreakpointsRequest) (*debugrpc.SetBreakpointsResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -186,7 +186,7 @@ func (s *Server) SetBreakpoints(ctx context.Context, req *debugrpc.SetBreakpoint
 	}, nil
 }
 
-// SetFunctionBreakpoints implements DebugServiceServer.
+// SetFunctionBreakpoints implements DebuggerServer.
 func (s *Server) SetFunctionBreakpoints(ctx context.Context, req *debugrpc.SetFunctionBreakpointsRequest) (*debugrpc.SetFunctionBreakpointsResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -204,7 +204,7 @@ func (s *Server) SetFunctionBreakpoints(ctx context.Context, req *debugrpc.SetFu
 	}, nil
 }
 
-// SetExceptionBreakpoints implements DebugServiceServer.
+// SetExceptionBreakpoints implements DebuggerServer.
 func (s *Server) SetExceptionBreakpoints(ctx context.Context, req *debugrpc.SetExceptionBreakpointsRequest) (*debugrpc.SetExceptionBreakpointsResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -222,7 +222,7 @@ func (s *Server) SetExceptionBreakpoints(ctx context.Context, req *debugrpc.SetE
 	}, nil
 }
 
-// Continue implements DebugServiceServer.
+// Continue implements DebuggerServer.
 func (s *Server) Continue(ctx context.Context, req *debugrpc.ContinueRequest) (*debugrpc.ContinueResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -241,7 +241,7 @@ func (s *Server) Continue(ctx context.Context, req *debugrpc.ContinueRequest) (*
 	}, nil
 }
 
-// Pause implements DebugServiceServer.
+// Pause implements DebuggerServer.
 func (s *Server) Pause(ctx context.Context, req *debugrpc.PauseRequest) (*debugrpc.PauseResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -255,7 +255,7 @@ func (s *Server) Pause(ctx context.Context, req *debugrpc.PauseRequest) (*debugr
 	return &debugrpc.PauseResponse{}, nil
 }
 
-// Next implements DebugServiceServer.
+// Next implements DebuggerServer.
 func (s *Server) Next(ctx context.Context, req *debugrpc.NextRequest) (*debugrpc.NextResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -271,7 +271,7 @@ func (s *Server) Next(ctx context.Context, req *debugrpc.NextRequest) (*debugrpc
 	return &debugrpc.NextResponse{}, nil
 }
 
-// StepIn implements DebugServiceServer.
+// StepIn implements DebuggerServer.
 func (s *Server) StepIn(ctx context.Context, req *debugrpc.StepInRequest) (*debugrpc.StepInResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -288,7 +288,7 @@ func (s *Server) StepIn(ctx context.Context, req *debugrpc.StepInRequest) (*debu
 	return &debugrpc.StepInResponse{}, nil
 }
 
-// StepOut implements DebugServiceServer.
+// StepOut implements DebuggerServer.
 func (s *Server) StepOut(ctx context.Context, req *debugrpc.StepOutRequest) (*debugrpc.StepOutResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -304,7 +304,7 @@ func (s *Server) StepOut(ctx context.Context, req *debugrpc.StepOutRequest) (*de
 	return &debugrpc.StepOutResponse{}, nil
 }
 
-// StepBack implements DebugServiceServer.
+// StepBack implements DebuggerServer.
 func (s *Server) StepBack(ctx context.Context, req *debugrpc.StepBackRequest) (*debugrpc.StepBackResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -320,7 +320,7 @@ func (s *Server) StepBack(ctx context.Context, req *debugrpc.StepBackRequest) (*
 	return &debugrpc.StepBackResponse{}, nil
 }
 
-// ReverseContinue implements DebugServiceServer.
+// ReverseContinue implements DebuggerServer.
 func (s *Server) ReverseContinue(ctx context.Context, req *debugrpc.ReverseContinueRequest) (*debugrpc.ReverseContinueResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -335,7 +335,7 @@ func (s *Server) ReverseContinue(ctx context.Context, req *debugrpc.ReverseConti
 	return &debugrpc.ReverseContinueResponse{}, nil
 }
 
-// Threads implements DebugServiceServer.
+// Threads implements DebuggerServer.
 func (s *Server) Threads(ctx context.Context, req *debugrpc.ThreadsRequest) (*debugrpc.ThreadsResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -349,7 +349,7 @@ func (s *Server) Threads(ctx context.Context, req *debugrpc.ThreadsRequest) (*de
 	}, nil
 }
 
-// StackTrace implements DebugServiceServer.
+// StackTrace implements DebuggerServer.
 func (s *Server) StackTrace(ctx context.Context, req *debugrpc.StackTraceRequest) (*debugrpc.StackTraceResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -370,7 +370,7 @@ func (s *Server) StackTrace(ctx context.Context, req *debugrpc.StackTraceRequest
 	}, nil
 }
 
-// Scopes implements DebugServiceServer.
+// Scopes implements DebuggerServer.
 func (s *Server) Scopes(ctx context.Context, req *debugrpc.ScopesRequest) (*debugrpc.ScopesResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -388,7 +388,7 @@ func (s *Server) Scopes(ctx context.Context, req *debugrpc.ScopesRequest) (*debu
 	}, nil
 }
 
-// Variables implements DebugServiceServer.
+// Variables implements DebuggerServer.
 func (s *Server) Variables(ctx context.Context, req *debugrpc.VariablesRequest) (*debugrpc.VariablesResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -409,7 +409,7 @@ func (s *Server) Variables(ctx context.Context, req *debugrpc.VariablesRequest) 
 	}, nil
 }
 
-// SetVariable implements DebugServiceServer.
+// SetVariable implements DebuggerServer.
 func (s *Server) SetVariable(ctx context.Context, req *debugrpc.SetVariableRequest) (*debugrpc.SetVariableResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -433,7 +433,7 @@ func (s *Server) SetVariable(ctx context.Context, req *debugrpc.SetVariableReque
 	}, nil
 }
 
-// Source implements DebugServiceServer.
+// Source implements DebuggerServer.
 func (s *Server) Source(ctx context.Context, req *debugrpc.SourceRequest) (*debugrpc.SourceResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -453,7 +453,7 @@ func (s *Server) Source(ctx context.Context, req *debugrpc.SourceRequest) (*debu
 	}, nil
 }
 
-// Evaluate implements DebugServiceServer.
+// Evaluate implements DebuggerServer.
 func (s *Server) Evaluate(ctx context.Context, req *debugrpc.EvaluateRequest) (*debugrpc.EvaluateResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -478,7 +478,7 @@ func (s *Server) Evaluate(ctx context.Context, req *debugrpc.EvaluateRequest) (*
 	}, nil
 }
 
-// SetExpression implements DebugServiceServer.
+// SetExpression implements DebuggerServer.
 func (s *Server) SetExpression(ctx context.Context, req *debugrpc.SetExpressionRequest) (*debugrpc.SetExpressionResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -502,7 +502,7 @@ func (s *Server) SetExpression(ctx context.Context, req *debugrpc.SetExpressionR
 	}, nil
 }
 
-// Completions implements DebugServiceServer.
+// Completions implements DebuggerServer.
 func (s *Server) Completions(ctx context.Context, req *debugrpc.CompletionsRequest) (*debugrpc.CompletionsResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -523,7 +523,7 @@ func (s *Server) Completions(ctx context.Context, req *debugrpc.CompletionsReque
 	}, nil
 }
 
-// ExceptionInfo implements DebugServiceServer.
+// ExceptionInfo implements DebuggerServer.
 func (s *Server) ExceptionInfo(ctx context.Context, req *debugrpc.ExceptionInfoRequest) (*debugrpc.ExceptionInfoResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -543,7 +543,7 @@ func (s *Server) ExceptionInfo(ctx context.Context, req *debugrpc.ExceptionInfoR
 	}, nil
 }
 
-// Modules implements DebugServiceServer.
+// Modules implements DebuggerServer.
 func (s *Server) Modules(ctx context.Context, req *debugrpc.ModulesRequest) (*debugrpc.ModulesResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -563,7 +563,7 @@ func (s *Server) Modules(ctx context.Context, req *debugrpc.ModulesRequest) (*de
 	}, nil
 }
 
-// LoadedSources implements DebugServiceServer.
+// LoadedSources implements DebuggerServer.
 func (s *Server) LoadedSources(ctx context.Context, req *debugrpc.LoadedSourcesRequest) (*debugrpc.LoadedSourcesResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -577,7 +577,7 @@ func (s *Server) LoadedSources(ctx context.Context, req *debugrpc.LoadedSourcesR
 	}, nil
 }
 
-// ReadMemory implements DebugServiceServer.
+// ReadMemory implements DebuggerServer.
 func (s *Server) ReadMemory(ctx context.Context, req *debugrpc.ReadMemoryRequest) (*debugrpc.ReadMemoryResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -599,7 +599,7 @@ func (s *Server) ReadMemory(ctx context.Context, req *debugrpc.ReadMemoryRequest
 	}, nil
 }
 
-// WriteMemory implements DebugServiceServer.
+// WriteMemory implements DebuggerServer.
 func (s *Server) WriteMemory(ctx context.Context, req *debugrpc.WriteMemoryRequest) (*debugrpc.WriteMemoryResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -621,7 +621,7 @@ func (s *Server) WriteMemory(ctx context.Context, req *debugrpc.WriteMemoryReque
 	}, nil
 }
 
-// Disassemble implements DebugServiceServer.
+// Disassemble implements DebuggerServer.
 func (s *Server) Disassemble(ctx context.Context, req *debugrpc.DisassembleRequest) (*debugrpc.DisassembleResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -643,7 +643,7 @@ func (s *Server) Disassemble(ctx context.Context, req *debugrpc.DisassembleReque
 	}, nil
 }
 
-// GotoTargets implements DebugServiceServer.
+// GotoTargets implements DebuggerServer.
 func (s *Server) GotoTargets(ctx context.Context, req *debugrpc.GotoTargetsRequest) (*debugrpc.GotoTargetsResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
@@ -663,7 +663,7 @@ func (s *Server) GotoTargets(ctx context.Context, req *debugrpc.GotoTargetsReque
 	}, nil
 }
 
-// Goto implements DebugServiceServer.
+// Goto implements DebuggerServer.
 func (s *Server) Goto(ctx context.Context, req *debugrpc.GotoRequest) (*debugrpc.GotoResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()

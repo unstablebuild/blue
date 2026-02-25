@@ -32,6 +32,7 @@ import (
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/component"
+	"github.com/unstablebuild/rune-go-sdk/handler"
 	"github.com/unstablebuild/rune-go-sdk/iterator"
 	"github.com/unstablebuild/rune-go-sdk/term"
 )
@@ -93,7 +94,12 @@ func (h *hoverHandler) HandleCommand(ctx context.Context, cmd textapi.Command) e
 		if mdErr != nil {
 			return mdErr
 		}
-		floating = mdhandler.New(comp, h.cfg.MarkdownHandlerOptions...)
+		mdh := mdhandler.New(comp, h.cfg.MarkdownHandlerOptions...)
+		span := handler.NewSpan(mdh, component.SpanConfig{
+			PadHorizontal:    2,
+			ContentAlignment: component.AlignmentCentered,
+		})
+		floating = browserapi.FuncFloatingHandler(span, mdh.Close)
 	} else {
 		floating = newHoverFloating(component.NewString(result.Contents.Value))
 	}
