@@ -26,6 +26,8 @@ package lspcmd
 import (
 	"context"
 
+	mdcomp "github.com/unstablebuild/blue/tui/component/markdown"
+	mdhandler "github.com/unstablebuild/blue/tui/handler/markdown"
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
@@ -36,17 +38,18 @@ import (
 
 // HoverConfig configures the "hover" subcommand.
 type HoverConfig struct {
-	// NewFloating constructs the floating window component for a hover
-	// result. It must not be nil; use DefaultHoverConfig for a safe default.
-	NewFloating func(string) browserapi.Floating
+	// MarkdownConfig configures the markdown component used to render
+	// hover results with MarkupKindMarkdown content.
+	MarkdownConfig mdcomp.Config
+	// MarkdownHandlerOptions configures the markdown handler used to
+	// render hover results with MarkupKindMarkdown content.
+	MarkdownHandlerOptions []mdhandler.Option
 }
 
 // DefaultHoverConfig returns a HoverConfig with sensible defaults.
 func DefaultHoverConfig() HoverConfig {
 	return HoverConfig{
-		NewFloating: func(s string) browserapi.Floating {
-			return newHoverFloating(component.NewString(s))
-		},
+		MarkdownConfig: mdcomp.DefaultConfig(),
 	}
 }
 
@@ -84,8 +87,17 @@ func (h *hoverHandler) HandleCommand(ctx context.Context, cmd textapi.Command) e
 	if result == nil || result.Contents.Value == "" {
 		return nil
 	}
-	wrapped := h.cfg.NewFloating(result.Contents.Value)
-	_, err = h.wm.Floating(wrapped, browserapi.FloatingConfig{
+	var floating browserapi.Floating
+	if result.Contents.Kind == semanticapi.MarkupKindMarkdown {
+		comp, mdErr := mdcomp.NewWithConfig(result.Contents.Value, h.cfg.MarkdownConfig)
+		if mdErr != nil {
+			return mdErr
+		}
+		floating = mdhandler.New(comp, h.cfg.MarkdownHandlerOptions...)
+	} else {
+		floating = newHoverFloating(component.NewString(result.Contents.Value))
+	}
+	_, err = h.wm.Floating(floating, browserapi.FloatingConfig{
 		Alignment: component.AlignmentCentered,
 	})
 	return err
