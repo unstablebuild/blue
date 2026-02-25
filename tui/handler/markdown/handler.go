@@ -67,6 +67,12 @@ func New(comp *markdown.Component, opts ...Option) *Handler {
 	return h
 }
 
+// Close cancels any in-flight syntax highlighting goroutines
+// owned by the underlying component.
+func (h *Handler) Close() error {
+	return h.comp.Close()
+}
+
 // Resize updates the viewport dimensions.
 func (h *Handler) Resize(width, height int) {
 	h.width = width
