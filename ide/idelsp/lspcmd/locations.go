@@ -87,9 +87,7 @@ func newLocationsHandler(
 	}
 }
 
-func (l *locationsHandler) Handle(
-	ev term.Event,
-) (exit, handled bool) {
+func (l *locationsHandler) Handle(ev term.Event) (exit, handled bool) {
 	if ev.Type != term.EventKey {
 		return false, false
 	}
@@ -115,24 +113,17 @@ func (l *locationsHandler) Handle(
 	return false, false
 }
 
-func (l *locationsHandler) Cursor() (
-	term.Coordinates, term.CursorStyle, bool,
-) {
-	return term.Coordinates{},
-		term.CursorStyleDefault, false
+func (l *locationsHandler) Cursor() (term.Coordinates, term.CursorStyle, bool) {
+	return term.Coordinates{}, term.CursorStyleDefault, false
 }
 
-func (l *locationsHandler) Selection() (
-	string, bool,
-) {
+func (l *locationsHandler) Selection() (string, bool) {
 	return "", false
 }
 
 func (l *locationsHandler) Resize(_, _ int) {}
 
-func (l *locationsHandler) Draw(
-	w term.Writer,
-) {
+func (l *locationsHandler) Draw(w term.Writer) {
 	selAttr := term.Attributes{
 		Fg: tcell.ColorWhite,
 	}
@@ -151,9 +142,7 @@ func (l *locationsHandler) Draw(
 	}
 }
 
-func (l *locationsHandler) Dimensions() (
-	int, int,
-) {
+func (l *locationsHandler) Dimensions() (int, int) {
 	return l.width, l.height
 }
 
@@ -165,9 +154,7 @@ func (l *locationsHandler) navigate() error {
 	if l.selected >= len(l.entries) {
 		return nil
 	}
-	return navigateTo(
-		l.entries[l.selected], l.opener, l.wm, l.editor,
-	)
+	return navigateTo(l.entries[l.selected], l.opener, l.wm, l.editor)
 }
 
 func navigateTo(
@@ -197,49 +184,30 @@ func navigateTo(
 	return editor.SetCursor(eh, posToCoord(e.rng.Start))
 }
 
-func locationsFromResult(
-	r semanticapi.LocationResult,
-) []locationEntry {
+func locationsFromResult(r semanticapi.LocationResult) []locationEntry {
 	var entries []locationEntry
 	if r.Location != nil {
-		entries = append(
-			entries,
-			locationFromLoc(*r.Location),
-		)
+		entries = append(entries, locationFromLoc(*r.Location))
 	}
 	for _, loc := range r.Locations {
-		entries = append(
-			entries, locationFromLoc(loc),
-		)
+		entries = append(entries, locationFromLoc(loc))
 	}
 	for _, ll := range r.LocationLinks {
-		entries = append(
-			entries, locationEntry{
-				uri: ll.TargetURI,
-				rng: ll.TargetSelectionRange,
-				display: fmt.Sprintf(
-					"%s:%d",
-					trimFilePrefix(ll.TargetURI),
-					ll.TargetSelectionRange.
-						Start.Line+1,
-				),
-			},
-		)
+		entries = append(entries, locationEntry{
+			uri: ll.TargetURI,
+			rng: ll.TargetSelectionRange,
+			display: fmt.Sprintf("%s:%d",
+				trimFilePrefix(ll.TargetURI), ll.TargetSelectionRange.Start.Line+1),
+		})
 	}
 	return entries
 }
 
-func locationFromLoc(
-	loc semanticapi.Location,
-) locationEntry {
+func locationFromLoc(loc semanticapi.Location) locationEntry {
 	return locationEntry{
-		uri: loc.URI,
-		rng: loc.Range,
-		display: fmt.Sprintf(
-			"%s:%d",
-			trimFilePrefix(loc.URI),
-			loc.Range.Start.Line+1,
-		),
+		uri:     loc.URI,
+		rng:     loc.Range,
+		display: fmt.Sprintf("%s:%d", trimFilePrefix(loc.URI), loc.Range.Start.Line+1),
 	}
 }
 
@@ -270,9 +238,7 @@ func enrichEntries(
 	return entries
 }
 
-func loadCells(
-	lspURI string, editor textapi.Editor,
-) [][]term.Cell {
+func loadCells(lspURI string, editor textapi.Editor) [][]term.Cell {
 	uri, err := lspToURI(lspURI)
 	if err != nil {
 		return nil
