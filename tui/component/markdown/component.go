@@ -344,6 +344,16 @@ func (c *Component) WordBoundsAt(
 	return
 }
 
+// Close cancels any in-flight syntax highlighting goroutines.
+func (c *Component) Close() error {
+	for _, blk := range c.blocks {
+		if cb, ok := blk.(*codeBlock); ok {
+			cb.close()
+		}
+	}
+	return nil
+}
+
 func (c *Component) buildAnchors() {
 	for i, blk := range c.blocks {
 		if h, ok := blk.(*headerBlock); ok {

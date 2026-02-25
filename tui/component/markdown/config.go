@@ -15,6 +15,7 @@
 package markdown
 
 import (
+	"github.com/unstablebuild/rune-go-sdk/api/syntaxapi"
 	"github.com/unstablebuild/rune-go-sdk/component"
 	"github.com/unstablebuild/rune-go-sdk/term"
 	"github.com/unstablebuild/tcell/v3"
@@ -37,6 +38,13 @@ type Config struct {
 	// Code styles
 	CodeBlock  term.Attributes
 	InlineCode term.Attributes
+	// Parser, when set, enables syntax highlighting inside fenced code blocks.
+	Parser syntaxapi.Parser
+	// ScheduleNextTick schedules a function to run on the next event-loop
+	// tick. Highlighting runs asynchronously via this callback so that
+	// Highlight I/O does not block construction. Defaults to a
+	// synchronous call in DefaultConfig.
+	ScheduleNextTick func(func()) bool
 
 	// Link styles
 	Link    term.Attributes
@@ -139,6 +147,8 @@ func DefaultConfig() Config {
 
 		HorizontalRule:     '─',
 		HorizontalRuleAttr: gray,
+
+		ScheduleNextTick: func(cb func()) bool { cb(); return true },
 
 		ParagraphSpacing: 1,
 	}

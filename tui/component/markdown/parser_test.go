@@ -15,6 +15,7 @@
 package markdown
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -160,8 +161,13 @@ func TestParseCodeBlocks(t *testing.T) {
 
 			code, ok := blocks[0].(*codeBlock)
 			require.True(t, ok, "expected codeBlock")
-			assert.Equal(t, tt.language, code.language)
-			assert.Equal(t, tt.code, code.code)
+			// Verify the cells contain the expected code text.
+			var b strings.Builder
+			for _, row := range code.cells {
+				b.WriteString(cellsToString(row))
+				b.WriteByte('\n')
+			}
+			assert.Equal(t, tt.code, b.String())
 		})
 	}
 }
