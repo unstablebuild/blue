@@ -41,55 +41,51 @@ import (
 
 // CompleteConfig configures the "complete" subcommand.
 type CompleteConfig struct {
-	// TriggerKey, when non-zero, re-fetches completions on press.
-	TriggerKey term.KeyComb
-
 	// Icons maps CompletionItemKind to a display icon string.
 	Icons map[semanticapi.CompletionItemKind]string
-
-	// NewSearchList constructs the floating component that displays
-	// completion results. Items arrive asynchronously via ch.
-	NewSearchList func(
-		ch <-chan string, editor textapi.Editor,
-		resource textapi.Handler,
-	) browserapi.Floating
 }
 
 // DefaultCompleteConfig returns a CompleteConfig with sensible defaults.
 func DefaultCompleteConfig() CompleteConfig {
 	return CompleteConfig{
-		NewSearchList: defaultNewSearchList,
-		Icons:         defaultIcons(),
+		Icons: defaultIcons(),
 	}
 }
 
 func defaultIcons() map[semanticapi.CompletionItemKind]string {
 	return map[semanticapi.CompletionItemKind]string{
-		semanticapi.CompletionItemKindText:          "\ueb8d", // nf-cod-symbol_string
-		semanticapi.CompletionItemKindMethod:        "\uea8c", // nf-cod-symbol_method
-		semanticapi.CompletionItemKindFunction:      "\uea8c", // nf-cod-symbol_method
-		semanticapi.CompletionItemKindConstructor:   "\uea8c", // nf-cod-symbol_method
-		semanticapi.CompletionItemKindField:         "\ueb5f", // nf-cod-symbol_field
-		semanticapi.CompletionItemKindVariable:      "\uea88", // nf-cod-symbol_variable
-		semanticapi.CompletionItemKindClass:         "\ueb5b", // nf-cod-symbol_class
-		semanticapi.CompletionItemKindInterface:     "\ueb61", // nf-cod-symbol_interface
-		semanticapi.CompletionItemKindModule:        "\uea8b", // nf-cod-symbol_namespace
-		semanticapi.CompletionItemKindProperty:      "\ueb65", // nf-cod-symbol_property
-		semanticapi.CompletionItemKindUnit:          "\uea96", // nf-cod-symbol_ruler
-		semanticapi.CompletionItemKindValue:         "\uea90", // nf-cod-symbol_numeric
-		semanticapi.CompletionItemKindEnum:          "\uea95", // nf-cod-symbol_enum
-		semanticapi.CompletionItemKindKeyword:       "\ueb62", // nf-cod-symbol_keyword
-		semanticapi.CompletionItemKindSnippet:       "\ueb66", // nf-cod-symbol_snippet
-		semanticapi.CompletionItemKindColor:         "\ueb5c", // nf-cod-symbol_color
-		semanticapi.CompletionItemKindFile:          "\ueb60", // nf-cod-symbol_file
-		semanticapi.CompletionItemKindReference:     "\ueb63", // nf-cod-symbol_misc
-		semanticapi.CompletionItemKindFolder:        "\ueb60", // nf-cod-symbol_file
-		semanticapi.CompletionItemKindEnumMember:    "\ueb5e", // nf-cod-symbol_enum_member
-		semanticapi.CompletionItemKindConstant:      "\ueb5d", // nf-cod-symbol_constant
-		semanticapi.CompletionItemKindStruct:        "\uea91", // nf-cod-symbol_structure
-		semanticapi.CompletionItemKindEvent:         "\uea86", // nf-cod-symbol_event
-		semanticapi.CompletionItemKindOperator:      "\ueb64", // nf-cod-symbol_operator
-		semanticapi.CompletionItemKindTypeParameter: "\uea92", // nf-cod-symbol_parameter
+		semanticapi.CompletionItemKindText:        "󰉿",  // nf-cod-symbol_text
+		semanticapi.CompletionItemKindMethod:      ".󰊕", // nf-cod-symbol_method
+		semanticapi.CompletionItemKindFunction:    "󰊕",  // nf-cod-symbol_function
+		semanticapi.CompletionItemKindConstructor: "󰒓",  // nf-cod-symbol_constructor
+
+		semanticapi.CompletionItemKindField:    "󰜢", // nf-cod-symbol_field
+		semanticapi.CompletionItemKindVariable: "󰀫", // nf-cod-symbol_variable
+		semanticapi.CompletionItemKindConstant: "󰏿", // nf-cod-symbol_constant
+		semanticapi.CompletionItemKindProperty: "󰆧", // nf-cod-symbol_property
+
+		semanticapi.CompletionItemKindClass:         "󰠱", // nf-cod-symbol_class
+		semanticapi.CompletionItemKindStruct:        "󰙅", // nf-cod-symbol_structure
+		semanticapi.CompletionItemKindInterface:     "󰜰", // nf-cod-symbol_interface
+		semanticapi.CompletionItemKindTypeParameter: "󰆩", // nf-cod-symbol_parameter
+
+		semanticapi.CompletionItemKindModule: "󰅩", // nf-cod-symbol_namespace
+		semanticapi.CompletionItemKindUnit:   "󰑭", // nf-cod-symbol_ruler
+		semanticapi.CompletionItemKindValue:  "󰎠", // nf-cod-symbol_numeric
+
+		semanticapi.CompletionItemKindEnum:       "󰕘", // nf-cod-symbol_enum
+		semanticapi.CompletionItemKindEnumMember: "󰕘", // nf-cod-symbol_enum_member (shares icon intentionally)
+
+		semanticapi.CompletionItemKindKeyword:  "󰌋", // nf-cod-symbol_keyword
+		semanticapi.CompletionItemKindOperator: "󰆕", // nf-cod-symbol_operator
+
+		semanticapi.CompletionItemKindSnippet: "󰘍", // nf-cod-symbol_snippet
+		semanticapi.CompletionItemKindColor:   "󰏘", // nf-cod-symbol_color
+
+		semanticapi.CompletionItemKindFile:      "󰈙", // nf-cod-symbol_file
+		semanticapi.CompletionItemKindFolder:    "󰉋", // nf-cod-folder
+		semanticapi.CompletionItemKindReference: "󰈇", // nf-cod-symbol_reference
+		semanticapi.CompletionItemKindEvent:     "󰉁", // nf-cod-symbol_event
 	}
 }
 
@@ -103,35 +99,32 @@ func formatLabel(
 	return item.Label
 }
 
-// CompleteHandler creates a textapi.CommandHandler
-// for the "complete" subcommand.
+// CompleteHandler creates a textapi.CommandHandler for the "complete" subcommand.
 func CompleteHandler(
 	lsp semanticapi.LSP, editor textapi.Editor,
-	wm browserapi.WindowManager,
-	cfg CompleteConfig, scheduleNextTick func(fn func()) bool,
+	wm browserapi.WindowManager, cfg CompleteConfig,
+	interrupter term.Interrupter,
 ) textapi.CommandHandler {
 	return &completeHandler{
-		lsp:              lsp,
-		editor:           editor,
-		wm:               wm,
-		cfg:              cfg,
-		scheduleNextTick: scheduleNextTick,
+		lsp:         lsp,
+		editor:      editor,
+		wm:          wm,
+		cfg:         cfg,
+		interrupter: interrupter,
 	}
 }
 
 var _ textapi.CommandHandler = (*completeHandler)(nil)
 
 type completeHandler struct {
-	lsp              semanticapi.LSP
-	editor           textapi.Editor
-	wm               browserapi.WindowManager
-	cfg              CompleteConfig
-	scheduleNextTick func(fn func()) bool
+	lsp         semanticapi.LSP
+	editor      textapi.Editor
+	wm          browserapi.WindowManager
+	cfg         CompleteConfig
+	interrupter term.Interrupter
 }
 
-func (h *completeHandler) HandleCommand(
-	ctx context.Context, cmd textapi.Command,
-) error {
+func (h *completeHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
 	params := semanticapi.CompletionParams{
 		TextDocument: textDocID(cmd.URI),
 		Position:     coordToPos(cmd.Cursor.Content),
@@ -141,43 +134,41 @@ func (h *completeHandler) HandleCommand(
 	}
 
 	ch := make(chan string, 1)
-	floating := h.cfg.NewSearchList(ch, h.editor, cmd.Resource)
-
 	fetchCtx, cancel := context.WithCancel(context.Background())
-	wrapped := &closerFloating{
-		Floating: floating,
-		cancel:   cancel,
+	fetchDone, fetchDoneCancel := context.WithCancel(context.Background())
+	drainDone, drainDoneCancel := context.WithCancel(context.Background())
+
+	list := component.NewFocusList()
+	list.SetFocusAttr(term.Attributes{Fg: tcell.ColorWhite})
+
+	floating := &completionHandler{
+		list:        list,
+		drainDone:   drainDone,
+		interrupter: h.interrupter,
+		cancel:      cancel,
+		fetchDone:   fetchDone,
+		icons:       h.cfg.Icons,
+		editor:      h.editor,
+		resource:    cmd.Resource,
 	}
 
-	// Inject trigger-key dependencies before wm.Floating so
-	// the handler is fully initialised if the window manager
-	// renders eagerly. handler.win is set after the call.
-	if handler, ok := floating.(*completionHandler); ok {
-		handler.lsp = h.lsp
-		handler.wm = h.wm
-		handler.params = params
-		handler.triggerKey = h.cfg.TriggerKey
-		handler.icons = h.cfg.Icons
-		handler.scheduleNextTick = h.scheduleNextTick
-		handler.nextKind = semanticapi.CompletionTriggerKindTriggerForIncompleteCompletions
-	}
+	go debug.CapturePanicReport(func() {
+		defer drainDoneCancel()
+		floating.drainLoop(ch)
+	})
 
-	win, err := h.wm.Floating(wrapped, browserapi.FloatingConfig{
+	_, err := h.wm.Floating(floating, browserapi.FloatingConfig{
 		Alignment: component.AlignmentLeft | component.AlignmentTop,
 		Offset:    term.Coordinates{X: cmd.Cursor.Window.X + 1, Y: cmd.Cursor.Window.Y + 2},
 	})
 	if err != nil {
 		cancel()
+		fetchDoneCancel()
 		return err
 	}
 
-	if handler, ok := floating.(*completionHandler); ok {
-		handler.win = win
-	}
-
-	wrapped.wg.Add(1)
 	go debug.CapturePanicReport(func() {
-		defer wrapped.wg.Done()
+		defer fetchDoneCancel()
 		defer close(ch)
 
 		result, err := h.lsp.Completion(ctx, params)
@@ -185,16 +176,11 @@ func (h *completeHandler) HandleCommand(
 			slog.Warn("completion fetch", "err", err)
 			return
 		}
-		if len(result.Items) == 0 {
-			return
-		}
-
-		handler, isDefault := floating.(*completionHandler)
 		for _, item := range result.Items {
 			label := formatLabel(item, h.cfg.Icons)
-			if isDefault {
-				handler.addItem(item)
-			}
+			floating.itemsMu.Lock()
+			floating.items = append(floating.items, item)
+			floating.itemsMu.Unlock()
 			select {
 			case ch <- label:
 			case <-fetchCtx.Done():
@@ -212,151 +198,115 @@ func (h *completeHandler) Complete(_ context.Context, _ string, _ []string) (
 	return iterator.Empty[string](), nil
 }
 
-// closerFloating wraps a browserapi.Floating to own a goroutine's lifecycle.
-type closerFloating struct {
-	browserapi.Floating
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
-}
-
-func (c *closerFloating) Close() error {
-	c.cancel()
-	c.wg.Wait()
-	return c.Floating.Close()
-}
-
-// completionHandler is a floating window that
-// displays and allows selecting completion items.
+// completionHandler is a floating window that displays completion
+// items, allows selecting one, and applies the chosen edit.
 type completionHandler struct {
-	mu       sync.Mutex
+	// UI state (protected by mu).
+	mu          sync.Mutex
+	labels      []string
+	list        *component.FocusList
+	selected    bool
+	interrupter term.Interrupter
+
+	// Goroutine lifecycle.
+	cancel    context.CancelFunc
+	fetchDone context.Context
+	drainDone context.Context
+
+	// Completion items (protected by itemsMu).
+	itemsMu  sync.Mutex
 	items    []semanticapi.CompletionItem
-	list     *component.FocusList
-	ch       <-chan string
+	icons    map[semanticapi.CompletionItemKind]string
 	editor   textapi.Editor
 	resource textapi.Handler
-	width    int
-	height   int
-
-	// TriggerKey dependencies (injected by HandleCommand).
-	win              browserapi.Window
-	lsp              semanticapi.LSP
-	wm               browserapi.WindowManager
-	params           semanticapi.CompletionParams
-	triggerKey       term.KeyComb
-	icons            map[semanticapi.CompletionItemKind]string
-	nextKind         semanticapi.CompletionTriggerKind
-	scheduleNextTick func(fn func()) bool
-
-	// Goroutine lifecycle for trigger re-fetches.
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
-}
-
-func defaultNewSearchList(
-	ch <-chan string, editor textapi.Editor,
-	resource textapi.Handler,
-) browserapi.Floating {
-	list := component.NewFocusList()
-	list.SetFocusAttr(term.Attributes{Fg: tcell.ColorWhite})
-	return &completionHandler{
-		list:     list,
-		ch:       ch,
-		editor:   editor,
-		resource: resource,
-		width:    20,
-		height:   1,
-	}
 }
 
 // newCompletionHandler creates a pre-populated completionHandler.
 // Used in tests that need a synchronously filled handler.
-func newCompletionHandler(
-	items []semanticapi.CompletionItem,
-	icons map[semanticapi.CompletionItemKind]string,
-	editor textapi.Editor, resource textapi.Handler,
-) *completionHandler {
+func newCompletionHandler(labels []string) *completionHandler {
 	list := component.NewFocusList()
 	list.SetFocusAttr(term.Attributes{Fg: tcell.ColorWhite})
-	cfg := component.StringConfig{
+	strCfg := component.StringConfig{
 		Attributes: term.Attributes{Fg: tcell.ColorGray},
 	}
-	maxW := 0
-	for _, item := range items {
-		label := formatLabel(item, icons)
-		list.PushBack(component.NewStringWithConfig(label, cfg))
-		if n := utf8.RuneCountInString(label); n > maxW {
-			maxW = n
-		}
+	for _, label := range labels {
+		list.PushBack(component.NewStringWithConfig(label, strCfg))
 	}
-	h := min(len(items), 15)
-	w := maxW + 2
-	list.Resize(w, h)
-	return &completionHandler{
-		list:     list,
-		items:    items,
-		editor:   editor,
-		resource: resource,
-		width:    w,
-		height:   h,
+	h := &completionHandler{
+		list:        list,
+		labels:      labels,
+		interrupter: term.NopInterrupter(),
+	}
+	return h
+}
+
+func (c *completionHandler) drainLoop(ch <-chan string) {
+	strCfg := component.StringConfig{
+		Attributes: term.Attributes{Fg: tcell.ColorGray},
+	}
+	for label := range ch {
+		c.mu.Lock()
+		c.labels = append(c.labels, label)
+		c.list.PushBack(component.NewStringWithConfig(label, strCfg))
+		for draining := true; draining; {
+			select {
+			case l, ok := <-ch:
+				if !ok {
+					draining = false
+				} else {
+					c.labels = append(c.labels, l)
+					c.list.PushBack(component.NewStringWithConfig(l, strCfg))
+				}
+			default:
+				draining = false
+			}
+		}
+		c.mu.Unlock()
+		_ = c.interrupter.Interrupt(context.Background())
 	}
 }
 
-func (c *completionHandler) addItem(item semanticapi.CompletionItem) {
+// Focus returns the label of the focused item. Returns ("", false)
+// when the user dismissed without selecting (Esc).
+func (c *completionHandler) Focus() (string, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.items = append(c.items, item)
+	if !c.selected {
+		return "", false
+	}
+	idx := c.list.FocusOffset()
+	if idx >= len(c.labels) {
+		return "", false
+	}
+	return c.labels[idx], true
 }
 
-func (c *completionHandler) drainChannel() {
-	if c.ch == nil {
-		return
+func (c *completionHandler) Handle(ev term.Event) (bool, bool) {
+	exit, handled := c.handleKey(ev)
+	if !exit {
+		return exit, handled
 	}
-	cfg := component.StringConfig{
-		Attributes: term.Attributes{Fg: tcell.ColorGray},
+	label, ok := c.Focus()
+	if !ok {
+		return exit, handled
 	}
-	for {
-		select {
-		case label, ok := <-c.ch:
-			if !ok {
-				c.ch = nil
-				return
-			}
-			c.list.PushBack(
-				component.NewStringWithConfig(label, cfg),
-			)
-			n := utf8.RuneCountInString(label) + 2
-			if n > c.width {
-				c.width = n
-			}
-			count := c.list.Len()
-			c.height = min(count, 15)
-			c.list.Resize(c.width, c.height)
-		default:
-			return
-		}
+	if err := c.applyItem(label); err != nil {
+		slog.Warn("completion apply", "err", err)
 	}
+	return exit, handled
 }
 
-func (c *completionHandler) Handle(
-	ev term.Event,
-) (exit, handled bool) {
-	c.drainChannel()
+func (c *completionHandler) handleKey(ev term.Event) (exit, handled bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if ev.Type != term.EventKey {
 		return false, false
-	}
-	kc := ev.KeyComb()
-	zeroKey := term.KeyComb{}
-	if c.triggerKey != zeroKey && kc == c.triggerKey {
-		c.handleTrigger()
-		return false, true
 	}
 	switch ev.Key {
 	case term.KeyEsc:
 		return true, true
-	case term.KeyEnter:
-		if err := c.applyItem(); err != nil {
-			slog.Warn("completion apply", "err", err)
-		}
+	case term.KeyEnter, term.KeyTab:
+		c.selected = true
 		return true, true
 	case term.KeyArrowDown:
 		c.list.FocusDown()
@@ -378,125 +328,22 @@ func (c *completionHandler) Handle(
 	return false, false
 }
 
-func (c *completionHandler) handleTrigger() {
-	// Toggle between IncompleteCompletions and Invoked.
-	if c.nextKind == semanticapi.CompletionTriggerKindTriggerForIncompleteCompletions {
-		c.nextKind = semanticapi.CompletionTriggerKindInvoked
-	} else {
-		c.nextKind = semanticapi.CompletionTriggerKindTriggerForIncompleteCompletions
-	}
-
-	// Cancel any previous trigger goroutine. Do not Wait here
-	// to avoid blocking the event loop; Close() waits instead.
-	if c.cancel != nil {
-		c.cancel()
-	}
-
-	triggerCtx, cancel := context.WithCancel(context.Background())
-	c.cancel = cancel
-
-	params := c.params
-	params.Context = &semanticapi.CompletionContext{
-		TriggerKind: c.nextKind,
-	}
-
-	// Capture nextKind before spawning the goroutine to avoid
-	// a data race if the user presses the trigger key again.
-	nextKind := c.nextKind
-
-	c.wg.Add(1)
-	go func() {
-		defer c.wg.Done()
-
-		result, err := c.lsp.Completion(triggerCtx, params)
-		if err != nil {
-			slog.Warn("completion re-fetch", "err", err)
-			return
+func (c *completionHandler) applyItem(label string) error {
+	c.itemsMu.Lock()
+	var item semanticapi.CompletionItem
+	var found bool
+	for _, it := range c.items {
+		if formatLabel(it, c.icons) == label {
+			item = it
+			found = true
+			break
 		}
-
-		c.scheduleNextTick(func() {
-			ch := make(chan string, 1)
-			close(ch) // Items are populated directly; no async delivery needed.
-			newHandler := defaultNewSearchList(ch, c.editor, c.resource)
-			inner := newHandler.(*completionHandler)
-			inner.win = c.win
-			inner.lsp = c.lsp
-			inner.wm = c.wm
-			inner.params = c.params
-			inner.triggerKey = c.triggerKey
-			inner.icons = c.icons
-			inner.scheduleNextTick = c.scheduleNextTick
-			inner.nextKind = nextKind
-
-			for _, item := range result.Items {
-				label := formatLabel(item, c.icons)
-				inner.addItem(item)
-				inner.list.PushBack(
-					component.NewStringWithConfig(label, component.StringConfig{
-						Attributes: term.Attributes{Fg: tcell.ColorGray},
-					}),
-				)
-				n := utf8.RuneCountInString(label) + 2
-				if n > inner.width {
-					inner.width = n
-				}
-			}
-			count := inner.list.Len()
-			inner.height = min(count, 15)
-			if inner.height == 0 {
-				inner.height = 1
-			}
-			inner.list.Resize(inner.width, inner.height)
-
-			if err := c.wm.SetWindowContent(c.win, newHandler); err != nil {
-				slog.Warn("completion set window content", "err", err)
-			}
-		})
-	}()
-}
-
-func (c *completionHandler) Cursor() (
-	term.Coordinates, term.CursorStyle, bool,
-) {
-	return term.Coordinates{}, term.CursorStyleDefault, false
-}
-
-func (c *completionHandler) Selection() (string, bool) {
-	return "", false
-}
-
-func (c *completionHandler) Resize(width, height int) {
-	c.width = width
-	c.height = height
-	c.list.Resize(width, height)
-}
-
-func (c *completionHandler) Draw(w term.Writer) {
-	c.list.Draw(w)
-}
-
-func (c *completionHandler) Dimensions() (int, int) {
-	return c.width, c.height
-}
-
-func (c *completionHandler) Close() error {
-	if c.cancel != nil {
-		c.cancel()
-		c.wg.Wait()
 	}
-	return nil
-}
-
-func (c *completionHandler) applyItem() error {
-	c.mu.Lock()
-	items := c.items
-	idx := c.list.FocusOffset()
-	c.mu.Unlock()
-
-	if idx >= len(items) {
+	c.itemsMu.Unlock()
+	if !found {
 		return nil
 	}
-	item := items[idx]
+
 	ce := c.editor.CellEditor(c.resource)
 	ctx := context.Background()
 	switch {
@@ -518,4 +365,53 @@ func (c *completionHandler) applyItem() error {
 		_, _, _, err = ce.Edit(ctx, cur, cur, item.Label)
 		return err
 	}
+}
+
+func (c *completionHandler) Cursor() (term.Coordinates, term.CursorStyle, bool) {
+	return term.Coordinates{}, term.CursorStyleDefault, false
+}
+
+func (c *completionHandler) Selection() (string, bool) {
+	return "", false
+}
+
+func (c *completionHandler) Resize(width, height int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.list.Resize(width, height)
+}
+
+func (c *completionHandler) Draw(w term.Writer) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.list.Draw(w)
+}
+
+func (c *completionHandler) Dimensions() (int, int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.contentDimensions()
+}
+
+func (c *completionHandler) contentDimensions() (int, int) {
+	maxW := 0
+	for _, label := range c.labels {
+		if n := utf8.RuneCountInString(label); n > maxW {
+			maxW = n
+		}
+	}
+	return maxW + 2, min(len(c.labels), 15)
+}
+
+func (c *completionHandler) Close() error {
+	if c.cancel != nil {
+		c.cancel()
+	}
+	if c.fetchDone != nil {
+		<-c.fetchDone.Done()
+	}
+	if c.drainDone != nil {
+		<-c.drainDone.Done()
+	}
+	return nil
 }

@@ -26,9 +26,7 @@ package lspcmd
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
-	"time"
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
@@ -44,42 +42,12 @@ import (
 
 var _ browserapi.Floating = (*completionHandler)(nil)
 
-// stubFloating is a minimal browserapi.Floating for testing
-// custom NewSearchList without triggering the default
-// *completionHandler injection path.
-type stubFloating struct {
-	width, height int
-}
-
-func (s *stubFloating) Handle(_ term.Event) (bool, bool)                  { return false, false }
-func (s *stubFloating) Cursor() (term.Coordinates, term.CursorStyle, bool) { return term.Coordinates{}, term.CursorStyleDefault, false }
-func (s *stubFloating) Selection() (string, bool)                          { return "", false }
-func (s *stubFloating) Resize(w, h int)                                    { s.width = w; s.height = h }
-func (s *stubFloating) Draw(_ term.Writer)                                 {}
-func (s *stubFloating) Dimensions() (int, int)                             { return s.width, s.height }
-func (s *stubFloating) Close() error                                       { return nil }
-
 func testItems(labels ...string) []semanticapi.CompletionItem {
 	items := make([]semanticapi.CompletionItem, len(labels))
 	for i, l := range labels {
 		items[i] = semanticapi.CompletionItem{Label: l}
 	}
 	return items
-}
-
-func noopEditor() *mockEditor {
-	return &mockEditor{
-		cellEditorFn: func(_ textapi.Handler) textapi.CellEditor {
-			return &mockCellEditor{
-				editFn: func(
-					_ context.Context,
-					_, _ term.Coordinates, _ string,
-				) (term.Coordinates, term.Coordinates, string, error) {
-					return term.Coordinates{}, term.Coordinates{}, "", nil
-				},
-			}
-		},
-	}
 }
 
 var noIcons map[semanticapi.CompletionItemKind]string
@@ -162,8 +130,7 @@ func TestFormatLabel(t *testing.T) {
 // content is rendered correctly and remains stable
 // across key navigation events.
 func TestCompletionHandlerRender(t *testing.T) {
-	items := testItems("alpha", "beta")
-	ch := newCompletionHandler(items, noIcons, &mockEditor{}, &mockHandler{})
+	ch := newCompletionHandler([]string{"alpha", "beta"})
 	w, h := ch.Dimensions()
 	expected := "alpha  \nbeta   "
 	cases := []handlertest.SequenceTestCase{
@@ -264,10 +231,19 @@ func TestCompletionHandlerHandle(t *testing.T) {
 			giveEvent: term.Event{Type: term.EventMouse},
 		},
 		{
-			name:      "unknown key not handled",
+			name:      "tab exits",
 			giveItems: 2,
 			giveEvent: term.Event{
 				Type: term.EventKey, Key: term.KeyTab,
+			},
+			wantExit:    true,
+			wantHandled: true,
+		},
+		{
+			name:      "unknown key not handled",
+			giveItems: 2,
+			giveEvent: term.Event{
+				Type: term.EventKey, Key: term.KeyBackspace,
 			},
 		},
 	}
@@ -277,9 +253,7 @@ func TestCompletionHandlerHandle(t *testing.T) {
 			for i := range labels {
 				labels[i] = "x"
 			}
-			ch := newCompletionHandler(
-				testItems(labels...), noIcons, noopEditor(), &mockHandler{},
-			)
+			ch := newCompletionHandler(labels)
 			for i := 0; i < test.giveOffset; i++ {
 				ch.list.FocusDown()
 			}
@@ -291,39 +265,86 @@ func TestCompletionHandlerHandle(t *testing.T) {
 	}
 }
 
-func TestCompletionHandlerDraw(t *testing.T) {
+func TestCompletionHandlerFocus(t *testing.T) {
 	tests := []struct {
-		name            string
-		giveItems       []semanticapi.CompletionItem
-		giveFocusOffset int
-		wantFg          []tcell.Color
+		name       string
+		labels     []string
+		pressEnter bool
+		offset     int
+		wantLabel  string
+		wantOK     bool
 	}{
 		{
-			name:      "first focused",
-			giveItems: testItems("a", "b"),
-			wantFg:    []tcell.Color{tcell.ColorWhite, tcell.ColorGray},
+			name:       "returns label on enter",
+			labels:     []string{"alpha", "beta"},
+			pressEnter: true,
+			wantLabel:  "alpha",
+			wantOK:     true,
 		},
 		{
-			name:            "second focused",
-			giveItems:       testItems("a", "b"),
-			giveFocusOffset: 1,
-			wantFg:          []tcell.Color{tcell.ColorGray, tcell.ColorWhite},
+			name:       "returns second label after focus down",
+			labels:     []string{"alpha", "beta"},
+			pressEnter: true,
+			offset:     1,
+			wantLabel:  "beta",
+			wantOK:     true,
 		},
 		{
-			name:      "single entry focused",
-			giveItems: testItems("only"),
-			wantFg:    []tcell.Color{tcell.ColorWhite},
+			name:   "returns empty on esc",
+			labels: []string{"alpha", "beta"},
+			wantOK: false,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ch := newCompletionHandler(
-				test.giveItems, noIcons, &mockEditor{}, &mockHandler{},
-			)
+			ch := newCompletionHandler(test.labels)
+			for i := 0; i < test.offset; i++ {
+				ch.list.FocusDown()
+			}
+			if test.pressEnter {
+				ch.Handle(term.Event{Type: term.EventKey, Key: term.KeyEnter})
+			} else {
+				ch.Handle(term.Event{Type: term.EventKey, Key: term.KeyEsc})
+			}
+			label, ok := ch.Focus()
+			assert.Equal(t, test.wantOK, ok)
+			assert.Equal(t, test.wantLabel, label)
+		})
+	}
+}
+
+func TestCompletionHandlerDraw(t *testing.T) {
+	tests := []struct {
+		name            string
+		giveLabels      []string
+		giveFocusOffset int
+		wantFg          []tcell.Color
+	}{
+		{
+			name:       "first focused",
+			giveLabels: []string{"a", "b"},
+			wantFg:     []tcell.Color{tcell.ColorWhite, tcell.ColorGray},
+		},
+		{
+			name:            "second focused",
+			giveLabels:      []string{"a", "b"},
+			giveFocusOffset: 1,
+			wantFg:          []tcell.Color{tcell.ColorGray, tcell.ColorWhite},
+		},
+		{
+			name:       "single entry focused",
+			giveLabels: []string{"only"},
+			wantFg:     []tcell.Color{tcell.ColorWhite},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ch := newCompletionHandler(test.giveLabels)
 			for i := 0; i < test.giveFocusOffset; i++ {
 				ch.list.FocusDown()
 			}
 			w, h := ch.Dimensions()
+			ch.Resize(w, h)
 			sw := term.NewStringWriter(w, h)
 			ch.Draw(sw)
 			require.NoError(t, sw.Flush())
@@ -339,41 +360,39 @@ func TestCompletionHandlerDraw(t *testing.T) {
 
 func TestCompletionHandlerDimensions(t *testing.T) {
 	tests := []struct {
-		name      string
-		giveItems []semanticapi.CompletionItem
-		wantW     int
-		wantH     int
+		name       string
+		giveLabels []string
+		wantW      int
+		wantH      int
 	}{
 		{
-			name:      "width is max label plus 2",
-			giveItems: testItems("short", "longer entry"),
-			wantW:     utf8.RuneCountInString("longer entry") + 2,
-			wantH:     2,
+			name:       "width is max label plus 2",
+			giveLabels: []string{"short", "longer entry"},
+			wantW:      utf8.RuneCountInString("longer entry") + 2,
+			wantH:      2,
 		},
 		{
-			name:      "height capped at 15",
-			giveItems: make([]semanticapi.CompletionItem, 20),
-			wantW:     2,
-			wantH:     15,
+			name:       "height capped at 15",
+			giveLabels: make([]string, 20),
+			wantW:      2,
+			wantH:      15,
 		},
 		{
-			name:      "single entry",
-			giveItems: testItems("a.go:1"),
-			wantW:     8,
-			wantH:     1,
+			name:       "single entry",
+			giveLabels: []string{"a.go:1"},
+			wantW:      8,
+			wantH:      1,
 		},
 		{
-			name:      "unicode label uses rune count",
-			giveItems: testItems("café"),
-			wantW:     6,
-			wantH:     1,
+			name:       "unicode label uses rune count",
+			giveLabels: []string{"café"},
+			wantW:      6,
+			wantH:      1,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ch := newCompletionHandler(
-				test.giveItems, noIcons, &mockEditor{}, &mockHandler{},
-			)
+			ch := newCompletionHandler(test.giveLabels)
 			w, h := ch.Dimensions()
 			assert.Equal(t, test.wantW, w)
 			assert.Equal(t, test.wantH, h)
@@ -385,6 +404,7 @@ func TestCompletionHandlerApplyItem(t *testing.T) {
 	tests := []struct {
 		name      string
 		giveItems []semanticapi.CompletionItem
+		giveLabel string
 		wantText  string
 		wantEdit  bool
 		wantStart term.Coordinates
@@ -408,6 +428,7 @@ func TestCompletionHandlerApplyItem(t *testing.T) {
 					},
 				},
 			},
+			giveLabel: "foo",
 			wantText:  "foobar",
 			wantEdit:  true,
 			wantStart: term.Coordinates{X: 2, Y: 1},
@@ -418,14 +439,21 @@ func TestCompletionHandlerApplyItem(t *testing.T) {
 			giveItems: []semanticapi.CompletionItem{
 				{Label: "fn", InsertText: "func() {}"},
 			},
-			wantText: "func() {}",
-			wantEdit: true,
+			giveLabel: "fn",
+			wantText:  "func() {}",
+			wantEdit:  true,
 		},
 		{
 			name:      "label fallback",
 			giveItems: []semanticapi.CompletionItem{{Label: "myVar"}},
+			giveLabel: "myVar",
 			wantText:  "myVar",
 			wantEdit:  true,
+		},
+		{
+			name:      "no match returns nil",
+			giveItems: []semanticapi.CompletionItem{{Label: "myVar"}},
+			giveLabel: "nonexistent",
 		},
 	}
 	for _, test := range tests {
@@ -452,10 +480,15 @@ func TestCompletionHandlerApplyItem(t *testing.T) {
 					}
 				},
 			}
-			ch := newCompletionHandler(
-				test.giveItems, noIcons, editor, &mockHandler{},
-			)
-			err := ch.applyItem()
+			ch := &completionHandler{
+				list:        component.NewFocusList(),
+				items:       test.giveItems,
+				icons:       noIcons,
+				editor:      editor,
+				resource:    &mockHandler{},
+				interrupter: term.NopInterrupter(),
+			}
+			err := ch.applyItem(test.giveLabel)
 			require.NoError(t, err)
 			assert.Equal(t, test.wantEdit, editCalled)
 			assert.Equal(t, test.wantText, editText)
@@ -479,7 +512,13 @@ func TestCompletionHandlerApplyItemError(t *testing.T) {
 			}
 		},
 	}
-	ch := newCompletionHandler(testItems("x"), noIcons, editor, &mockHandler{})
+
+	ch := newCompletionHandler([]string{"x"})
+	ch.items = []semanticapi.CompletionItem{{Label: "x"}}
+	ch.icons = noIcons
+	ch.editor = editor
+	ch.resource = &mockHandler{}
+
 	exit, handled := ch.Handle(term.Event{
 		Type: term.EventKey, Key: term.KeyEnter,
 	})
@@ -487,27 +526,37 @@ func TestCompletionHandlerApplyItemError(t *testing.T) {
 	assert.True(t, handled, "should still be handled on error")
 }
 
-// TestCompletionHandlerDrainChannel verifies that items
-// sent to the channel appear in the FocusList after Handle.
-func TestCompletionHandlerDrainChannel(t *testing.T) {
-	ch := make(chan string, 3)
-	ch <- "alpha"
-	ch <- "beta"
-	ch <- "gamma"
-	close(ch)
+// TestCompletionHandlerBackgroundDrain verifies that the
+// drain goroutine populates the list without any Handle call.
+func TestCompletionHandlerBackgroundDrain(t *testing.T) {
+	labelCh := make(chan string, 3)
+	labelCh <- "alpha"
+	labelCh <- "beta"
+	labelCh <- "gamma"
+	close(labelCh)
 
-	handler := defaultNewSearchList(ch, &mockEditor{}, &mockHandler{}).(*completionHandler)
+	drainDone, drainDoneCancel := context.WithCancel(context.Background())
+	handler := &completionHandler{
+		list:        component.NewFocusList(),
+		drainDone:   drainDone,
+		interrupter: term.NopInterrupter(),
+	}
+	go func() {
+		defer drainDoneCancel()
+		handler.drainLoop(labelCh)
+	}()
 
-	// Trigger drain via Handle with a non-key event.
-	handler.Handle(term.Event{Type: term.EventMouse})
+	// Wait for the drain goroutine to finish — no Handle call needed.
+	require.NoError(t, handler.Close())
 
 	assert.Equal(t, 3, handler.list.Len())
-	assert.Equal(t, 3, handler.height)
-	assert.True(t, handler.width >= utf8.RuneCountInString("gamma")+2)
+	w, h := handler.Dimensions()
+	assert.Equal(t, 3, h)
+	assert.True(t, w >= utf8.RuneCountInString("gamma")+2)
 }
 
 // TestCompletionHandlerApplyItemAsync verifies that
-// applyItem works after goroutine-delivered addItem.
+// applyItem works after channel-delivered labels.
 func TestCompletionHandlerApplyItemAsync(t *testing.T) {
 	var editText string
 	editor := &mockEditor{
@@ -524,115 +573,43 @@ func TestCompletionHandlerApplyItemAsync(t *testing.T) {
 		},
 	}
 
-	ch := make(chan string, 1)
-	handler := defaultNewSearchList(ch, editor, &mockHandler{}).(*completionHandler)
+	labelCh := make(chan string, 1)
+	drainDone, drainDoneCancel := context.WithCancel(context.Background())
 
-	// Simulate goroutine delivering an item.
 	item := semanticapi.CompletionItem{
 		Label:      "myFunc",
 		InsertText: "myFunc()",
 	}
-	handler.addItem(item)
-	ch <- "myFunc"
-	close(ch)
 
-	// Drain + apply.
-	handler.Handle(term.Event{Type: term.EventMouse})
-	err := handler.applyItem()
+	handler := &completionHandler{
+		list:        component.NewFocusList(),
+		drainDone:   drainDone,
+		interrupter: term.NopInterrupter(),
+		items:       []semanticapi.CompletionItem{item},
+		icons:       noIcons,
+		editor:      editor,
+		resource:    &mockHandler{},
+	}
+	go func() {
+		defer drainDoneCancel()
+		handler.drainLoop(labelCh)
+	}()
+
+	// Simulate goroutine delivering label.
+	labelCh <- "myFunc"
+	close(labelCh)
+
+	// Wait for drain goroutine.
+	require.NoError(t, handler.Close())
+
+	err := handler.applyItem("myFunc")
 	require.NoError(t, err)
 	assert.Equal(t, "myFunc()", editText)
 }
 
-// TestCompletionHandlerTriggerKey verifies that pressing
-// the trigger key re-fetches completions and calls
-// SetWindowContent via scheduleNextTick.
-func TestCompletionHandlerTriggerKey(t *testing.T) {
-	triggerKey := term.KeyComb{Mod: term.ModCtrl, Ch: 'l'}
-
-	var completionCalls int
-	var lastTriggerKind semanticapi.CompletionTriggerKind
-	lsp := &mockLSP{
-		completionFn: func(
-			_ context.Context, p semanticapi.CompletionParams,
-		) (semanticapi.CompletionResult, error) {
-			completionCalls++
-			lastTriggerKind = p.Context.TriggerKind
-			return semanticapi.CompletionResult{
-				Items: testItems("result"),
-			}, nil
-		},
-	}
-
-	var setContentCalled bool
-	wm := &mockWindowManager{
-		setWindowContentFn: func(_ browserapi.Window, _ browserapi.Handler) error {
-			setContentCalled = true
-			return nil
-		},
-	}
-
-	icons := map[semanticapi.CompletionItemKind]string{}
-	ch := make(chan string, 1)
-	close(ch)
-	handler := defaultNewSearchList(ch, &mockEditor{}, &mockHandler{}).(*completionHandler)
-	handler.win = &mockWindow{id: 1}
-	handler.lsp = lsp
-	handler.wm = wm
-	handler.triggerKey = triggerKey
-	handler.icons = icons
-	handler.nextKind = semanticapi.CompletionTriggerKindTriggerForIncompleteCompletions
-	handler.scheduleNextTick = func(fn func()) bool {
-		fn()
-		return true
-	}
-
-	// First press: should toggle to Invoked and re-fetch.
-	ev := term.Event{
-		Type: term.EventKey,
-		Mod:  triggerKey.Mod,
-		Ch:   triggerKey.Ch,
-	}
-	exit, handled := handler.Handle(ev)
-	handler.wg.Wait()
-
-	assert.False(t, exit)
-	assert.True(t, handled)
-	assert.Equal(t, 1, completionCalls)
-	assert.Equal(t, semanticapi.CompletionTriggerKindInvoked, lastTriggerKind)
-	assert.True(t, setContentCalled)
-
-	// Second press: should toggle back to IncompleteCompletions.
-	setContentCalled = false
-	handler.Handle(ev)
-	handler.wg.Wait()
-
-	assert.Equal(t, 2, completionCalls)
-	assert.Equal(t,
-		semanticapi.CompletionTriggerKindTriggerForIncompleteCompletions,
-		lastTriggerKind,
-	)
-	assert.True(t, setContentCalled)
-}
-
-// TestCompletionHandlerTriggerKeyNotSet verifies that
-// a zero-value TriggerKey is not handled.
-func TestCompletionHandlerTriggerKeyNotSet(t *testing.T) {
-	ch := make(chan string, 1)
-	close(ch)
-	handler := defaultNewSearchList(ch, &mockEditor{}, &mockHandler{}).(*completionHandler)
-
-	ev := term.Event{
-		Type: term.EventKey,
-		Mod:  term.ModCtrl,
-		Ch:   'l',
-	}
-	_, handled := handler.Handle(ev)
-	assert.False(t, handled)
-}
-
 // TestCompleteHandlerCommandAsync verifies that
-// HandleCommand creates the channel, calls NewSearchList,
-// wm.Floating, and starts the goroutine.
+// HandleCommand creates the floating, starts goroutines,
+// and delivers completion items.
 func TestCompleteHandlerCommandAsync(t *testing.T) {
 	items := testItems("alpha", "beta")
 	lsp := &mockLSP{
@@ -654,8 +631,7 @@ func TestCompleteHandlerCommandAsync(t *testing.T) {
 	}
 
 	cfg := DefaultCompleteConfig()
-	scheduleNextTick := func(fn func()) bool { fn(); return true }
-	h := CompleteHandler(lsp, &mockEditor{}, wm, cfg, scheduleNextTick)
+	h := CompleteHandler(lsp, &mockEditor{}, wm, cfg, term.NopInterrupter())
 
 	cmd := textapi.Command{Resource: &mockHandler{}}
 	err := h.HandleCommand(context.Background(), cmd)
@@ -666,94 +642,27 @@ func TestCompleteHandlerCommandAsync(t *testing.T) {
 	require.NoError(t, gotFloating.Close())
 }
 
-// TestCompleteHandlerCustomSearchList verifies that a
-// custom NewSearchList receives the channel and its
-// floating is shown.
-func TestCompleteHandlerCustomSearchList(t *testing.T) {
-	items := testItems("alpha")
-	lsp := &mockLSP{
-		completionFn: func(
-			_ context.Context, _ semanticapi.CompletionParams,
-		) (semanticapi.CompletionResult, error) {
-			return semanticapi.CompletionResult{Items: items}, nil
-		},
-	}
+// TestCompletionHandlerClose verifies that Close cancels
+// the fetch context and waits for the goroutine.
+func TestCompletionHandlerClose(t *testing.T) {
+	fetchCtx, fetchCancel := context.WithCancel(context.Background())
+	fetchDone, fetchDoneCancel := context.WithCancel(context.Background())
 
-	var receivedLabels []string
-	var mu sync.Mutex
-	// Use a dedicated stub to ensure the default
-	// *completionHandler injection path is skipped.
-	customFloating := &stubFloating{width: 10, height: 1}
-
-	var floatingCalled bool
-	wm := &mockWindowManager{
-		floatingFn: func(
-			_ browserapi.Floating, _ browserapi.FloatingConfig,
-		) (browserapi.Window, error) {
-			floatingCalled = true
-			return &mockWindow{id: 1}, nil
-		},
-	}
-
-	cfg := CompleteConfig{
-		Icons: defaultIcons(),
-		NewSearchList: func(
-			ch <-chan string, _ textapi.Editor,
-			_ textapi.Handler,
-		) browserapi.Floating {
-			go func() {
-				for label := range ch {
-					mu.Lock()
-					receivedLabels = append(receivedLabels, label)
-					mu.Unlock()
-				}
-			}()
-			return customFloating
-		},
-	}
-	scheduleNextTick := func(fn func()) bool { fn(); return true }
-	h := CompleteHandler(lsp, &mockEditor{}, wm, cfg, scheduleNextTick)
-
-	cmd := textapi.Command{Resource: &mockHandler{}}
-	err := h.HandleCommand(context.Background(), cmd)
-	require.NoError(t, err)
-	assert.True(t, floatingCalled)
-
-	// Wait for labels to arrive.
-	assert.Eventually(t, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return len(receivedLabels) == 1
-	}, time.Second, 10*time.Millisecond)
-
-	mu.Lock()
-	defer mu.Unlock()
-	assert.Contains(t, receivedLabels[0], "alpha")
-}
-
-// TestCloserFloating verifies that Close cancels the
-// context and waits for the goroutine.
-func TestCloserFloating(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	inner := &completionHandler{
-		list:   component.NewFocusList(),
-		width:  10,
-		height: 1,
-	}
-	cf := &closerFloating{
-		Floating: inner,
-		cancel:   cancel,
+	ch := &completionHandler{
+		list:        component.NewFocusList(),
+		cancel:      fetchCancel,
+		fetchDone:   fetchDone,
+		interrupter: term.NopInterrupter(),
 	}
 
 	var goroutineExited bool
-	cf.wg.Add(1)
 	go func() {
-		defer cf.wg.Done()
-		<-ctx.Done()
+		defer fetchDoneCancel()
+		<-fetchCtx.Done()
 		goroutineExited = true
 	}()
 
-	err := cf.Close()
+	err := ch.Close()
 	require.NoError(t, err)
 	assert.True(t, goroutineExited)
 }
@@ -795,8 +704,7 @@ func TestCompleteHandlerCommand(t *testing.T) {
 				},
 			}
 			cfg := DefaultCompleteConfig()
-			scheduleNextTick := func(fn func()) bool { fn(); return true }
-			h := CompleteHandler(lsp, &mockEditor{}, wm, cfg, scheduleNextTick)
+			h := CompleteHandler(lsp, &mockEditor{}, wm, cfg, term.NopInterrupter())
 			cmd := textapi.Command{Resource: &mockHandler{}}
 			err := h.HandleCommand(context.Background(), cmd)
 			require.NoError(t, err)

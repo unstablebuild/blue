@@ -33,6 +33,7 @@ import (
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
 	"github.com/unstablebuild/rune-go-sdk/iterator"
+	"github.com/unstablebuild/rune-go-sdk/term"
 )
 
 const cmdName = "lsp"
@@ -76,12 +77,9 @@ type AllConfig struct {
 	Implementation ImplementationConfig
 	References     ReferencesConfig
 
-	// ScheduleNextTick schedules fn to run on the next event-loop
-	// iteration. It returns false if the event queue is full.
-	// Production callers must inject the real term.ScheduleNextTick.
-	// DefaultConfig provides a synchronous stub suitable for tests
-	// only; using it in production will cause data races.
-	ScheduleNextTick func(fn func()) bool
+	// Interrupter signals the event loop to re-render after
+	// asynchronous updates (e.g. completion results arriving).
+	Interrupter term.Interrupter
 }
 
 // DefaultConfig returns an AllConfig where every subcommand uses its
@@ -92,10 +90,7 @@ func DefaultConfig() AllConfig {
 		Complete:       DefaultCompleteConfig(),
 		Implementation: DefaultImplementationConfig(),
 		References:     DefaultReferencesConfig(),
-		ScheduleNextTick: func(fn func()) bool {
-			fn()
-			return true
-		},
+		Interrupter:    term.NopInterrupter(),
 	}
 }
 
@@ -115,7 +110,7 @@ func AllHandler(
 		handlers: map[string]textapi.CommandHandler{
 			"format":   formatH,
 			"hover":    HoverHandler(lsp, wm, cfg.Hover),
-			"complete": CompleteHandler(lsp, editor, wm, cfg.Complete, cfg.ScheduleNextTick),
+			"complete": CompleteHandler(lsp, editor, wm, cfg.Complete, cfg.Interrupter),
 			"implementation": ImplementationHandler(
 				lsp, editor, wm, opener, notify, fs, cfg.Implementation,
 			),
