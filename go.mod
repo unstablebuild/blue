@@ -22,6 +22,7 @@ require (
 	github.com/unstablebuild/rune-go-sdk v0.0.23
 	github.com/unstablebuild/tcell/v3 v3.6.2
 	github.com/willf/pad v0.0.0-20200313202418-172aa767f2a4
+	github.com/yuin/goldmark v1.4.13
 	go.etcd.io/bbolt v1.3.4
 	go.uber.org/config v1.4.0
 	go.uber.org/goleak v1.3.0
