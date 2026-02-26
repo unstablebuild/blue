@@ -1827,6 +1827,230 @@ func TestE2ECallbackApplyEdit(t *testing.T) {
 	require.NoError(t, mgr.Close())
 }
 
+func TestE2EGoModChangeNotifiesGopls(t *testing.T) {
+	t.Parallel()
+	goplsBin := findGopls(t)
+	tmpDir := setupTestWorkspace(t, "")
+
+	uri := makeURI(t, "file://"+tmpDir)
+
+	// Write a valid workspace first.
+	goModPath := filepath.Join(tmpDir, "go.mod")
+	require.NoError(t, os.WriteFile(goModPath,
+		[]byte("module example.com/testmod\n\ngo 1.22\n"), 0644))
+
+	mainPath := filepath.Join(tmpDir, "main.go")
+	mainContent := `package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("hello")
+}
+`
+	require.NoError(t, os.WriteFile(mainPath,
+		[]byte(mainContent), 0644))
+
+	mainURI := "file://" + mainPath
+
+	ctx, cancel := context.WithTimeout(
+		context.Background(), 30*time.Second,
+	)
+	defer cancel()
+
+	var (
+		loadedWg    sync.WaitGroup
+		loadedReady sync.Once
+	)
+
+	diagCh := make(chan semanticapi.PublishDiagnosticsParams, 32)
+	callback := &testCallback{
+		onShowMessage: func(params semanticapi.ShowMessageParams) {
+			if strings.Contains(params.Message, "Finished loading packages") {
+				loadedReady.Do(loadedWg.Done)
+			}
+		},
+		onProgress: readyOnProgress(&loadedReady, &loadedWg),
+		onDiagnostics: func(p semanticapi.PublishDiagnosticsParams) {
+			select {
+			case diagCh <- p:
+			default:
+			}
+		},
+	}
+
+	scheme := newTestScheme()
+	mgr := New(
+		uri,
+		scheme,
+		scheme,
+		&stubPkgManager{bin: goplsBin},
+		nil, // notifications
+		nil, // opener
+		Config{Callback: callback, MaxRetries: 1},
+	)
+
+	params := autoInitParams(uri.String())
+	initOpts, err := json.Marshal(map[string]any{
+		"langID":  "go",
+		"command": "gopls serve",
+	})
+	require.NoError(t, err)
+	params.InitializeOptions = initOpts
+
+	loadedWg.Add(1)
+	_, err = mgr.Initialize(ctx, params)
+	require.NoError(t, err)
+	require.NoError(t, mgr.DidOpen(ctx,
+		semanticapi.DidOpenTextDocumentParams{
+			TextDocument: semanticapi.TextDocumentItem{
+				URI:        mainURI,
+				LanguageID: "go",
+				Version:    0,
+				Text:       mainContent,
+			},
+		},
+	))
+	loadedWg.Wait()
+
+	// Drain any initial diagnostics from loading.
+	drainDiagnostics(diagCh, 1*time.Second)
+
+	// Break go.mod by adding a require for a nonexistent module.
+	// gopls publishes diagnostics for go.mod when it can't resolve deps.
+	require.NoError(t, os.WriteFile(goModPath,
+		[]byte("module example.com/testmod\n\ngo 1.22\n\nrequire nonexistent.invalid/pkg v0.0.0\n"), 0644))
+
+	goModURI, err := workspaceapi.ParseURI("file://" + goModPath)
+	require.NoError(t, err)
+
+	mgr.Handle(ctx, textapi.Event{
+		Type: textapi.EventTypeChange,
+		URI:  goModURI,
+	})
+
+	// Wait for diagnostics that include errors.
+	timer := time.NewTimer(15 * time.Second)
+	defer timer.Stop()
+	var got bool
+	for !got {
+		select {
+		case p := <-diagCh:
+			if len(p.Diagnostics) > 0 {
+				got = true
+			}
+		case <-timer.C:
+			t.Fatal("timed out waiting for diagnostics after go.mod change")
+		case <-ctx.Done():
+			t.Fatal("context cancelled waiting for diagnostics")
+		}
+	}
+
+	require.NoError(t, mgr.Close())
+}
+
+func TestE2EReinitializePreservesParams(t *testing.T) {
+	t.Parallel()
+	goplsBin := findGopls(t)
+	tmpDir := setupTestWorkspace(t, "testdata")
+
+	mainPath := filepath.Join(tmpDir, "main.go")
+	mainContent, err := os.ReadFile(mainPath)
+	require.NoError(t, err)
+	mainURI := "file://" + mainPath
+
+	uri := makeURI(t, "file://"+tmpDir)
+	scheme := newTestScheme()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var ready sync.Once
+	var wg sync.WaitGroup
+	callback := &testCallback{
+		onProgress: readyOnProgress(&ready, &wg),
+	}
+
+	mgr := New(
+		uri, scheme, scheme,
+		&stubPkgManager{bin: goplsBin},
+		nil, nil,
+		Config{Callback: callback, MaxRetries: 3, NoInitializeServer: true},
+	)
+	t.Cleanup(func() { _ = mgr.Close() })
+
+	// Initialize with custom options that gopls will use.
+	params := autoInitParams(uri.String())
+	initOpts, err := json.Marshal(map[string]any{
+		"langID":         "go",
+		"command":        "gopls serve",
+		"semanticTokens": true,
+	})
+	require.NoError(t, err)
+	params.InitializeOptions = initOpts
+
+	wg.Add(1)
+	_, err = mgr.Initialize(ctx, params)
+	require.NoError(t, err)
+
+	// Open a file and wait for gopls to finish loading so the
+	// server is fully operational before we kill it.
+	require.NoError(t, mgr.DidOpen(ctx, semanticapi.DidOpenTextDocumentParams{
+		TextDocument: semanticapi.TextDocumentItem{
+			URI:        mainURI,
+			LanguageID: "go",
+			Version:    0,
+			Text:       string(mainContent),
+		},
+	}))
+	wg.Wait()
+
+	// Snapshot the original server and its InitializeParams.
+	mgr.mu.Lock()
+	origSrv := mgr.servers["go"]
+	mgr.mu.Unlock()
+	require.NotNil(t, origSrv)
+	originalParams := origSrv.params
+
+	// Kill the gopls process so watchServer triggers a restart.
+	require.NoError(t, scheme.Signal(origSrv.pid, syscall.SIGKILL))
+
+	// Wait for the manager to detect the crash and start a new server.
+	var newSrv *langServer
+	require.Eventually(t, func() bool {
+		mgr.mu.Lock()
+		s := mgr.servers["go"]
+		mgr.mu.Unlock()
+		if s != nil && s != origSrv {
+			newSrv = s
+			return true
+		}
+		return false
+	}, 15*time.Second, 200*time.Millisecond,
+		"server did not restart after kill")
+
+	// The restarted server must have the exact same InitializeParams
+	// that were originally sent, including the custom InitializeOptions.
+	assert.Equal(t, originalParams, newSrv.params)
+}
+
+// drainDiagnostics reads and discards diagnostics from the channel
+// for the given duration.
+func drainDiagnostics(
+	ch <-chan semanticapi.PublishDiagnosticsParams,
+	d time.Duration,
+) {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ch:
+		case <-timer.C:
+			return
+		}
+	}
+}
+
 func findGopls(t *testing.T) string {
 	t.Helper()
 	goplsBin, err := exec.LookPath("gopls")
