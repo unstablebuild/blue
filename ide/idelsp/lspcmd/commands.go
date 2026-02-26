@@ -94,6 +94,7 @@ type Config struct {
 	TypeDefinition TypeDefinitionConfig
 	Implementation ImplementationConfig
 	References     ReferencesConfig
+	Highlight      HighlightConfig
 
 	// ScheduleNextTick defers a function to the next event-loop tick.
 	ScheduleNextTick func(func()) bool
@@ -114,6 +115,7 @@ func DefaultConfig() Config {
 		TypeDefinition: DefaultTypeDefinitionConfig(),
 		Implementation: DefaultImplementationConfig(),
 		References:     DefaultReferencesConfig(),
+		Highlight:      DefaultHighlightConfig(),
 		Interrupter:    term.NopInterrupter(),
 	}
 }
@@ -133,25 +135,34 @@ func AllHandler(
 	if err != nil {
 		return nil, err
 	}
+	err = SubscribeHighlight(lsp, editor, cfg.ScheduleNextTick, cfg.Highlight)
+	if err != nil {
+		return nil, err
+	}
 	return &routerHandler{
 		handlers: map[string]textapi.CommandHandler{
 			"format":   formatH,
 			"hover":    HoverHandler(lsp, wm, cfg.Hover),
 			"complete": CompleteHandler(lsp, editor, wm, cfg.Complete, cfg.Interrupter),
 			"definition": DefinitionHandler(
-				lsp, editor, wm, opener, notify, fs, cfg.ScheduleNextTick, cfg.Parser, cfg.Definition,
+				lsp, editor, wm, opener, notify, fs,
+				cfg.ScheduleNextTick, cfg.Parser, cfg.Definition,
 			),
 			"declaration": DeclarationHandler(
-				lsp, editor, wm, opener, notify, fs, cfg.ScheduleNextTick, cfg.Parser, cfg.Declaration,
+				lsp, editor, wm, opener, notify, fs,
+				cfg.ScheduleNextTick, cfg.Parser, cfg.Declaration,
 			),
 			"type-definition": TypeDefinitionHandler(
-				lsp, editor, wm, opener, notify, fs, cfg.ScheduleNextTick, cfg.Parser, cfg.TypeDefinition,
+				lsp, editor, wm, opener, notify, fs,
+				cfg.ScheduleNextTick, cfg.Parser, cfg.TypeDefinition,
 			),
 			"implementation": ImplementationHandler(
-				lsp, editor, wm, opener, notify, fs, cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.Implementation,
+				lsp, editor, wm, opener, notify, fs,
+				cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.Implementation,
 			),
 			"references": ReferencesHandler(
-				lsp, editor, wm, opener, notify, fs, cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.References,
+				lsp, editor, wm, opener, notify, fs,
+				cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.References,
 			),
 		},
 	}, nil
