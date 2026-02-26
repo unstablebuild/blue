@@ -1,0 +1,698 @@
+// Unstable Build LLC ("COMPANY") CONFIDENTIAL
+//
+// Unpublished Copyright (c) 2017-2026 Unstable Build, All Rights Reserved.
+//
+// NOTICE: All information contained herein is, and remains the property of COMPANY.
+// The intellectual and technical concepts contained herein are proprietary to
+// COMPANY and may be covered by U.S. and Foreign Patents, patents in process,
+// and are protected by trade secret or copyright law. Dissemination of this information
+// or reproduction of this material is strictly forbidden unless prior written permission
+// is obtained from COMPANY. Access to the source code contained herein is hereby
+// forbidden to anyone except current COMPANY employees, managers or contractors who
+// have executed Confidentiality and Non-disclosure agreements explicitly covering such access.
+//
+// The copyright notice above does not evidence any actual or intended publication or
+// disclosure of this source code, which includes information that is confidential and/or
+// proprietary, and is a trade secret, of COMPANY. ANY REPRODUCTION, MODIFICATION,
+// DISTRIBUTION, PUBLIC  PERFORMANCE, OR PUBLIC DISPLAY OF OR THROUGH USE OF THIS SOURCE CODE
+// WITHOUT  THE EXPRESS WRITTEN CONSENT OF COMPANY IS STRICTLY PROHIBITED, AND IN
+// VIOLATION OF APPLICABLE LAWS AND INTERNATIONAL TREATIES. THE RECEIPT OR POSSESSION OF
+// THIS SOURCE CODE AND/OR RELATED INFORMATION DOES NOT CONVEY OR IMPLY ANY RIGHTS TO
+// REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
+// ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
+
+package lspcmd
+
+import (
+	"context"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
+	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
+	"github.com/unstablebuild/rune-go-sdk/api/textapi"
+	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
+	"github.com/unstablebuild/rune-go-sdk/component/comptest"
+	"github.com/unstablebuild/rune-go-sdk/term"
+	"github.com/unstablebuild/tcell/v3"
+)
+
+func testSignatureHelp(sigs []semanticapi.SignatureInformation, activeSig, activeParam uint32) *semanticapi.SignatureHelp {
+	return &semanticapi.SignatureHelp{
+		Signatures:      sigs,
+		ActiveSignature: activeSig,
+		ActiveParameter: activeParam,
+	}
+}
+
+func TestSignatureHelpFloatingHandle(t *testing.T) {
+	t.Parallel()
+	result := testSignatureHelp([]semanticapi.SignatureInformation{
+		{Label: "foo(a int, b string)"},
+		{Label: "foo(a int)"},
+	}, 0, 0)
+	f := newSignatureHelpFloating(result, DefaultSignatureHelpConfig())
+
+	// Esc dismisses.
+	exit, handled := f.Handle(term.Event{Type: term.EventKey, Key: term.KeyEsc})
+	assert.True(t, exit, "Esc should exit")
+	assert.True(t, handled, "Esc should be handled")
+
+	// Up at index 0 clamps.
+	f.activeIdx = 0
+	exit, handled = f.Handle(term.Event{Type: term.EventKey, Key: term.KeyArrowUp})
+	assert.False(t, exit, "Up should not exit")
+	assert.True(t, handled, "Up should be handled")
+	assert.Equal(t, 0, f.activeIdx)
+
+	// Down increments.
+	exit, handled = f.Handle(term.Event{Type: term.EventKey, Key: term.KeyArrowDown})
+	assert.False(t, exit, "Down should not exit")
+	assert.True(t, handled, "Down should be handled")
+	assert.Equal(t, 1, f.activeIdx)
+
+	// Down at max clamps.
+	exit, handled = f.Handle(term.Event{Type: term.EventKey, Key: term.KeyArrowDown})
+	assert.False(t, exit, "Down at max should not exit")
+	assert.True(t, handled, "Down at max should be handled")
+	assert.Equal(t, 1, f.activeIdx)
+
+	// Any other key dismisses.
+	exit, handled = f.Handle(term.Event{Type: term.EventKey, Key: term.KeyEnter})
+	assert.True(t, exit, "Enter should exit")
+	assert.True(t, handled, "Enter should be handled")
+
+	// Mouse events ignored.
+	exit, handled = f.Handle(term.Event{Type: term.EventMouse})
+	assert.False(t, exit, "mouse should not exit")
+	assert.False(t, handled, "mouse should not be handled")
+}
+
+func TestSignatureHelpFloatingDimensions(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		sigs  []semanticapi.SignatureInformation
+		aSig  uint32
+		aPar  uint32
+		wantW int
+		wantH int
+	}{
+		{
+			name: "single sig no param doc",
+			sigs: []semanticapi.SignatureInformation{
+				{Label: "foo(a int)", Parameters: []semanticapi.ParameterInformation{{Label: "a int"}}},
+			},
+			wantW: 10, // len("foo(a int)")
+			wantH: 1,
+		},
+		{
+			name: "single sig with param doc",
+			sigs: []semanticapi.SignatureInformation{
+				{
+					Label: "foo(a int)",
+					Parameters: []semanticapi.ParameterInformation{
+						{Label: "a int", DocumentationString: "the first arg"},
+					},
+				},
+			},
+			aPar:  0,
+			wantW: 13, // len("the first arg")
+			wantH: 2,
+		},
+		{
+			name: "multiple sigs include counter in width",
+			sigs: []semanticapi.SignatureInformation{
+				{Label: "foo(a int)"},
+				{Label: "foo(a int, b string)"},
+			},
+			wantW: 10 + 4, // "foo(a int)" + " 1/2"
+			wantH: 1,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := testSignatureHelp(test.sigs, test.aSig, test.aPar)
+			f := newSignatureHelpFloating(result, DefaultSignatureHelpConfig())
+			w, h := f.Dimensions()
+			assert.Equal(t, test.wantW, w, "width")
+			assert.Equal(t, test.wantH, h, "height")
+		})
+	}
+}
+
+func TestSignatureHelpFloatingDraw(t *testing.T) {
+	t.Parallel()
+	cfg := DefaultSignatureHelpConfig()
+	sig := semanticapi.SignatureInformation{
+		Label: "foo(a int, b string)",
+		Parameters: []semanticapi.ParameterInformation{
+			{Label: "a int"},
+			{Label: "b string", DocumentationString: "second param"},
+		},
+	}
+	result := testSignatureHelp([]semanticapi.SignatureInformation{sig}, 0, 1)
+	f := newSignatureHelpFloating(result, cfg)
+	w, h := f.Dimensions()
+	f.Resize(w, h)
+
+	sw := term.NewStringWriter(w, h)
+	comptest.TestComponent(t, f, sw, []comptest.TestCase{
+		{
+			Expected: "foo(a int, b string)\nsecond param        ",
+		},
+	})
+
+	// Verify bold+underline on the active parameter range.
+	// "b string" starts at rune index 11, ends at 19.
+	cells := sw.Cells()
+	for x := 11; x < 19; x++ {
+		cell := cells[x]
+		assert.NotZero(t, cell.Attrs&tcell.AttrBold, "cell %d should be bold", x)
+		assert.NotZero(t, cell.Attrs&tcell.AttrUnderline, "cell %d should be underline", x)
+	}
+	// Characters outside the active param range should NOT have bold.
+	assert.Zero(t, cells[0].Attrs&tcell.AttrBold, "cell 0 should not be bold")
+
+	// Second line should have the param documentation in gray.
+	require.True(t, h >= 2, "should have 2 lines for param doc")
+	docCell := cells[w] // first cell of second row
+	assert.Equal(t, tcell.ColorGray, docCell.Fg, "param doc should be gray")
+}
+
+func TestSignatureHelpFloatingOverloadCycling(t *testing.T) {
+	t.Parallel()
+	sigs := []semanticapi.SignatureInformation{
+		{Label: "foo(a int)"},
+		{Label: "foo(a int, b string)"},
+		{Label: "foo(a int, b string, c bool)"},
+	}
+	result := testSignatureHelp(sigs, 0, 0)
+	f := newSignatureHelpFloating(result, DefaultSignatureHelpConfig())
+	assert.Equal(t, 0, f.activeIdx)
+
+	// Down twice.
+	f.Handle(term.Event{Type: term.EventKey, Key: term.KeyArrowDown})
+	assert.Equal(t, 1, f.activeIdx)
+	f.Handle(term.Event{Type: term.EventKey, Key: term.KeyArrowDown})
+	assert.Equal(t, 2, f.activeIdx)
+
+	// Up once.
+	f.Handle(term.Event{Type: term.EventKey, Key: term.KeyArrowUp})
+	assert.Equal(t, 1, f.activeIdx)
+
+	// Dimensions reflect the currently active signature.
+	w, _ := f.Dimensions()
+	// "foo(a int, b string)" = 20 + " 2/3" = 4 → 24
+	assert.Equal(t, 24, w)
+}
+
+func TestFindParamRuneRange(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		sig       semanticapi.SignatureInformation
+		paramIdx  int
+		wantStart int
+		wantEnd   int
+	}{
+		{
+			name: "basic match",
+			sig: semanticapi.SignatureInformation{
+				Label:      "foo(a int, b string)",
+				Parameters: []semanticapi.ParameterInformation{{Label: "a int"}, {Label: "b string"}},
+			},
+			paramIdx:  0,
+			wantStart: 4,
+			wantEnd:   9,
+		},
+		{
+			name: "second param",
+			sig: semanticapi.SignatureInformation{
+				Label:      "foo(a int, b string)",
+				Parameters: []semanticapi.ParameterInformation{{Label: "a int"}, {Label: "b string"}},
+			},
+			paramIdx:  1,
+			wantStart: 11,
+			wantEnd:   19,
+		},
+		{
+			name: "no match",
+			sig: semanticapi.SignatureInformation{
+				Label:      "foo(a int)",
+				Parameters: []semanticapi.ParameterInformation{{Label: "z float64"}},
+			},
+			paramIdx:  0,
+			wantStart: -1,
+			wantEnd:   -1,
+		},
+		{
+			name: "out of range index",
+			sig: semanticapi.SignatureInformation{
+				Label:      "foo(a int)",
+				Parameters: []semanticapi.ParameterInformation{{Label: "a int"}},
+			},
+			paramIdx:  5,
+			wantStart: -1,
+			wantEnd:   -1,
+		},
+		{
+			name: "unicode label",
+			sig: semanticapi.SignatureInformation{
+				Label:      "fn(café string)",
+				Parameters: []semanticapi.ParameterInformation{{Label: "café string"}},
+			},
+			paramIdx:  0,
+			wantStart: 3,
+			wantEnd:   14,
+		},
+		{
+			name: "label offsets",
+			sig: semanticapi.SignatureInformation{
+				Label: "foo(a int, b string)",
+				Parameters: []semanticapi.ParameterInformation{
+					{LabelOffsets: &[2]uint32{4, 9}},
+					{LabelOffsets: &[2]uint32{11, 19}},
+				},
+			},
+			paramIdx:  1,
+			wantStart: 11,
+			wantEnd:   19,
+		},
+		{
+			name: "empty param label",
+			sig: semanticapi.SignatureInformation{
+				Label:      "foo(a int)",
+				Parameters: []semanticapi.ParameterInformation{{Label: ""}},
+			},
+			paramIdx:  0,
+			wantStart: -1,
+			wantEnd:   -1,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			start, end := findParamRuneRange(test.sig, test.paramIdx)
+			assert.Equal(t, test.wantStart, start, "start")
+			assert.Equal(t, test.wantEnd, end, "end")
+		})
+	}
+}
+
+func TestSignatureHelpHandlerCommand(t *testing.T) {
+	t.Parallel()
+	sig := semanticapi.SignatureInformation{
+		Label:      "foo(a int, b string)",
+		Parameters: []semanticapi.ParameterInformation{{Label: "a int"}, {Label: "b string"}},
+	}
+	lsp := &mockLSP{
+		signatureHelpFn: func(
+			_ context.Context, _ semanticapi.SignatureHelpParams,
+		) (*semanticapi.SignatureHelp, error) {
+			return testSignatureHelp([]semanticapi.SignatureInformation{sig}, 0, 0), nil
+		},
+	}
+	var floatingCalled bool
+	wm := &mockWindowManager{
+		floatingFn: func(
+			_ browserapi.Floating, _ browserapi.FloatingConfig,
+		) (browserapi.Window, error) {
+			floatingCalled = true
+			return &mockWindow{id: 1}, nil
+		},
+	}
+	h := SignatureHelpHandler(lsp, &mockEditor{}, wm, nil, DefaultSignatureHelpConfig())
+	cmd := textapi.Command{Resource: &mockHandler{}}
+	err := h.HandleCommand(context.Background(), cmd)
+	require.NoError(t, err)
+	assert.True(t, floatingCalled, "should open floating window")
+}
+
+func TestSignatureHelpHandlerNilResult(t *testing.T) {
+	t.Parallel()
+	lsp := &mockLSP{
+		signatureHelpFn: func(
+			_ context.Context, _ semanticapi.SignatureHelpParams,
+		) (*semanticapi.SignatureHelp, error) {
+			return nil, nil
+		},
+	}
+	var floatingCalled bool
+	wm := &mockWindowManager{
+		floatingFn: func(
+			_ browserapi.Floating, _ browserapi.FloatingConfig,
+		) (browserapi.Window, error) {
+			floatingCalled = true
+			return &mockWindow{id: 1}, nil
+		},
+	}
+	h := SignatureHelpHandler(lsp, &mockEditor{}, wm, nil, DefaultSignatureHelpConfig())
+	cmd := textapi.Command{Resource: &mockHandler{}}
+	err := h.HandleCommand(context.Background(), cmd)
+	require.NoError(t, err)
+	assert.False(t, floatingCalled, "should not open floating for nil result")
+}
+
+func TestSignatureHelpHandlerEmptySignatures(t *testing.T) {
+	t.Parallel()
+	lsp := &mockLSP{
+		signatureHelpFn: func(
+			_ context.Context, _ semanticapi.SignatureHelpParams,
+		) (*semanticapi.SignatureHelp, error) {
+			return &semanticapi.SignatureHelp{}, nil
+		},
+	}
+	var floatingCalled bool
+	wm := &mockWindowManager{
+		floatingFn: func(
+			_ browserapi.Floating, _ browserapi.FloatingConfig,
+		) (browserapi.Window, error) {
+			floatingCalled = true
+			return &mockWindow{id: 1}, nil
+		},
+	}
+	h := SignatureHelpHandler(lsp, &mockEditor{}, wm, nil, DefaultSignatureHelpConfig())
+	cmd := textapi.Command{Resource: &mockHandler{}}
+	err := h.HandleCommand(context.Background(), cmd)
+	require.NoError(t, err)
+	assert.False(t, floatingCalled, "should not open floating for empty signatures")
+}
+
+func TestSignatureHelpAutoTriggerDisabled(t *testing.T) {
+	t.Parallel()
+	var subscribeCalled bool
+	editor := &mockEditor{
+		subscribeEventsFn: func(
+			_ []textapi.EventType, _ textapi.EventHandler,
+		) error {
+			subscribeCalled = true
+			return nil
+		},
+	}
+	cfg := DefaultSignatureHelpConfig()
+	cfg.AutoTrigger = false
+	cfg.TriggerCharacters = []string{"(", ","}
+	SignatureHelpHandler(&mockLSP{}, editor, &mockWindowManager{}, nil, cfg)
+	assert.False(t, subscribeCalled, "SubscribeEvents should not be called when AutoTrigger is false")
+}
+
+func TestSignatureHelpAutoTriggerNoMatch(t *testing.T) {
+	t.Parallel()
+	var capturedHandler textapi.EventHandler
+	var setLocationCalled bool
+	editor := &mockEditor{
+		subscribeEventsFn: func(
+			_ []textapi.EventType, h textapi.EventHandler,
+		) error {
+			capturedHandler = h
+			return nil
+		},
+		editorFn: func(uri workspaceapi.URI) (textapi.Handler, error) {
+			return &mockHandler{uri: uri}, nil
+		},
+		setLocationListFn: func(_ textapi.Handler, _ textapi.LocationPriority, _ string, _ textapi.LocationList) error {
+			setLocationCalled = true
+			return nil
+		},
+	}
+	cfg := DefaultSignatureHelpConfig()
+	cfg.TriggerCharacters = []string{"(", ","}
+	SignatureHelpHandler(&mockLSP{}, editor, &mockWindowManager{}, syncTick, cfg)
+	require.NotNil(t, capturedHandler, "handler should be subscribed")
+
+	// Fire an edit event with a non-trigger character.
+	done := capturedHandler.Handle(context.Background(), textapi.Event{
+		Type:    textapi.EventTypeEdit,
+		Content: "x",
+	})
+	assert.False(t, done)
+	assert.False(t, setLocationCalled, "SetLocationList should not be called for non-trigger char")
+}
+
+func TestSignatureHelpAutoTriggerNilResult(t *testing.T) {
+	t.Parallel()
+	lsp := &mockLSP{
+		signatureHelpFn: func(
+			_ context.Context, _ semanticapi.SignatureHelpParams,
+		) (*semanticapi.SignatureHelp, error) {
+			return nil, nil
+		},
+	}
+	var setLocationCalled bool
+	var capturedHandler textapi.EventHandler
+	editor := &mockEditor{
+		subscribeEventsFn: func(
+			_ []textapi.EventType, h textapi.EventHandler,
+		) error {
+			capturedHandler = h
+			return nil
+		},
+		editorFn: func(uri workspaceapi.URI) (textapi.Handler, error) {
+			return &mockHandler{uri: uri}, nil
+		},
+		setLocationListFn: func(_ textapi.Handler, _ textapi.LocationPriority, _ string, _ textapi.LocationList) error {
+			setLocationCalled = true
+			return nil
+		},
+	}
+	cfg := DefaultSignatureHelpConfig()
+	cfg.TriggerCharacters = []string{"(", ","}
+	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg)
+	require.NotNil(t, capturedHandler, "handler should be subscribed")
+
+	// Fire an edit event with a trigger character but LSP returns nil.
+	done := capturedHandler.Handle(context.Background(), textapi.Event{
+		Type:    textapi.EventTypeEdit,
+		Content: "(",
+	})
+	assert.False(t, done)
+
+	// The fetch runs asynchronously via time.AfterFunc(0, ...).
+	// Give it a moment to complete.
+	time.Sleep(50 * time.Millisecond)
+	assert.False(t, setLocationCalled, "SetLocationList should not be called when LSP returns nil")
+}
+
+func TestSignatureHelpAutoTriggerSetsLocation(t *testing.T) {
+	t.Parallel()
+	sig := semanticapi.SignatureInformation{
+		Label: "foo(a int, b string)",
+		Parameters: []semanticapi.ParameterInformation{
+			{Label: "a int"},
+			{Label: "b string"},
+		},
+	}
+	lsp := &mockLSP{
+		signatureHelpFn: func(
+			_ context.Context, _ semanticapi.SignatureHelpParams,
+		) (*semanticapi.SignatureHelp, error) {
+			return testSignatureHelp([]semanticapi.SignatureInformation{sig}, 0, 0), nil
+		},
+	}
+
+	var mu sync.Mutex
+	var gotList textapi.LocationList
+	var gotID string
+	var capturedHandler textapi.EventHandler
+	editor := &mockEditor{
+		subscribeEventsFn: func(
+			_ []textapi.EventType, h textapi.EventHandler,
+		) error {
+			capturedHandler = h
+			return nil
+		},
+		editorFn: func(uri workspaceapi.URI) (textapi.Handler, error) {
+			return &mockHandler{uri: uri}, nil
+		},
+		setLocationListFn: func(_ textapi.Handler, _ textapi.LocationPriority, id string, list textapi.LocationList) error {
+			mu.Lock()
+			gotList = list
+			gotID = id
+			mu.Unlock()
+			return nil
+		},
+	}
+
+	cfg := DefaultSignatureHelpConfig()
+	cfg.TriggerCharacters = []string{"(", ","}
+	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg)
+	require.NotNil(t, capturedHandler, "handler should be subscribed")
+
+	wsURI, err := workspaceapi.ParseURI("file:///test.go")
+	require.NoError(t, err)
+
+	done := capturedHandler.Handle(context.Background(), textapi.Event{
+		Type:    textapi.EventTypeEdit,
+		URI:     wsURI,
+		Content: "(",
+		From:    term.Coordinates{X: 3, Y: 10},
+		To:      term.Coordinates{X: 4, Y: 10},
+	})
+	assert.False(t, done)
+
+	// Wait for the async fetch to complete.
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return gotList != nil
+	}, time.Second, 10*time.Millisecond, "SetLocationList should be called")
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	assert.Equal(t, signatureHelpLocationID, gotID)
+	loc, ok := gotList.Current()
+	require.True(t, ok, "location list should have an entry")
+	assert.Equal(t, term.Coordinates{X: 4, Y: 10}, loc.From, "From should be ev.To")
+	assert.Equal(t, term.Coordinates{X: 5, Y: 10}, loc.To, "To should be one past From")
+	assert.Equal(t, term.Attributes{}, loc.Attr, "attr should be empty")
+	assert.Contains(t, loc.Message, "**", "message should contain bold markers")
+	assert.Contains(t, loc.Message, "a int", "message should contain param")
+}
+
+func TestSignatureHelpCursorClearsLocation(t *testing.T) {
+	t.Parallel()
+	sig := semanticapi.SignatureInformation{
+		Label: "foo(a int, b string)",
+		Parameters: []semanticapi.ParameterInformation{
+			{Label: "a int"},
+			{Label: "b string"},
+		},
+	}
+	lsp := &mockLSP{
+		signatureHelpFn: func(
+			_ context.Context, _ semanticapi.SignatureHelpParams,
+		) (*semanticapi.SignatureHelp, error) {
+			return testSignatureHelp([]semanticapi.SignatureInformation{sig}, 0, 0), nil
+		},
+	}
+
+	var mu sync.Mutex
+	var calls []textapi.LocationList
+	var capturedHandler textapi.EventHandler
+	editor := &mockEditor{
+		subscribeEventsFn: func(
+			_ []textapi.EventType, h textapi.EventHandler,
+		) error {
+			capturedHandler = h
+			return nil
+		},
+		editorFn: func(uri workspaceapi.URI) (textapi.Handler, error) {
+			return &mockHandler{uri: uri}, nil
+		},
+		setLocationListFn: func(_ textapi.Handler, _ textapi.LocationPriority, _ string, list textapi.LocationList) error {
+			mu.Lock()
+			calls = append(calls, list)
+			mu.Unlock()
+			return nil
+		},
+	}
+
+	cfg := DefaultSignatureHelpConfig()
+	cfg.TriggerCharacters = []string{"(", ","}
+	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg)
+	require.NotNil(t, capturedHandler, "handler should be subscribed")
+
+	wsURI, err := workspaceapi.ParseURI("file:///test.go")
+	require.NoError(t, err)
+
+	// First trigger the edit so a location is set.
+	capturedHandler.Handle(context.Background(), textapi.Event{
+		Type:    textapi.EventTypeEdit,
+		URI:     wsURI,
+		Content: "(",
+		From:    term.Coordinates{X: 3, Y: 10},
+		To:      term.Coordinates{X: 4, Y: 10},
+	})
+
+	// Wait for the async fetch to set the location.
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(calls) > 0 && calls[len(calls)-1] != nil
+	}, time.Second, 10*time.Millisecond, "location should be set first")
+
+	// Now fire a cursor event to clear it.
+	capturedHandler.Handle(context.Background(), textapi.Event{
+		Type: textapi.EventTypeCursor,
+		URI:  wsURI,
+		From: term.Coordinates{X: 5, Y: 10},
+	})
+
+	mu.Lock()
+	lastCall := calls[len(calls)-1]
+	mu.Unlock()
+	assert.Nil(t, lastCall, "cursor event should clear the location list")
+}
+
+func TestFormatSignatureMessage(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		help *semanticapi.SignatureHelp
+		want string
+	}{
+		{
+			name: "single sig no active param",
+			help: testSignatureHelp([]semanticapi.SignatureInformation{
+				{Label: "foo()"},
+			}, 0, 0),
+			want: "foo()",
+		},
+		{
+			name: "active param with bold",
+			help: testSignatureHelp([]semanticapi.SignatureInformation{
+				{
+					Label: "foo(a int, b string)",
+					Parameters: []semanticapi.ParameterInformation{
+						{Label: "a int"},
+						{Label: "b string"},
+					},
+				},
+			}, 0, 0),
+			want: "foo(**a int**, b string)",
+		},
+		{
+			name: "second param bold",
+			help: testSignatureHelp([]semanticapi.SignatureInformation{
+				{
+					Label: "foo(a int, b string)",
+					Parameters: []semanticapi.ParameterInformation{
+						{Label: "a int"},
+						{Label: "b string"},
+					},
+				},
+			}, 0, 1),
+			want: "foo(a int, **b string**)",
+		},
+		{
+			name: "multiple sigs with counter",
+			help: testSignatureHelp([]semanticapi.SignatureInformation{
+				{Label: "foo(a int)"},
+				{Label: "foo(a int, b string)"},
+			}, 0, 0),
+			want: "foo(a int) 1/2",
+		},
+		{
+			name: "with param doc",
+			help: testSignatureHelp([]semanticapi.SignatureInformation{
+				{
+					Label: "foo(a int)",
+					Parameters: []semanticapi.ParameterInformation{
+						{Label: "a int", DocumentationString: "the first arg"},
+					},
+				},
+			}, 0, 0),
+			want: "foo(**a int**)\nthe first arg",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatSignatureMessage(tt.help)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

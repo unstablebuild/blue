@@ -78,6 +78,10 @@ func Manual() textapi.CommandManual {
 				Name:    "references",
 				Summary: "Find references to symbol",
 			},
+			{
+				Name:    "signature-help",
+				Summary: "Show signature help at cursor",
+			},
 		},
 	}
 }
@@ -95,6 +99,7 @@ type Config struct {
 	Implementation ImplementationConfig
 	References     ReferencesConfig
 	Highlight      HighlightConfig
+	SignatureHelp  SignatureHelpConfig
 
 	// ScheduleNextTick defers a function to the next event-loop tick.
 	ScheduleNextTick func(func()) bool
@@ -116,6 +121,7 @@ func DefaultConfig() Config {
 		Implementation: DefaultImplementationConfig(),
 		References:     DefaultReferencesConfig(),
 		Highlight:      DefaultHighlightConfig(),
+		SignatureHelp:  DefaultSignatureHelpConfig(),
 		Interrupter:    term.NopInterrupter(),
 	}
 }
@@ -164,6 +170,7 @@ func AllHandler(
 				lsp, editor, wm, opener, notify, fs,
 				cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.References,
 			),
+			"signature-help": SignatureHelpHandler(lsp, editor, wm, cfg.ScheduleNextTick, cfg.SignatureHelp),
 		},
 	}, nil
 }
