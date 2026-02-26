@@ -25,11 +25,13 @@ package lspcmd
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -285,4 +287,182 @@ func TestE2ECommands(t *testing.T) {
 			require.NoError(t, err)
 		})
 	})
+}
+
+func TestE2ESignatureHelpAutoTrigger(t *testing.T) {
+	t.Parallel()
+	goplsBin := findGopls(t)
+	tmpDir := setupTestWorkspace(t, "../testdata")
+
+	rootURI, err := workspaceapi.ParseURI("file://" + tmpDir)
+	require.NoError(t, err)
+
+	mainPath := filepath.Join(tmpDir, "main.go")
+	mainContent, err := os.ReadFile(mainPath)
+	require.NoError(t, err)
+
+	mainURI := "file://" + mainPath
+	mainWSURI, err := workspaceapi.ParseURI(mainURI)
+	require.NoError(t, err)
+
+	scheme := newTestScheme()
+
+	var wg sync.WaitGroup
+	var ready sync.Once
+	callback := &e2eCallback{
+		onShowMessage: func(params semanticapi.ShowMessageParams) {
+			if strings.Contains(params.Message, "Finished loading packages") {
+				ready.Do(wg.Done)
+			}
+		},
+		onProgress: readyOnProgress(&ready, &wg),
+	}
+
+	mgr := idelsp.New(
+		rootURI, scheme, scheme, &stubPkgManager{bin: goplsBin},
+		nil, nil, idelsp.Config{Callback: callback, MaxRetries: 1},
+	)
+	ctx := context.Background()
+	t.Cleanup(func() { _ = mgr.Close() })
+
+	// Initialize the go server explicitly to get capabilities.
+	initOpts, err := json.Marshal(map[string]any{
+		"langID":  "go",
+		"command": goplsBin + " serve",
+	})
+	require.NoError(t, err)
+
+	capabilities, err := json.Marshal(map[string]any{
+		"textDocument": map[string]any{
+			"signatureHelp": map[string]any{},
+			"completion":    map[string]any{},
+			"hover":         map[string]any{},
+		},
+		"window": map[string]any{
+			"workDoneProgress": true,
+		},
+	})
+	require.NoError(t, err)
+
+	initResult, err := mgr.Initialize(ctx, semanticapi.InitializeParams{
+		RootURI:           "file://" + tmpDir,
+		Capabilities:      json.RawMessage(capabilities),
+		InitializeOptions: json.RawMessage(initOpts),
+	})
+	require.NoError(t, err)
+
+	// Verify gopls advertises trigger characters.
+	require.NotNil(t, initResult.Capabilities.SignatureHelpProvider,
+		"gopls should advertise signature help provider")
+	triggerChars := initResult.Capabilities.SignatureHelpProvider.TriggerCharacters
+	assert.Contains(t, triggerChars, "(", "trigger chars should include '('")
+	assert.Contains(t, triggerChars, ",", "trigger chars should include ','")
+
+	// Open the test file so gopls knows about it.
+	wg.Add(1)
+	mgr.Handle(ctx, textapi.Event{
+		Type:    textapi.EventTypeOpen,
+		URI:     mainWSURI,
+		Content: string(mainContent),
+	})
+	wg.Wait()
+
+	// Set up the editor mock to capture the subscribed event handler.
+	var capturedHandler textapi.EventHandler
+	var mu sync.Mutex
+	var locationCalls []textapi.LocationList
+	editor := &mockEditor{
+		editorFn: func(uri workspaceapi.URI) (textapi.Handler, error) {
+			return &mockHandler{uri: uri}, nil
+		},
+		subscribeEventsFn: func(
+			_ []textapi.EventType, h textapi.EventHandler,
+		) error {
+			capturedHandler = h
+			return nil
+		},
+		setLocationListFn: func(_ textapi.Handler, _ textapi.LocationPriority, _ string, list textapi.LocationList) error {
+			mu.Lock()
+			locationCalls = append(locationCalls, list)
+			mu.Unlock()
+			return nil
+		},
+	}
+
+	wm := &mockWindowManager{}
+
+	cfg := DefaultConfig()
+	cfg.RootURI = rootURI
+	cfg.ScheduleNextTick = syncTick
+	cfg.SignatureHelp.TriggerCharacters = triggerChars
+
+	_, err = AllHandler(mgr, editor, wm, &mockResourceOpener{},
+		&mockNotifications{}, &mockFileSystem{
+			openFileFn: func(path string, flag int, mode os.FileMode) (workspaceapi.File, error) {
+				return os.OpenFile(path, flag, mode)
+			},
+		}, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, capturedHandler, "SubscribeEvents should have been called")
+
+	// Simulate typing "(" after "Add" on line 45 (0-indexed),
+	// where `fmt.Println(Add(1, 2))` is.
+	// The "(" after "Add" is at column 16 (0-indexed: col 16).
+
+	// Send the edit event to gopls via mgr.Handle.
+	editEv := textapi.Event{
+		Type:     textapi.EventTypeEdit,
+		URI:      mainWSURI,
+		Resource: &mockHandler{uri: mainWSURI},
+		Start:    term.Coordinates{X: 16, Y: 45},
+		End:      term.Coordinates{X: 16, Y: 45},
+		From:     term.Coordinates{X: 16, Y: 45},
+		To:       term.Coordinates{X: 17, Y: 45},
+		Content:  "(",
+	}
+	mgr.Handle(ctx, editEv)
+
+	// Give gopls a moment to process the didChange.
+	time.Sleep(500 * time.Millisecond)
+
+	// Fire the same event through the captured handler.
+	done := capturedHandler.Handle(ctx, editEv)
+	assert.False(t, done, "handler should not signal done")
+
+	// Wait for the async fetch to set the location.
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, l := range locationCalls {
+			if l != nil {
+				return true
+			}
+		}
+		return false
+	}, 5*time.Second, 50*time.Millisecond, "SetLocationList should be called with a non-nil list")
+
+	// Verify the location message contains the Add signature with bold markers.
+	mu.Lock()
+	var gotLoc textapi.Location
+	for _, l := range locationCalls {
+		if l != nil {
+			gotLoc, _ = l.Current()
+			break
+		}
+	}
+	mu.Unlock()
+	assert.Contains(t, gotLoc.Message, "**", "message should contain bold markers")
+	assert.Contains(t, gotLoc.Message, "Add(", "message should contain the Add signature")
+
+	// Fire a cursor event and verify the location list is cleared.
+	capturedHandler.Handle(ctx, textapi.Event{
+		Type: textapi.EventTypeCursor,
+		URI:  mainWSURI,
+		From: term.Coordinates{X: 18, Y: 45},
+	})
+
+	mu.Lock()
+	lastCall := locationCalls[len(locationCalls)-1]
+	mu.Unlock()
+	assert.Nil(t, lastCall, "cursor event should clear the location list")
 }
