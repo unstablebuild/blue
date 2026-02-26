@@ -209,11 +209,12 @@ func TestLocationsFloatingHandlerDraw(t *testing.T) {
 	require.NoError(t, sw.Flush())
 
 	rendered := sw.Cells()
+	leftPad := spanHPad / 2 // Span centres content; left offset = hPad/2
 	// Target line (line 1) should have preview bg.
-	cell := rendered[1*w]
+	cell := rendered[1*w+leftPad]
 	assert.Equal(t, tcell.ColorYellow, cell.Bg, "target line should have preview bg")
 	// Non-target line should not.
-	assert.NotEqual(t, tcell.ColorYellow, rendered[0].Bg, "non-target line should not have preview bg")
+	assert.NotEqual(t, tcell.ColorYellow, rendered[leftPad].Bg, "non-target line should not have preview bg")
 }
 
 func TestLocationsFloatingDrawPreviewReverseRange(t *testing.T) {
@@ -235,14 +236,15 @@ func TestLocationsFloatingDrawPreviewReverseRange(t *testing.T) {
 	require.NoError(t, sw.Flush())
 
 	rendered := sw.Cells()
+	leftPad := spanHPad / 2 // Span centres content; left offset = hPad/2
 	// Character 1 is outside the range — no AttrReverse.
-	assert.Zero(t, rendered[1].Attrs&tcell.AttrReverse, "char before range should not have AttrReverse")
+	assert.Zero(t, rendered[leftPad+1].Attrs&tcell.AttrReverse, "char before range should not have AttrReverse")
 	// Character 2 is inside the range — AttrReverse set.
-	assert.NotZero(t, rendered[2].Attrs&tcell.AttrReverse, "char in range should have AttrReverse")
+	assert.NotZero(t, rendered[leftPad+2].Attrs&tcell.AttrReverse, "char in range should have AttrReverse")
 	// Character 4 is inside the range.
-	assert.NotZero(t, rendered[4].Attrs&tcell.AttrReverse, "char in range should have AttrReverse")
+	assert.NotZero(t, rendered[leftPad+4].Attrs&tcell.AttrReverse, "char in range should have AttrReverse")
 	// Character 5 is outside the range (end is exclusive).
-	assert.Zero(t, rendered[5].Attrs&tcell.AttrReverse, "char after range should not have AttrReverse")
+	assert.Zero(t, rendered[leftPad+5].Attrs&tcell.AttrReverse, "char after range should not have AttrReverse")
 }
 
 func TestLocationsFloatingDrawPreviewClampsTargetLine(t *testing.T) {
@@ -261,8 +263,9 @@ func TestLocationsFloatingDrawPreviewClampsTargetLine(t *testing.T) {
 	require.NoError(t, sw.Flush())
 
 	rendered := sw.Cells()
+	leftPad := spanHPad / 2 // Span centres content; left offset = hPad/2
 	// The last line of the file should get the target highlight.
-	cell := rendered[1*w]
+	cell := rendered[1*w+leftPad]
 	assert.Equal(t, tcell.ColorYellow, cell.Bg, "clamped target line should have preview bg")
 }
 
@@ -388,10 +391,11 @@ func TestLocationsFloatingHighlightApplied(t *testing.T) {
 	require.NoError(t, sw.Flush())
 
 	rendered := sw.Cells()
+	leftPad := spanHPad / 2 // Span centres content; left offset = hPad/2
 	// Line 0 / char 0 is within the highlight range — should have green fg.
-	assert.Equal(t, tcell.ColorGreen, rendered[0].Fg, "highlighted char should have green fg")
+	assert.Equal(t, tcell.ColorGreen, rendered[leftPad+0].Fg, "highlighted char should have green fg")
 	// Line 0 / char 5 is outside the range — should not have green fg.
-	assert.NotEqual(t, tcell.ColorGreen, rendered[5].Fg, "non-highlighted char should not have green fg")
+	assert.NotEqual(t, tcell.ColorGreen, rendered[leftPad+5].Fg, "non-highlighted char should not have green fg")
 }
 
 func TestLocationsFloatingHighlightUnionWithTargetLine(t *testing.T) {
@@ -418,15 +422,16 @@ func TestLocationsFloatingHighlightUnionWithTargetLine(t *testing.T) {
 	require.NoError(t, sw.Flush())
 
 	rendered := sw.Cells()
+	leftPad := spanHPad / 2 // Span centres content; left offset = hPad/2
 	// Char 0: target line, within highlight range, but outside reference range.
 	// Should have the highlight fg (Red) unioned with the preview attr (Yellow bg).
-	cell0 := rendered[0]
+	cell0 := rendered[leftPad+0]
 	assert.Equal(t, tcell.ColorYellow, cell0.Bg, "target line cell should have preview bg")
 	assert.Equal(t, tcell.ColorRed, cell0.Fg, "target line cell should keep syntax fg")
 	assert.Zero(t, cell0.Attrs&tcell.AttrReverse, "cell outside reference range should not have reverse")
 
 	// Char 2: target line, within highlight range AND within reference range.
-	cell2 := rendered[2]
+	cell2 := rendered[leftPad+2]
 	assert.Equal(t, tcell.ColorYellow, cell2.Bg, "ref range cell should have preview bg")
 	assert.Equal(t, tcell.ColorRed, cell2.Fg, "ref range cell should keep syntax fg")
 	assert.NotZero(t, cell2.Attrs&tcell.AttrReverse, "ref range cell should have reverse")
@@ -456,8 +461,9 @@ func TestLocationsFloatingHighlightMultipleRangesPerLine(t *testing.T) {
 	require.NoError(t, sw.Flush())
 
 	rendered := sw.Cells()
-	assert.Equal(t, tcell.ColorBlue, rendered[0].Fg, "first range should be blue")
-	assert.Equal(t, tcell.ColorRed, rendered[5].Fg, "second range should be red")
+	leftPad := spanHPad / 2 // Span centres content; left offset = hPad/2
+	assert.Equal(t, tcell.ColorBlue, rendered[leftPad+0].Fg, "first range should be blue")
+	assert.Equal(t, tcell.ColorRed, rendered[leftPad+5].Fg, "second range should be red")
 }
 
 func TestLocationsFloatingNilParserNoHighlights(t *testing.T) {

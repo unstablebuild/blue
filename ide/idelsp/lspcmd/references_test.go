@@ -50,6 +50,13 @@ func TestReferencesEnrichedDisplay(t *testing.T) {
 				End:   semanticapi.Position{Line: 0, Character: 8},
 			},
 		},
+		{
+			URI: "file:///project/b.go",
+			Range: semanticapi.Range{
+				Start: semanticapi.Position{Line: 3, Character: 0},
+				End:   semanticapi.Position{Line: 3, Character: 3},
+			},
+		},
 	}
 	lsp := &mockLSP{
 		referencesFn: func(_ context.Context, _ semanticapi.ReferenceParams) ([]semanticapi.Location, error) {
@@ -158,6 +165,13 @@ func TestReferencesZeroRootURI(t *testing.T) {
 				End:   semanticapi.Position{Line: 5, Character: 3},
 			},
 		},
+		{
+			URI: "file:///workspace/pkg/bar.go",
+			Range: semanticapi.Range{
+				Start: semanticapi.Position{Line: 10, Character: 0},
+				End:   semanticapi.Position{Line: 10, Character: 3},
+			},
+		},
 	}
 	lsp := &mockLSP{
 		referencesFn: func(_ context.Context, _ semanticapi.ReferenceParams) ([]semanticapi.Location, error) {
@@ -191,8 +205,9 @@ func TestReferencesZeroRootURI(t *testing.T) {
 	require.NotNil(t, fh)
 
 	lh := fh.(*locationsFloatingHandler)
-	require.Len(t, lh.entries, 1)
+	require.Len(t, lh.entries, 2)
 	assert.Equal(t, "/workspace/pkg/foo.go:6", lh.entries[0].display, "zero RootURI should produce absolute path")
+	assert.Equal(t, "/workspace/pkg/bar.go:11", lh.entries[1].display, "zero RootURI should produce absolute path")
 }
 
 func TestReferencesHandler(t *testing.T) {
@@ -200,12 +215,26 @@ func TestReferencesHandler(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name        string
-		locs        []semanticapi.Location
-		nilResource bool
-		wantFloat   bool
-		wantEntries int
+		name         string
+		locs         []semanticapi.Location
+		nilResource  bool
+		wantFloat    bool
+		wantNavigate bool
+		wantEntries  int
 	}{
+		{
+			name: "single reference navigates directly",
+			locs: []semanticapi.Location{
+				{
+					URI: "file:///project/a.go",
+					Range: semanticapi.Range{
+						Start: semanticapi.Position{Line: 10, Character: 5},
+						End:   semanticapi.Position{Line: 10, Character: 8},
+					},
+				},
+			},
+			wantNavigate: true,
+		},
 		{
 			name: "multiple references",
 			locs: []semanticapi.Location{
@@ -227,8 +256,8 @@ func TestReferencesHandler(t *testing.T) {
 			wantFloat:   true,
 			wantEntries: 2,
 		},
-		{name: "zero references", locs: nil, wantFloat: false},
-		{name: "nil resource", nilResource: true, wantFloat: false},
+		{name: "zero references"},
+		{name: "nil resource", nilResource: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -237,9 +266,14 @@ func TestReferencesHandler(t *testing.T) {
 					return tt.locs, nil
 				},
 			}
+			var navigated bool
 			editor := &mockEditor{
 				editorFn: func(u workspaceapi.URI) (textapi.Handler, error) {
 					return &mockHandler{uri: u}, nil
+				},
+				setCursorFn: func(_ textapi.Handler, _ term.Coordinates) error {
+					navigated = true
+					return nil
 				},
 			}
 			var fh browserapi.Floating
@@ -264,6 +298,7 @@ func TestReferencesHandler(t *testing.T) {
 			err := h.HandleCommand(context.Background(), cmd)
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantFloat, fh != nil)
+			assert.Equal(t, tt.wantNavigate, navigated)
 			if tt.wantEntries > 0 {
 				lh := fh.(*locationsFloatingHandler)
 				assert.Equal(t, tt.wantEntries, len(lh.entries))
