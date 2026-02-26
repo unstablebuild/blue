@@ -2,6 +2,8 @@ module github.com/unstablebuild/blue
 
 go 1.25.6
 
+replace github.com/unstablebuild/rune-go-sdk => ../rune-go-sdk
+
 require (
 	cloud.google.com/go/firestore v1.18.0
 	cloud.google.com/go/secretmanager v1.15.0

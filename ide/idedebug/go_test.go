@@ -16,8 +16,10 @@ package idedebug
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -295,8 +297,10 @@ func TestE2E(t *testing.T) {
 
 					caps, err := mgr.Initialize(
 						context.Background(),
-						&dap.InitializeRequestArguments{
-							AdapterID: "go",
+						&debugapi.InitializeRequestArguments{
+							InitializeRequestArguments: dap.InitializeRequestArguments{
+								AdapterID: "go",
+							},
 						},
 					)
 					require.NoError(t, err)
@@ -308,6 +312,136 @@ func TestE2E(t *testing.T) {
 				})
 			}
 		})
+
+	t.Run("explicit init via InitializeOptions",
+		func(t *testing.T) {
+			t.Parallel()
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					executor := newTestExecutor(t)
+					eventSub := newTestEventSubscriber()
+					mgr := New(
+						uri,
+						executor,
+						&stubPkgManager{bin: dlvBin},
+						Config{MaxRetries: 1, EventSubscriber: eventSub},
+					)
+
+					initOpts, err := json.Marshal(map[string]any{
+						"langID":  "go",
+						"command": dlvBin + " dap --listen={addr}",
+					})
+					require.NoError(t, err)
+
+					caps, err := mgr.Initialize(
+						context.Background(),
+						&debugapi.InitializeRequestArguments{
+							InitializeOptions: initOpts,
+						},
+					)
+					require.NoError(t, err)
+					require.NotNil(t, caps)
+
+					setupDebugSession(t, mgr, eventSub.events, tmpDir, mainPath, breakpointLine)
+					tt.fn(t, mgr, eventSub.events)
+					require.NoError(t, mgr.Close())
+				})
+			}
+		})
+}
+
+func TestE2E_NoReadErrorWarnings(t *testing.T) {
+	t.Parallel()
+	dlvBin := findDlv(t)
+	tmpDir := setupTestWorkspace(t, "go")
+
+	uri := makeURI(t, "file://"+tmpDir)
+	mainPath := filepath.Join(tmpDir, "main.go")
+	const breakpointLine = 27
+
+	// Install a warn-capturing slog handler.
+	h := &warnHandler{
+		inner: slog.Default().Handler(),
+	}
+	orig := slog.Default()
+	slog.SetDefault(slog.New(h))
+	t.Cleanup(func() { slog.SetDefault(orig) })
+
+	executor := newTestExecutor(t)
+	eventSub := newTestEventSubscriber()
+	mgr := New(
+		uri,
+		executor,
+		&stubPkgManager{bin: dlvBin},
+		Config{MaxRetries: 1, EventSubscriber: eventSub},
+	)
+
+	caps, err := mgr.Initialize(
+		context.Background(),
+		&debugapi.InitializeRequestArguments{
+			InitializeRequestArguments: dap.InitializeRequestArguments{
+				AdapterID: "go",
+			},
+		},
+	)
+	require.NoError(t, err)
+	require.NotNil(t, caps)
+
+	setupDebugSession(t, mgr, eventSub.events, tmpDir, mainPath, breakpointLine)
+
+	// Continue so the program finishes.
+	_, err = mgr.Continue(
+		t.Context(),
+		&dap.ContinueArguments{ThreadId: 1},
+	)
+	require.NoError(t, err)
+	waitForEvent(t, eventSub.events, "terminated")
+
+	require.NoError(t, mgr.Close())
+
+	// Assert no spurious "read error" warnings.
+	warnings := h.readErrors()
+	assert.Empty(t, warnings, "unexpected 'read error' warnings: %v", warnings)
+}
+
+// warnHandler is an slog.Handler that delegates to an inner
+// handler and records all LevelWarn+ records whose message is
+// "read error".
+type warnHandler struct {
+	inner   slog.Handler
+	mu      sync.Mutex
+	records []slog.Record
+}
+
+func (w *warnHandler) Enabled(_ context.Context, l slog.Level) bool {
+	return true
+}
+
+func (w *warnHandler) Handle(ctx context.Context, r slog.Record) error {
+	if r.Level >= slog.LevelWarn && r.Message == "read error" {
+		w.mu.Lock()
+		w.records = append(w.records, r)
+		w.mu.Unlock()
+	}
+	return w.inner.Handle(ctx, r)
+}
+
+func (w *warnHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &warnHandler{inner: w.inner.WithAttrs(attrs)}
+}
+
+func (w *warnHandler) WithGroup(name string) slog.Handler {
+	return &warnHandler{inner: w.inner.WithGroup(name)}
+}
+
+func (w *warnHandler) readErrors() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var msgs []string
+	for _, r := range w.records {
+		msgs = append(msgs, r.Message)
+	}
+	return msgs
 }
 
 // setupDebugSession performs the DAP launch sequence:
