@@ -19,7 +19,7 @@ require (
 	github.com/sirupsen/logrus v1.6.0
 	github.com/slack-go/slack v0.13.0
 	github.com/stretchr/testify v1.11.1
-	github.com/unstablebuild/rune-go-sdk v0.0.25
+	github.com/unstablebuild/rune-go-sdk v0.0.27
 	github.com/unstablebuild/tcell/v3 v3.6.2
 	github.com/willf/pad v0.0.0-20200313202418-172aa767f2a4
 	github.com/yuin/goldmark v1.4.13
@@ -36,6 +36,7 @@ require (
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22
 	gopkg.in/yaml.v3 v3.0.1
+	mvdan.cc/sh/v3 v3.12.0
 	upspin.io v0.0.0-20220526012102-c626106d18af
 )
 
@@ -98,5 +99,4 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251029180050-ab9386a59fda // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	honnef.co/go/tools v0.3.2 // indirect
-	mvdan.cc/sh/v3 v3.12.0 // indirect
 )
