@@ -120,15 +120,6 @@ func (m *mockCellEditor) Edit(ctx context.Context, start, end term.Coordinates, 
 	return m.editFn(ctx, start, end, str)
 }
 
-// mockCellView implements textapi.CellView.
-type mockCellView struct {
-	rawCellsFn func() ([][]term.Cell, error)
-}
-
-func (m *mockCellView) RawCells() ([][]term.Cell, error) {
-	return m.rawCellsFn()
-}
-
 // mockWindow implements browserapi.Window for testing.
 type mockWindow struct {
 	id uint64

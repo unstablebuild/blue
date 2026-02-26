@@ -51,21 +51,24 @@ func (s *Server) Register(srv *grpc.Server) {
 func (s *Server) Initialize(ctx context.Context, req *debugrpc.InitializeRequest) (*debugrpc.InitializeResponse, error) {
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
-	args := &dap.InitializeRequestArguments{
-		ClientID:                     req.GetClientId(),
-		ClientName:                   req.GetClientName(),
-		AdapterID:                    req.GetAdapterId(),
-		Locale:                       req.GetLocale(),
-		LinesStartAt1:                req.GetLinesStartAt_1(),
-		ColumnsStartAt1:              req.GetColumnsStartAt_1(),
-		PathFormat:                   req.GetPathFormat(),
-		SupportsVariableType:         req.GetSupportsVariableType(),
-		SupportsVariablePaging:       req.GetSupportsVariablePaging(),
-		SupportsRunInTerminalRequest: req.GetSupportsRunInTerminalRequest(),
-		SupportsMemoryReferences:     req.GetSupportsMemoryReferences(),
-		SupportsProgressReporting:    req.GetSupportsProgressReporting(),
-		SupportsInvalidatedEvent:     req.GetSupportsInvalidatedEvent(),
-		SupportsMemoryEvent:          req.GetSupportsMemoryEvent(),
+	args := &debugapi.InitializeRequestArguments{
+		InitializeRequestArguments: dap.InitializeRequestArguments{
+			ClientID:                     req.GetClientId(),
+			ClientName:                   req.GetClientName(),
+			AdapterID:                    req.GetAdapterId(),
+			Locale:                       req.GetLocale(),
+			LinesStartAt1:                req.GetLinesStartAt_1(),
+			ColumnsStartAt1:              req.GetColumnsStartAt_1(),
+			PathFormat:                   req.GetPathFormat(),
+			SupportsVariableType:         req.GetSupportsVariableType(),
+			SupportsVariablePaging:       req.GetSupportsVariablePaging(),
+			SupportsRunInTerminalRequest: req.GetSupportsRunInTerminalRequest(),
+			SupportsMemoryReferences:     req.GetSupportsMemoryReferences(),
+			SupportsProgressReporting:    req.GetSupportsProgressReporting(),
+			SupportsInvalidatedEvent:     req.GetSupportsInvalidatedEvent(),
+			SupportsMemoryEvent:          req.GetSupportsMemoryEvent(),
+		},
+		InitializeOptions: req.GetInitializeOptions(),
 	}
 
 	caps, err := s.debugger.Initialize(ctx, args)
