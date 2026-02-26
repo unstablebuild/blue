@@ -28,64 +28,57 @@ import (
 
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
-	"github.com/unstablebuild/rune-go-sdk/api/syntaxapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
 	"github.com/unstablebuild/rune-go-sdk/component"
 	"github.com/unstablebuild/rune-go-sdk/iterator"
 )
 
-// ImplementationConfig configures the "implementation" subcommand.
-type ImplementationConfig struct {
+// DeclarationConfig configures the "declaration" subcommand.
+type DeclarationConfig struct {
+	RootURI    workspaceapi.URI
 	ListConfig LocationsConfig
 }
 
-// DefaultImplementationConfig returns an ImplementationConfig with sensible defaults.
-func DefaultImplementationConfig() ImplementationConfig {
-	return ImplementationConfig{
-		ListConfig: DefaultLocationsConfig(),
-	}
+// DefaultDeclarationConfig returns a DeclarationConfig with sensible defaults.
+func DefaultDeclarationConfig() DeclarationConfig {
+	return DeclarationConfig{}
 }
 
-// ImplementationHandler creates a textapi.CommandHandler that finds
-// implementations of the symbol at the cursor position and displays them in a
-// floating window with a file preview.
-func ImplementationHandler(
+// DeclarationHandler creates a textapi.CommandHandler that finds the
+// declaration of the symbol at the cursor position and displays the result in
+// a floating window with a file preview.
+func DeclarationHandler(
 	lsp semanticapi.LSP, editor textapi.Editor,
 	wm browserapi.WindowManager, opener browserapi.ResourceOpener,
 	notify browserapi.Notifications, fs workspaceapi.FileSystem,
-	rootURI workspaceapi.URI, scheduleNextTick func(func()) bool,
-	parser syntaxapi.Parser, cfg ImplementationConfig,
+	cfg DeclarationConfig,
 ) textapi.CommandHandler {
-	return &implementationHandler{
+	return &declarationHandler{
 		lsp: lsp, editor: editor, wm: wm, opener: opener,
-		notify: notify, fs: fs, rootURI: rootURI,
-		scheduleNextTick: scheduleNextTick, parser: parser, cfg: cfg,
+		notify: notify, fs: fs, cfg: cfg,
 	}
 }
 
-type implementationHandler struct {
-	lsp              semanticapi.LSP
-	editor           textapi.Editor
-	wm               browserapi.WindowManager
-	opener           browserapi.ResourceOpener
-	notify           browserapi.Notifications
-	fs               workspaceapi.FileSystem
-	rootURI          workspaceapi.URI
-	scheduleNextTick func(func()) bool
-	parser           syntaxapi.Parser
-	cfg              ImplementationConfig
+type declarationHandler struct {
+	lsp    semanticapi.LSP
+	editor textapi.Editor
+	wm     browserapi.WindowManager
+	opener browserapi.ResourceOpener
+	notify browserapi.Notifications
+	fs     workspaceapi.FileSystem
+	cfg    DeclarationConfig
 }
 
-func (h *implementationHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
+func (h *declarationHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
 	if cmd.Resource == nil {
 		return nil
 	}
-	params := semanticapi.ImplementationParams{
+	params := semanticapi.DeclarationParams{
 		TextDocument: textDocID(cmd.URI),
 		Position:     coordToPos(cmd.Cursor.Content),
 	}
-	result, err := h.lsp.Implementation(ctx, params)
+	result, err := h.lsp.Declaration(ctx, params)
 	if err != nil {
 		return err
 	}
@@ -93,20 +86,18 @@ func (h *implementationHandler) HandleCommand(ctx context.Context, cmd textapi.C
 	if len(entries) == 0 {
 		return nil
 	}
-	entries = enrichEntries(entries, h.rootURI)
+	entries = enrichEntries(entries, h.cfg.RootURI, h.editor)
 	if len(entries) == 1 {
-		navigateTo(entries[0], h.opener, h.wm, h.editor)
-		return nil
+		return navigateTo(entries[0], h.opener, h.wm, h.editor)
 	}
 	handler := newLocationsFloatingHandler(
-		entries, h.opener, h.wm, h.editor, h.notify, h.fs,
-		h.scheduleNextTick, h.parser, h.cfg.ListConfig,
+		entries, h.opener, h.wm, h.editor, h.notify, h.fs, h.cfg.ListConfig,
 	)
 	_, err = h.wm.Floating(handler, browserapi.FloatingConfig{Alignment: component.AlignmentCentered})
 	return err
 }
 
-func (h *implementationHandler) Complete(
+func (h *declarationHandler) Complete(
 	_ context.Context, _ string, _ []string,
 ) (iterator.Iterator[string], error) {
 	return iterator.Empty[string](), nil

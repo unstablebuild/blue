@@ -461,11 +461,14 @@ func (stubLSP) DidDeleteFiles(_ context.Context, _ semanticapi.DeleteFilesParams
 	return nil
 }
 
-// mockLSP embeds stubLSP and overrides Completion,
-// Implementation, and References for testing.
+// mockLSP embeds stubLSP and overrides specific
+// methods for testing.
 type mockLSP struct {
 	stubLSP
 	completionFn     func(context.Context, semanticapi.CompletionParams) (semanticapi.CompletionResult, error)
+	definitionFn     func(context.Context, semanticapi.DefinitionParams) (semanticapi.LocationResult, error)
+	declarationFn    func(context.Context, semanticapi.DeclarationParams) (semanticapi.LocationResult, error)
+	typeDefinitionFn func(context.Context, semanticapi.TypeDefinitionParams) (semanticapi.LocationResult, error)
 	implementationFn func(context.Context, semanticapi.ImplementationParams) (semanticapi.LocationResult, error)
 	referencesFn     func(context.Context, semanticapi.ReferenceParams) ([]semanticapi.Location, error)
 }
@@ -478,6 +481,36 @@ func (m *mockLSP) Completion(
 		return m.completionFn(ctx, params)
 	}
 	return semanticapi.CompletionResult{}, nil
+}
+
+func (m *mockLSP) Definition(
+	ctx context.Context,
+	params semanticapi.DefinitionParams,
+) (semanticapi.LocationResult, error) {
+	if m.definitionFn != nil {
+		return m.definitionFn(ctx, params)
+	}
+	return semanticapi.LocationResult{}, nil
+}
+
+func (m *mockLSP) Declaration(
+	ctx context.Context,
+	params semanticapi.DeclarationParams,
+) (semanticapi.LocationResult, error) {
+	if m.declarationFn != nil {
+		return m.declarationFn(ctx, params)
+	}
+	return semanticapi.LocationResult{}, nil
+}
+
+func (m *mockLSP) TypeDefinition(
+	ctx context.Context,
+	params semanticapi.TypeDefinitionParams,
+) (semanticapi.LocationResult, error) {
+	if m.typeDefinitionFn != nil {
+		return m.typeDefinitionFn(ctx, params)
+	}
+	return semanticapi.LocationResult{}, nil
 }
 
 func (m *mockLSP) Implementation(

@@ -59,6 +59,18 @@ func Manual() textapi.CommandManual {
 				Summary: "Show completions at cursor",
 			},
 			{
+				Name:    "definition",
+				Summary: "Go to definition of symbol",
+			},
+			{
+				Name:    "declaration",
+				Summary: "Go to declaration of symbol",
+			},
+			{
+				Name:    "type-definition",
+				Summary: "Go to type definition of symbol",
+			},
+			{
 				Name:    "implementation",
 				Summary: "Find implementations of symbol",
 			},
@@ -77,6 +89,9 @@ type Config struct {
 	Parser         syntaxapi.Parser // nil = no highlighting
 	Hover          HoverConfig
 	Complete       CompleteConfig
+	Definition     DefinitionConfig
+	Declaration    DeclarationConfig
+	TypeDefinition TypeDefinitionConfig
 	Implementation ImplementationConfig
 	References     ReferencesConfig
 
@@ -94,6 +109,9 @@ func DefaultConfig() Config {
 	return Config{
 		Hover:          DefaultHoverConfig(),
 		Complete:       DefaultCompleteConfig(),
+		Definition:     DefaultDefinitionConfig(),
+		Declaration:    DefaultDeclarationConfig(),
+		TypeDefinition: DefaultTypeDefinitionConfig(),
 		Implementation: DefaultImplementationConfig(),
 		References:     DefaultReferencesConfig(),
 		Interrupter:    term.NopInterrupter(),
@@ -120,6 +138,15 @@ func AllHandler(
 			"format":   formatH,
 			"hover":    HoverHandler(lsp, wm, cfg.Hover),
 			"complete": CompleteHandler(lsp, editor, wm, cfg.Complete, cfg.Interrupter),
+			"definition": DefinitionHandler(
+				lsp, editor, wm, opener, notify, fs, cfg.Definition,
+			),
+			"declaration": DeclarationHandler(
+				lsp, editor, wm, opener, notify, fs, cfg.Declaration,
+			),
+			"type-definition": TypeDefinitionHandler(
+				lsp, editor, wm, opener, notify, fs, cfg.TypeDefinition,
+			),
 			"implementation": ImplementationHandler(
 				lsp, editor, wm, opener, notify, fs, cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.Implementation,
 			),

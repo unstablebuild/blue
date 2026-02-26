@@ -36,9 +36,9 @@ import (
 	"github.com/unstablebuild/rune-go-sdk/term"
 )
 
-var _ textapi.CommandHandler = (*implementationHandler)(nil)
+var _ textapi.CommandHandler = (*typeDefinitionHandler)(nil)
 
-func TestImplementationHandler(t *testing.T) {
+func TestTypeDefinitionHandler(t *testing.T) {
 	rootURI, err := workspaceapi.ParseURI("file:///project")
 	require.NoError(t, err)
 
@@ -51,7 +51,7 @@ func TestImplementationHandler(t *testing.T) {
 		wantEntries  int
 	}{
 		{
-			name: "single implementation navigates directly",
+			name: "single type definition navigates directly",
 			result: semanticapi.LocationResult{
 				Location: &semanticapi.Location{
 					URI: "file:///project/a.go",
@@ -64,7 +64,7 @@ func TestImplementationHandler(t *testing.T) {
 			wantNavigate: true,
 		},
 		{
-			name: "multiple implementations",
+			name: "multiple type definitions",
 			result: semanticapi.LocationResult{
 				Locations: []semanticapi.Location{
 					{URI: "file:///project/a.go", Range: semanticapi.Range{Start: semanticapi.Position{Line: 10}}},
@@ -74,13 +74,13 @@ func TestImplementationHandler(t *testing.T) {
 			wantFloat:   true,
 			wantEntries: 2,
 		},
-		{name: "no implementations"},
+		{name: "no type definitions"},
 		{name: "nil resource", nilResource: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			lsp := &mockLSP{
-				implementationFn: func(_ context.Context, _ semanticapi.ImplementationParams) (semanticapi.LocationResult, error) {
+				typeDefinitionFn: func(_ context.Context, _ semanticapi.TypeDefinitionParams) (semanticapi.LocationResult, error) {
 					return tt.result, nil
 				},
 			}
@@ -101,13 +101,13 @@ func TestImplementationHandler(t *testing.T) {
 					return nil, nil
 				},
 			}
-			h := ImplementationHandler(
+			h := TypeDefinitionHandler(
 				lsp, editor, wm, &mockResourceOpener{}, &mockNotifications{}, &mockFileSystem{},
-				rootURI, syncTick, nil, DefaultImplementationConfig(),
+				TypeDefinitionConfig{RootURI: rootURI},
 			)
 
 			uri, _ := workspaceapi.ParseURI("file:///project/a.go")
-			cmd := textapi.Command{Name: "implementation", URI: uri}
+			cmd := textapi.Command{Name: "type-definition", URI: uri}
 			if !tt.nilResource {
 				cmd.Resource = &mockHandler{uri: uri}
 			}

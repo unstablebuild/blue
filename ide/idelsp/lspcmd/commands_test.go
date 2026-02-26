@@ -177,30 +177,22 @@ func TestE2ECommands(t *testing.T) {
 	})
 
 	t.Run("implementation", func(t *testing.T) {
-		var floatingHandler browserapi.Floating
-		wm.floatingFn = func(
-			h browserapi.Floating,
-			_ browserapi.FloatingConfig,
-		) (browserapi.Window, error) {
-			floatingHandler = h
-			return nil, nil
+		// Speaker has a single implementation (Robot), so the
+		// handler navigates directly instead of showing a picker.
+		var navigated bool
+		editor.setCursorFn = func(_ textapi.Handler, _ term.Coordinates) error {
+			navigated = true
+			return nil
 		}
 		defer func() {
-			wm.floatingFn = nil
+			editor.setCursorFn = nil
 		}()
 
 		// Speaker is at line 50 (0-indexed), col 5.
 		cmd := makeCmd("implementation", nil, 50, 5)
 		err := router.HandleCommand(ctx, cmd)
 		require.NoError(t, err)
-		require.NotNil(t, floatingHandler)
-
-		lh, ok := floatingHandler.(*locationsFloatingHandler)
-		require.True(t, ok)
-		assert.GreaterOrEqual(
-			t, len(lh.entries), 1,
-			"expected at least 1 implementation",
-		)
+		assert.True(t, navigated, "expected direct navigation to single implementation")
 	})
 
 	t.Run("format", func(t *testing.T) {
