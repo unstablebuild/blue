@@ -76,7 +76,14 @@ func doNavigate(
 	if err != nil {
 		return err
 	}
-	return editor.SetCursor(eh, posToCoord(e.rng.Start))
+	target := posToCoord(e.rng.Start)
+	if err := editor.SetCursor(eh, target); err != nil {
+		if cur, curErr := editor.Cursor(eh); curErr == nil && cur == target {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func locationsFromResult(r semanticapi.LocationResult) []locationEntry {
