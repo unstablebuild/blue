@@ -691,6 +691,25 @@ func (h *CallbackHandler) applyDocumentChanges(
 	return nil
 }
 
+// editorForURI returns the editor handler for the given URI.
+// If the editor is not available, it opens the resource via
+// the resource opener and retries.
+func (h *CallbackHandler) editorForURI(
+	uri workspaceapi.URI,
+) (textapi.Handler, error) {
+	eh, err := h.editor.Editor(uri)
+	if err == nil {
+		return eh, nil
+	}
+	if h.resourceOpener == nil {
+		return nil, err
+	}
+	if _, openErr := h.resourceOpener.Open(uri); openErr != nil {
+		return nil, err
+	}
+	return h.editor.Editor(uri)
+}
+
 func (h *CallbackHandler) applyTextDocumentEdit(
 	ctx context.Context,
 	edit *semanticapi.TextDocumentEdit,
@@ -699,7 +718,7 @@ func (h *CallbackHandler) applyTextDocumentEdit(
 	if err != nil {
 		return fmt.Errorf("parse URI: %w", err)
 	}
-	editorHandler, err := h.editor.Editor(uri)
+	editorHandler, err := h.editorForURI(uri)
 	if err != nil {
 		return fmt.Errorf("editor for %s: %w", uri.Name(), err)
 	}
@@ -822,7 +841,7 @@ func (h *CallbackHandler) applyChanges(
 		if err != nil {
 			return fmt.Errorf("parse URI: %w", err)
 		}
-		editorHandler, err := h.editor.Editor(uri)
+		editorHandler, err := h.editorForURI(uri)
 		if err != nil {
 			return fmt.Errorf("editor for %s: %w", uri.Name(), err)
 		}

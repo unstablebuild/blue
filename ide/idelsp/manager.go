@@ -606,11 +606,12 @@ func (m *Manager) clearWatchers(serverID string) {
 }
 
 func (m *Manager) interceptCallback(serverID string) semanticapi.LSPCallback {
-	if m.callback == nil {
-		return nil
+	cb := m.callback
+	if cb == nil {
+		cb = nopLSPCallback{}
 	}
 	return &callbackInterceptor{
-		LSPCallback: m.callback,
+		LSPCallback: cb,
 		manager:     m,
 		serverID:    serverID,
 		log: slog.With("struct", "idelsp.callbackInterceptor",

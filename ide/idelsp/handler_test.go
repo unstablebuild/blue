@@ -669,6 +669,120 @@ func TestCallbackHandler_ApplyEdit(t *testing.T) {
 	}
 }
 
+func TestCallbackHandler_ApplyEdit_OpensUnopenedFile(
+	t *testing.T,
+) {
+	t.Parallel()
+	uri, err := workspaceapi.ParseURI("file:///tmp/test.go")
+	require.NoError(t, err)
+
+	handler := &mockEditorHandler{uri: uri}
+	ed := &mockEditor{
+		handler:   handler,
+		editorErr: fmt.Errorf("not open"),
+	}
+	opener := &mockResourceOpener{
+		openFn: func(_ workspaceapi.URI) {
+			ed.mu.Lock()
+			ed.editorErr = nil
+			ed.mu.Unlock()
+		},
+	}
+	h := NewCallbackHandler(
+		nil, nil, opener, ed,
+		newTestScheme(),
+		"",
+		CallbackHandlerConfig{},
+	)
+
+	t.Run("document changes retries after open", func(t *testing.T) {
+		result, err := h.ApplyEdit(t.Context(),
+			semanticapi.ApplyWorkspaceEditParams{
+				Edit: semanticapi.WorkspaceEdit{
+					DocumentChanges: []semanticapi.DocumentChange{
+						{
+							TextDocumentEdit: &semanticapi.TextDocumentEdit{
+								TextDocument: semanticapi.VersionedTextDocumentIdentifier{
+									URI: "file:///tmp/test.go",
+								},
+								Edits: []semanticapi.TextEdit{
+									{
+										Range: semanticapi.Range{
+											Start: semanticapi.Position{
+												Line: 0, Character: 0,
+											},
+											End: semanticapi.Position{
+												Line: 0, Character: 3,
+											},
+										},
+										NewText: "fixed",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		)
+		require.NoError(t, err)
+		assert.True(t, result.Applied)
+		assert.Equal(t, []mockCellEdit{
+			{
+				start: term.Coordinates{X: 0, Y: 0},
+				end:   term.Coordinates{X: 3, Y: 0},
+				text:  "fixed",
+			},
+		}, ed.cellEdits)
+		opener.mu.Lock()
+		assert.Len(t, opener.opened, 1)
+		opener.mu.Unlock()
+	})
+
+	t.Run("changes retries after open", func(t *testing.T) {
+		ed.mu.Lock()
+		ed.editorErr = fmt.Errorf("not open")
+		ed.cellEdits = nil
+		ed.mu.Unlock()
+		opener.mu.Lock()
+		opener.opened = nil
+		opener.mu.Unlock()
+
+		result, err := h.ApplyEdit(t.Context(),
+			semanticapi.ApplyWorkspaceEditParams{
+				Edit: semanticapi.WorkspaceEdit{
+					Changes: map[string][]semanticapi.TextEdit{
+						"file:///tmp/test.go": {
+							{
+								Range: semanticapi.Range{
+									Start: semanticapi.Position{
+										Line: 2, Character: 0,
+									},
+									End: semanticapi.Position{
+										Line: 2, Character: 4,
+									},
+								},
+								NewText: "done",
+							},
+						},
+					},
+				},
+			},
+		)
+		require.NoError(t, err)
+		assert.True(t, result.Applied)
+		assert.Equal(t, []mockCellEdit{
+			{
+				start: term.Coordinates{X: 0, Y: 2},
+				end:   term.Coordinates{X: 4, Y: 2},
+				text:  "done",
+			},
+		}, ed.cellEdits)
+		opener.mu.Lock()
+		assert.Len(t, opener.opened, 1)
+		opener.mu.Unlock()
+	})
+}
+
 func TestCallbackHandler_ApplyEdit_CreateFile(
 	t *testing.T,
 ) {
@@ -1310,6 +1424,7 @@ func (c *mockCellEditor) Edit(
 type mockResourceOpener struct {
 	mu     sync.Mutex
 	opened []workspaceapi.URI
+	openFn func(workspaceapi.URI)
 }
 
 func (m *mockResourceOpener) Open(
@@ -1318,6 +1433,9 @@ func (m *mockResourceOpener) Open(
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.opened = append(m.opened, uri)
+	if m.openFn != nil {
+		m.openFn(uri)
+	}
 	return nil, nil
 }
 
