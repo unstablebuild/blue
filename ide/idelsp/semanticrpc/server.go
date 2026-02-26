@@ -49,10 +49,11 @@ func (s *Server) Initialize(ctx context.Context, req *semanticrpc.InitializeRequ
 	ctx, cancel := joincontext.New(ctx, s.ctx)
 	defer cancel()
 	params := semanticapi.InitializeParams{
-		RootURI:          req.GetRootUri(),
-		Capabilities:     req.GetCapabilities(),
-		WorkspaceFolders: semanticrpc.WorkspaceFoldersFromProto(req.GetWorkspaceFolders()),
-		Trace:            semanticapi.TraceValue(req.GetTrace()),
+		RootURI:           req.GetRootUri(),
+		Capabilities:      req.GetCapabilities(),
+		InitializeOptions: req.GetInitializationOptions(),
+		WorkspaceFolders:  semanticrpc.WorkspaceFoldersFromProto(req.GetWorkspaceFolders()),
+		Trace:             semanticapi.TraceValue(req.GetTrace()),
 	}
 	if req.GetHasProcessId() {
 		pid := int(req.GetProcessId())
