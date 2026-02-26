@@ -139,11 +139,15 @@ func (m *mockWindow) WindowID() uint64 { return m.id }
 // mockWindowManager implements
 // browserapi.WindowManager for testing.
 type mockWindowManager struct {
+	focusFn            func() (browserapi.Window, error)
 	floatingFn         func(browserapi.Floating, browserapi.FloatingConfig) (browserapi.Window, error)
 	setWindowContentFn func(browserapi.Window, browserapi.Handler) error
 }
 
 func (m *mockWindowManager) Focus() (browserapi.Window, error) {
+	if m.focusFn != nil {
+		return m.focusFn()
+	}
 	return nil, nil
 }
 

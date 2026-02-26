@@ -25,7 +25,6 @@ package lspcmd
 
 import (
 	"testing"
-	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,277 +32,8 @@ import (
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
-	"github.com/unstablebuild/rune-go-sdk/handler/handlertest"
 	"github.com/unstablebuild/rune-go-sdk/term"
-	"github.com/unstablebuild/tcell/v3"
 )
-
-// TestLocationsHandlerRender uses handlertest to
-// verify that text content is rendered correctly
-// and remains stable across key navigation events.
-// Color differences between selected/unselected
-// entries are tested separately in
-// TestLocationsHandlerDraw.
-func TestLocationsHandlerRender(t *testing.T) {
-	entries := []locationEntry{
-		{display: "a.go:1"},
-		{display: "b.go:2"},
-	}
-	lh := newLocationsHandler(entries, nil, nil, nil)
-	w, h := lh.Dimensions()
-	expected := "a.go:1  \nb.go:2  "
-	cases := []handlertest.SequenceTestCase{
-		{
-			InputSequence: "",
-			Expected:      expected,
-		},
-		{
-			InputSequence: "<down>",
-			Expected:      expected,
-		},
-		{
-			InputSequence: "<up>",
-			Expected:      expected,
-		},
-	}
-	handlertest.RunHandlerSequence(
-		t, lh, w, h, cases,
-	)
-}
-
-func TestLocationsHandlerHandle(t *testing.T) {
-	tests := []struct {
-		name         string
-		entries      int
-		initial      int
-		event        term.Event
-		wantExit     bool
-		wantHandled  bool
-		wantSelected int
-	}{
-		{
-			name:    "esc exits",
-			entries: 2,
-			event: term.Event{
-				Type: term.EventKey,
-				Key:  term.KeyEsc,
-			},
-			wantExit:    true,
-			wantHandled: true,
-		},
-		{
-			name:    "enter exits",
-			entries: 2,
-			event: term.Event{
-				Type: term.EventKey,
-				Key:  term.KeyEnter,
-			},
-			wantExit:    true,
-			wantHandled: true,
-		},
-		{
-			name:    "down moves selection",
-			entries: 3,
-			event: term.Event{
-				Type: term.EventKey,
-				Key:  term.KeyArrowDown,
-			},
-			wantHandled:  true,
-			wantSelected: 1,
-		},
-		{
-			name:    "up moves selection",
-			entries: 3,
-			initial: 1,
-			event: term.Event{
-				Type: term.EventKey,
-				Key:  term.KeyArrowUp,
-			},
-			wantHandled: true,
-		},
-		{
-			name:    "down at bottom stays",
-			entries: 2,
-			initial: 1,
-			event: term.Event{
-				Type: term.EventKey,
-				Key:  term.KeyArrowDown,
-			},
-			wantHandled:  true,
-			wantSelected: 1,
-		},
-		{
-			name:    "up at top stays",
-			entries: 2,
-			event: term.Event{
-				Type: term.EventKey,
-				Key:  term.KeyArrowUp,
-			},
-			wantHandled: true,
-		},
-		{
-			name:    "non-key event ignored",
-			entries: 2,
-			event: term.Event{
-				Type: term.EventMouse,
-			},
-		},
-		{
-			name:    "unknown key not handled",
-			entries: 2,
-			event: term.Event{
-				Type: term.EventKey,
-				Key:  term.KeyTab,
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			entries := make(
-				[]locationEntry, tt.entries,
-			)
-			for i := range entries {
-				entries[i] = locationEntry{
-					display: "x",
-				}
-			}
-			lh := newLocationsHandler(
-				entries, nil, nil, nil,
-			)
-			lh.selected = tt.initial
-			exit, handled := lh.Handle(tt.event)
-			assert.Equal(
-				t, tt.wantExit, exit,
-			)
-			assert.Equal(
-				t, tt.wantHandled, handled,
-			)
-			assert.Equal(
-				t, tt.wantSelected,
-				lh.selected,
-			)
-		})
-	}
-}
-
-func TestLocationsHandlerDraw(t *testing.T) {
-	tests := []struct {
-		name     string
-		entries  []locationEntry
-		selected int
-		wantFg   []tcell.Color
-	}{
-		{
-			name: "first selected",
-			entries: []locationEntry{
-				{display: "a.go:1"},
-				{display: "b.go:2"},
-			},
-			selected: 0,
-			wantFg: []tcell.Color{
-				tcell.ColorWhite,
-				tcell.ColorGray,
-			},
-		},
-		{
-			name: "second selected",
-			entries: []locationEntry{
-				{display: "a.go:1"},
-				{display: "b.go:2"},
-			},
-			selected: 1,
-			wantFg: []tcell.Color{
-				tcell.ColorGray,
-				tcell.ColorWhite,
-			},
-		},
-		{
-			name: "single entry selected",
-			entries: []locationEntry{
-				{display: "only.go:1"},
-			},
-			wantFg: []tcell.Color{
-				tcell.ColorWhite,
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			lh := newLocationsHandler(
-				tt.entries, nil, nil, nil,
-			)
-			lh.selected = tt.selected
-			w, h := lh.Dimensions()
-			sw := term.NewStringWriter(w, h)
-			lh.Draw(sw)
-			require.NoError(t, sw.Flush())
-
-			cells := sw.Cells()
-			for i, want := range tt.wantFg {
-				cell := cells[i*w]
-				assert.Equal(
-					t, want, cell.Fg,
-					"entry %d foreground", i,
-				)
-			}
-		})
-	}
-}
-
-func TestLocationsHandlerDimensions(
-	t *testing.T,
-) {
-	tests := []struct {
-		name    string
-		entries []locationEntry
-		wantW   int
-		wantH   int
-	}{
-		{
-			name: "width is max display plus 2",
-			entries: []locationEntry{
-				{display: "short"},
-				{display: "longer entry"},
-			},
-			wantW: utf8.RuneCountInString("longer entry") + 2,
-			wantH: 2,
-		},
-		{
-			name: "height capped at 15",
-			entries: make(
-				[]locationEntry, 20,
-			),
-			wantW: 2,
-			wantH: 15,
-		},
-		{
-			name: "single entry",
-			entries: []locationEntry{
-				{display: "a.go:1"},
-			},
-			wantW: 8,
-			wantH: 1,
-		},
-		{
-			name: "unicode display uses rune count",
-			entries: []locationEntry{
-				{display: "café.go:1"},
-			},
-			wantW: 11,
-			wantH: 1,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			lh := newLocationsHandler(
-				tt.entries, nil, nil, nil,
-			)
-			w, h := lh.Dimensions()
-			assert.Equal(t, tt.wantW, w)
-			assert.Equal(t, tt.wantH, h)
-		})
-	}
-}
 
 func TestNavigateTo(t *testing.T) {
 	tests := []struct {
@@ -343,15 +73,29 @@ func TestNavigateTo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var (
-				openedPath string
-				cursorSet  term.Coordinates
+				openedPath       string
+				cursorSet        term.Coordinates
+				setContentWindow browserapi.Window
+				setContentH      browserapi.Handler
 			)
+			openHandler := &mockHandler{}
 			opener := &mockResourceOpener{
 				openFn: func(
 					u workspaceapi.URI,
 				) (browserapi.Handler, error) {
 					openedPath = u.Path()
-					return &mockHandler{}, nil
+					return openHandler, nil
+				},
+			}
+			focusWindow := &mockWindow{id: 1}
+			wm := &mockWindowManager{
+				focusFn: func() (browserapi.Window, error) {
+					return focusWindow, nil
+				},
+				setWindowContentFn: func(w browserapi.Window, h browserapi.Handler) error {
+					setContentWindow = w
+					setContentH = h
+					return nil
 				},
 			}
 			editor := &mockEditor{
@@ -370,14 +114,15 @@ func TestNavigateTo(t *testing.T) {
 					return nil
 				},
 			}
-			wm := &mockWindowManager{}
-			err := navigateTo(
-				tt.entry, opener, wm, editor,
+			syncTick := func(fn func()) bool { fn(); return true }
+			navigateTo(
+				tt.entry, opener, wm, editor, &mockNotifications{}, syncTick,
 			)
-			require.NoError(t, err)
 			assert.Equal(
 				t, tt.wantURI, openedPath,
 			)
+			assert.Equal(t, focusWindow, setContentWindow)
+			assert.Same(t, openHandler, setContentH, "SetWindowContent should receive the handler from Open")
 			assert.Equal(
 				t, tt.wantPos, cursorSet,
 			)
@@ -543,6 +288,26 @@ func TestLocationsFromResult(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestEnrichEntriesRelativePaths(t *testing.T) {
+	rootURI, err := workspaceapi.ParseURI("file:///workspace")
+	require.NoError(t, err)
+
+	entries := []locationEntry{
+		{
+			uri: "file:///workspace/pkg/foo.go",
+			rng: semanticapi.Range{Start: semanticapi.Position{Line: 5}},
+		},
+		{
+			uri: "file:///other/bar.go",
+			rng: semanticapi.Range{Start: semanticapi.Position{Line: 0}},
+		},
+	}
+	got := enrichEntries(entries, rootURI)
+
+	assert.Equal(t, "pkg/foo.go:6", got[0].display, "workspace file should be relative")
+	assert.Equal(t, "/other/bar.go:1", got[1].display, "out-of-workspace file should be absolute")
 }
 
 func TestTrimFilePrefix(t *testing.T) {

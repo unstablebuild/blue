@@ -26,7 +26,6 @@ package lspcmd
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"sort"
 
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
@@ -82,54 +81,4 @@ func applyEdits(
 		}
 	}
 	return nil
-}
-
-func extractSymbolName(
-	cells [][]term.Cell, rng semanticapi.Range,
-) string {
-	line := int(rng.Start.Line)
-	if line >= len(cells) {
-		return ""
-	}
-	row := cells[line]
-	start := int(rng.Start.Character)
-	end := int(rng.End.Character)
-	if start >= len(row) {
-		return ""
-	}
-	if end > len(row) {
-		end = len(row)
-	}
-	if end <= start {
-		return ""
-	}
-	runes := make([]rune, 0, end-start)
-	for i := start; i < end; i++ {
-		runes = append(runes, row[i].Ch)
-	}
-	return string(runes)
-}
-
-func relativePath(
-	fileURI string, rootURI workspaceapi.URI,
-) string {
-	p := trimFilePrefix(fileURI)
-	rel, err := filepath.Rel(rootURI.Path(), p)
-	if err != nil {
-		return p
-	}
-	return rel
-}
-
-func drawLine(w term.Writer, y int, text string, width int, attr term.Attributes) {
-	runes := []rune(text)
-	for x := 0; x < width; x++ {
-		ch := ' '
-		if x < len(runes) {
-			ch = runes[x]
-		}
-		w.SetCell(term.Coordinates{X: x, Y: y},
-			term.Cell{Attributes: attr, Ch: ch, Width: 1},
-		)
-	}
 }

@@ -26,19 +26,13 @@ package lspcmd
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
-	"github.com/unstablebuild/rune-go-sdk/term"
-	"github.com/unstablebuild/tcell/v3"
 )
-
-var _ browserapi.Floating = (*locationsHandler)(nil)
 
 type locationEntry struct {
 	uri     string
@@ -46,118 +40,20 @@ type locationEntry struct {
 	display string
 }
 
-// TODO: add a preview of the file at the selected position.
-// TODO: make entries relative to workspace URI if possible.
-// TODO: scroll list down when cursor passes last visible line.
-// TODO: consider using a FocusList instead of reimplementing.
-// TODO: allow ctrl-j/k for moving up and down.
-type locationsHandler struct {
-	entries  []locationEntry
-	selected int
-	opener   browserapi.ResourceOpener
-	wm       browserapi.WindowManager
-	editor   textapi.Editor
-	width    int
-	height   int
-}
-
-func newLocationsHandler(
-	entries []locationEntry,
-	opener browserapi.ResourceOpener,
-	wm browserapi.WindowManager,
-	editor textapi.Editor,
-) *locationsHandler {
-	maxW := 0
-	for _, e := range entries {
-		if n := utf8.RuneCountInString(e.display); n > maxW {
-			maxW = n
-		}
-	}
-	h := len(entries)
-	if h > 15 {
-		h = 15
-	}
-	return &locationsHandler{
-		entries: entries,
-		opener:  opener,
-		wm:      wm,
-		editor:  editor,
-		width:   maxW + 2,
-		height:  h,
-	}
-}
-
-func (l *locationsHandler) Handle(ev term.Event) (exit, handled bool) {
-	if ev.Type != term.EventKey {
-		return false, false
-	}
-	switch ev.Key {
-	case term.KeyEsc:
-		return true, true
-	case term.KeyEnter:
-		if err := l.navigate(); err != nil {
-			slog.Warn("location navigate", "err", err)
-		}
-		return true, true
-	case term.KeyArrowUp:
-		if l.selected > 0 {
-			l.selected--
-		}
-		return false, true
-	case term.KeyArrowDown:
-		if l.selected < len(l.entries)-1 {
-			l.selected++
-		}
-		return false, true
-	}
-	return false, false
-}
-
-func (l *locationsHandler) Cursor() (term.Coordinates, term.CursorStyle, bool) {
-	return term.Coordinates{}, term.CursorStyleDefault, false
-}
-
-func (l *locationsHandler) Selection() (string, bool) {
-	return "", false
-}
-
-func (l *locationsHandler) Resize(_, _ int) {}
-
-func (l *locationsHandler) Draw(w term.Writer) {
-	selAttr := term.Attributes{
-		Fg: tcell.ColorWhite,
-	}
-	normAttr := term.Attributes{
-		Fg: tcell.ColorGray,
-	}
-	for i, e := range l.entries {
-		if i >= l.height {
-			break
-		}
-		attr := normAttr
-		if i == l.selected {
-			attr = selAttr
-		}
-		drawLine(w, i, e.display, l.width, attr)
-	}
-}
-
-func (l *locationsHandler) Dimensions() (int, int) {
-	return l.width, l.height
-}
-
-func (l *locationsHandler) Close() error {
-	return nil
-}
-
-func (l *locationsHandler) navigate() error {
-	if l.selected >= len(l.entries) {
-		return nil
-	}
-	return navigateTo(l.entries[l.selected], l.opener, l.wm, l.editor)
-}
-
 func navigateTo(
+	e locationEntry, opener browserapi.ResourceOpener,
+	wm browserapi.WindowManager,
+	editor textapi.Editor, notify browserapi.Notifications,
+	scheduleNextTick func(func()) bool,
+) {
+	scheduleNextTick(func() {
+		if err := doNavigate(e, opener, wm, editor); err != nil {
+			_, _ = notify.Notify(browserapi.LevelError, "navigate: %s", err)
+		}
+	})
+}
+
+func doNavigate(
 	e locationEntry, opener browserapi.ResourceOpener,
 	wm browserapi.WindowManager, editor textapi.Editor,
 ) error {
@@ -169,12 +65,11 @@ func navigateTo(
 	if err != nil {
 		return err
 	}
-	focus, err := wm.Focus()
+	w, err := wm.Focus()
 	if err != nil {
 		return err
 	}
-	err = wm.SetWindowContent(focus, h)
-	if err != nil && !errors.Is(err, browserapi.ErrTabNotFree) {
+	if err := wm.SetWindowContent(w, h); err != nil && !errors.Is(err, browserapi.ErrTabNotFree) {
 		return err
 	}
 	eh, err := editor.Editor(uri)
@@ -216,44 +111,17 @@ func trimFilePrefix(uri string) string {
 }
 
 func enrichEntries(
-	entries []locationEntry, rootURI workspaceapi.URI, editor textapi.Editor,
+	entries []locationEntry, rootURI workspaceapi.URI,
 ) []locationEntry {
-	cache := make(map[string][][]term.Cell)
 	for i, e := range entries {
-		cells, ok := cache[e.uri]
-		if !ok {
-			cells = loadCells(e.uri, editor)
-			if cells != nil {
-				cache[e.uri] = cells
-			}
-		}
-		rel := relativePath(e.uri, rootURI)
-		if cells != nil {
-			sym := extractSymbolName(cells, e.rng)
-			entries[i].display = fmt.Sprintf("%s:%d %s", rel, e.rng.Start.Line+1, sym)
+		uri, err := lspToURI(e.uri)
+		var rel string
+		if err == nil {
+			rel = workspaceapi.RelPath(rootURI, uri)
 		} else {
-			entries[i].display = fmt.Sprintf("%s:%d", rel, e.rng.Start.Line+1)
+			rel = trimFilePrefix(e.uri)
 		}
+		entries[i].display = fmt.Sprintf("%s:%d", rel, e.rng.Start.Line+1)
 	}
 	return entries
-}
-
-func loadCells(lspURI string, editor textapi.Editor) [][]term.Cell {
-	uri, err := lspToURI(lspURI)
-	if err != nil {
-		return nil
-	}
-	eh, err := editor.Editor(uri)
-	if err != nil {
-		return nil
-	}
-	cv := editor.CellView(eh)
-	if cv == nil {
-		return nil
-	}
-	cells, err := cv.RawCells()
-	if err != nil {
-		return nil
-	}
-	return cells
 }

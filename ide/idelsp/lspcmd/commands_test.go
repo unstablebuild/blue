@@ -133,8 +133,7 @@ func TestE2ECommands(t *testing.T) {
 		},
 	}
 	cfg := DefaultConfig()
-	cfg.Implementation.RootURI = rootURI
-	cfg.References.RootURI = rootURI
+	cfg.RootURI = rootURI
 	router, err := AllHandler(mgr, editor, wm, opener, notify, fs, cfg)
 	require.NoError(t, err)
 
