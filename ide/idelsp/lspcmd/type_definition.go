@@ -35,57 +35,55 @@ import (
 	"github.com/unstablebuild/rune-go-sdk/iterator"
 )
 
-// ImplementationConfig configures the "implementation" subcommand.
-type ImplementationConfig struct {
+// TypeDefinitionConfig configures the "type-definition" subcommand.
+type TypeDefinitionConfig struct {
+	RootURI    workspaceapi.URI
 	ListConfig LocationsConfig
 }
 
-// DefaultImplementationConfig returns an ImplementationConfig with sensible defaults.
-func DefaultImplementationConfig() ImplementationConfig {
-	return ImplementationConfig{
-		ListConfig: DefaultLocationsConfig(),
-	}
+// DefaultTypeDefinitionConfig returns a TypeDefinitionConfig with sensible defaults.
+func DefaultTypeDefinitionConfig() TypeDefinitionConfig {
+	return TypeDefinitionConfig{}
 }
 
-// ImplementationHandler creates a textapi.CommandHandler that finds
-// implementations of the symbol at the cursor position and displays them in a
+// TypeDefinitionHandler creates a textapi.CommandHandler that finds the type
+// definition of the symbol at the cursor position and displays the result in a
 // floating window with a file preview.
-func ImplementationHandler(
+func TypeDefinitionHandler(
 	lsp semanticapi.LSP, editor textapi.Editor,
 	wm browserapi.WindowManager, opener browserapi.ResourceOpener,
 	notify browserapi.Notifications, fs workspaceapi.FileSystem,
-	rootURI workspaceapi.URI, scheduleNextTick func(func()) bool,
-	parser syntaxapi.Parser, cfg ImplementationConfig,
+	scheduleNextTick func(func()) bool,
+	parser syntaxapi.Parser, cfg TypeDefinitionConfig,
 ) textapi.CommandHandler {
-	return &implementationHandler{
+	return &typeDefinitionHandler{
 		lsp: lsp, editor: editor, wm: wm, opener: opener,
-		notify: notify, fs: fs, rootURI: rootURI,
+		notify: notify, fs: fs,
 		scheduleNextTick: scheduleNextTick, parser: parser, cfg: cfg,
 	}
 }
 
-type implementationHandler struct {
+type typeDefinitionHandler struct {
 	lsp              semanticapi.LSP
 	editor           textapi.Editor
 	wm               browserapi.WindowManager
 	opener           browserapi.ResourceOpener
 	notify           browserapi.Notifications
 	fs               workspaceapi.FileSystem
-	rootURI          workspaceapi.URI
 	scheduleNextTick func(func()) bool
 	parser           syntaxapi.Parser
-	cfg              ImplementationConfig
+	cfg              TypeDefinitionConfig
 }
 
-func (h *implementationHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
+func (h *typeDefinitionHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
 	if cmd.Resource == nil {
 		return nil
 	}
-	params := semanticapi.ImplementationParams{
+	params := semanticapi.TypeDefinitionParams{
 		TextDocument: textDocID(cmd.URI),
 		Position:     coordToPos(cmd.Cursor.Content),
 	}
-	result, err := h.lsp.Implementation(ctx, params)
+	result, err := h.lsp.TypeDefinition(ctx, params)
 	if err != nil {
 		return err
 	}
@@ -93,7 +91,7 @@ func (h *implementationHandler) HandleCommand(ctx context.Context, cmd textapi.C
 	if len(entries) == 0 {
 		return nil
 	}
-	entries = enrichEntries(entries, h.rootURI)
+	entries = enrichEntries(entries, h.cfg.RootURI)
 	if len(entries) == 1 {
 		navigateTo(entries[0], h.opener, h.wm, h.editor, h.notify, h.scheduleNextTick)
 		return nil
@@ -106,7 +104,7 @@ func (h *implementationHandler) HandleCommand(ctx context.Context, cmd textapi.C
 	return err
 }
 
-func (h *implementationHandler) Complete(
+func (h *typeDefinitionHandler) Complete(
 	_ context.Context, _ string, _ []string,
 ) (iterator.Iterator[string], error) {
 	return iterator.Empty[string](), nil

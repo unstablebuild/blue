@@ -98,6 +98,10 @@ func (h *referencesHandler) HandleCommand(ctx context.Context, cmd textapi.Comma
 		entries[i] = locationFromLoc(loc)
 	}
 	entries = enrichEntries(entries, h.rootURI)
+	if len(entries) == 1 {
+		navigateTo(entries[0], h.opener, h.wm, h.editor, h.notify, h.scheduleNextTick)
+		return nil
+	}
 	handler := newLocationsFloatingHandler(
 		entries, h.opener, h.wm, h.editor, h.notify,
 		h.fs, h.scheduleNextTick, h.parser, h.cfg.ListConfig,
