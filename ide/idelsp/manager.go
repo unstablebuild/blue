@@ -275,10 +275,14 @@ func (m *Manager) handle(ev textapi.Event) error {
 			})
 
 	case textapi.EventTypeCreate:
-		return m.broadcastNotify(ctx, ev.URI, "workspace/didCreateFiles",
-			semanticapi.CreateFilesParams{
-				Files: []semanticapi.FileCreate{
-					{URI: uri},
+		return m.broadcastNotify(ctx,
+			workspaceapi.URI{}, "workspace/didChangeWatchedFiles",
+			semanticapi.DidChangeWatchedFilesParams{
+				Changes: []semanticapi.FileEvent{
+					{
+						URI:  uri,
+						Type: semanticapi.FileChangeTypeCreated,
+					},
 				},
 			})
 
@@ -295,10 +299,14 @@ func (m *Manager) handle(ev textapi.Event) error {
 			})
 
 	case textapi.EventTypeRemove:
-		return m.broadcastNotify(ctx, ev.URI, "workspace/didDeleteFiles",
-			semanticapi.DeleteFilesParams{
-				Files: []semanticapi.FileDelete{
-					{URI: uri},
+		return m.broadcastNotify(ctx,
+			workspaceapi.URI{}, "workspace/didChangeWatchedFiles",
+			semanticapi.DidChangeWatchedFilesParams{
+				Changes: []semanticapi.FileEvent{
+					{
+						URI:  uri,
+						Type: semanticapi.FileChangeTypeDeleted,
+					},
 				},
 			})
 
