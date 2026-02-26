@@ -82,6 +82,10 @@ func Manual() textapi.CommandManual {
 				Name:    "signature-help",
 				Summary: "Show signature help at cursor",
 			},
+			{
+				Name:    "rename",
+				Summary: "Rename symbol at cursor",
+			},
 		},
 	}
 }
@@ -170,7 +174,9 @@ func AllHandler(
 				lsp, editor, wm, opener, notify, fs,
 				cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.References,
 			),
-			"signature-help": SignatureHelpHandler(lsp, editor, wm, cfg.ScheduleNextTick, cfg.SignatureHelp),
+			"signature-help": SignatureHelpHandler(lsp, editor, wm,
+				cfg.ScheduleNextTick, cfg.SignatureHelp),
+			"rename": RenameHandler(lsp, editor, wm, opener),
 		},
 	}, nil
 }
