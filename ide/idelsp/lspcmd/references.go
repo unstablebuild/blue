@@ -28,6 +28,7 @@ import (
 
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
+	"github.com/unstablebuild/rune-go-sdk/api/syntaxapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
 	"github.com/unstablebuild/rune-go-sdk/component"
@@ -36,13 +37,14 @@ import (
 
 // ReferencesConfig configures the "references" subcommand.
 type ReferencesConfig struct {
-	RootURI    workspaceapi.URI
 	ListConfig LocationsConfig
 }
 
 // DefaultReferencesConfig returns a ReferencesConfig with sensible defaults.
 func DefaultReferencesConfig() ReferencesConfig {
-	return ReferencesConfig{}
+	return ReferencesConfig{
+		ListConfig: DefaultLocationsConfig(),
+	}
 }
 
 // ReferencesHandler creates a textapi.CommandHandler that finds all references
@@ -52,22 +54,27 @@ func ReferencesHandler(
 	lsp semanticapi.LSP, editor textapi.Editor,
 	wm browserapi.WindowManager, opener browserapi.ResourceOpener,
 	notify browserapi.Notifications, fs workspaceapi.FileSystem,
-	cfg ReferencesConfig,
+	rootURI workspaceapi.URI, scheduleNextTick func(func()) bool,
+	parser syntaxapi.Parser, cfg ReferencesConfig,
 ) textapi.CommandHandler {
 	return &referencesHandler{
 		lsp: lsp, editor: editor, wm: wm, opener: opener,
-		notify: notify, fs: fs, cfg: cfg,
+		notify: notify, fs: fs, rootURI: rootURI,
+		scheduleNextTick: scheduleNextTick, parser: parser, cfg: cfg,
 	}
 }
 
 type referencesHandler struct {
-	lsp    semanticapi.LSP
-	editor textapi.Editor
-	wm     browserapi.WindowManager
-	opener browserapi.ResourceOpener
-	notify browserapi.Notifications
-	fs     workspaceapi.FileSystem
-	cfg    ReferencesConfig
+	lsp              semanticapi.LSP
+	editor           textapi.Editor
+	wm               browserapi.WindowManager
+	opener           browserapi.ResourceOpener
+	notify           browserapi.Notifications
+	fs               workspaceapi.FileSystem
+	rootURI          workspaceapi.URI
+	scheduleNextTick func(func()) bool
+	parser           syntaxapi.Parser
+	cfg              ReferencesConfig
 }
 
 func (h *referencesHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
@@ -90,9 +97,10 @@ func (h *referencesHandler) HandleCommand(ctx context.Context, cmd textapi.Comma
 	for i, loc := range locs {
 		entries[i] = locationFromLoc(loc)
 	}
-	entries = enrichEntries(entries, h.cfg.RootURI, h.editor)
+	entries = enrichEntries(entries, h.rootURI)
 	handler := newLocationsFloatingHandler(
-		entries, h.opener, h.wm, h.editor, h.notify, h.fs, h.cfg.ListConfig,
+		entries, h.opener, h.wm, h.editor, h.notify,
+		h.fs, h.scheduleNextTick, h.parser, h.cfg.ListConfig,
 	)
 	_, err = h.wm.Floating(handler, browserapi.FloatingConfig{Alignment: component.AlignmentCentered})
 	return err

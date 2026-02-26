@@ -30,6 +30,7 @@ import (
 
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
+	"github.com/unstablebuild/rune-go-sdk/api/syntaxapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
 	"github.com/unstablebuild/rune-go-sdk/iterator"
@@ -69,23 +70,28 @@ func Manual() textapi.CommandManual {
 	}
 }
 
-// AllConfig groups configuration for every subcommand registered by
+// Config groups configuration for every subcommand registered by
 // AllHandler.
-type AllConfig struct {
+type Config struct {
+	RootURI        workspaceapi.URI
+	Parser         syntaxapi.Parser // nil = no highlighting
 	Hover          HoverConfig
 	Complete       CompleteConfig
 	Implementation ImplementationConfig
 	References     ReferencesConfig
+
+	// ScheduleNextTick defers a function to the next event-loop tick.
+	ScheduleNextTick func(func()) bool
 
 	// Interrupter signals the event loop to re-render after
 	// asynchronous updates (e.g. completion results arriving).
 	Interrupter term.Interrupter
 }
 
-// DefaultConfig returns an AllConfig where every subcommand uses its
+// DefaultConfig returns a Config where every subcommand uses its
 // own default configuration.
-func DefaultConfig() AllConfig {
-	return AllConfig{
+func DefaultConfig() Config {
+	return Config{
 		Hover:          DefaultHoverConfig(),
 		Complete:       DefaultCompleteConfig(),
 		Implementation: DefaultImplementationConfig(),
@@ -100,8 +106,11 @@ func AllHandler(
 	lsp semanticapi.LSP, editor textapi.Editor,
 	wm browserapi.WindowManager, opener browserapi.ResourceOpener,
 	notify browserapi.Notifications, fs workspaceapi.FileSystem,
-	cfg AllConfig,
+	cfg Config,
 ) (textapi.CommandHandler, error) {
+	if cfg.RootURI.String() == "" {
+		panic("lspcmd: Config.RootURI must be set")
+	}
 	formatH, err := FormatHandler(lsp, editor)
 	if err != nil {
 		return nil, err
@@ -112,10 +121,10 @@ func AllHandler(
 			"hover":    HoverHandler(lsp, wm, cfg.Hover),
 			"complete": CompleteHandler(lsp, editor, wm, cfg.Complete, cfg.Interrupter),
 			"implementation": ImplementationHandler(
-				lsp, editor, wm, opener, notify, fs, cfg.Implementation,
+				lsp, editor, wm, opener, notify, fs, cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.Implementation,
 			),
 			"references": ReferencesHandler(
-				lsp, editor, wm, opener, notify, fs, cfg.References,
+				lsp, editor, wm, opener, notify, fs, cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.References,
 			),
 		},
 	}, nil

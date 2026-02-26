@@ -56,13 +56,9 @@ func TestReferencesEnrichedDisplay(t *testing.T) {
 			return locs, nil
 		},
 	}
-	cells := term.StringToCells("func Add(a, b int) int")
 	editor := &mockEditor{
 		editorFn: func(u workspaceapi.URI) (textapi.Handler, error) {
 			return &mockHandler{uri: u}, nil
-		},
-		cellViewFn: func(_ textapi.Handler) textapi.CellView {
-			return &mockCellView{rawCellsFn: func() ([][]term.Cell, error) { return cells, nil }}
 		},
 	}
 	var fh browserapi.Floating
@@ -74,7 +70,7 @@ func TestReferencesEnrichedDisplay(t *testing.T) {
 	}
 	h := ReferencesHandler(
 		lsp, editor, wm, &mockResourceOpener{}, &mockNotifications{}, &mockFileSystem{},
-		ReferencesConfig{RootURI: rootURI},
+		rootURI, syncTick, nil, DefaultReferencesConfig(),
 	)
 
 	uri, _ := workspaceapi.ParseURI("file:///project/a.go")
@@ -86,7 +82,117 @@ func TestReferencesEnrichedDisplay(t *testing.T) {
 	require.NotNil(t, fh)
 
 	lh := fh.(*locationsFloatingHandler)
-	assert.Equal(t, "a.go:1 Add", lh.entries[0].display)
+	assert.Equal(t, "a.go:1", lh.entries[0].display)
+}
+
+func TestReferencesRelativePaths(t *testing.T) {
+	rootURI, err := workspaceapi.ParseURI("file:///workspace")
+	require.NoError(t, err)
+
+	locs := []semanticapi.Location{
+		{
+			URI: "file:///workspace/src/pkg/handler.go",
+			Range: semanticapi.Range{
+				Start: semanticapi.Position{Line: 10, Character: 5},
+				End:   semanticapi.Position{Line: 10, Character: 11},
+			},
+		},
+		{
+			URI: "file:///workspace/cmd/main.go",
+			Range: semanticapi.Range{
+				Start: semanticapi.Position{Line: 3, Character: 0},
+				End:   semanticapi.Position{Line: 3, Character: 6},
+			},
+		},
+		{
+			URI: "file:///other/lib/ext.go",
+			Range: semanticapi.Range{
+				Start: semanticapi.Position{Line: 0, Character: 0},
+				End:   semanticapi.Position{Line: 0, Character: 3},
+			},
+		},
+	}
+	lsp := &mockLSP{
+		referencesFn: func(_ context.Context, _ semanticapi.ReferenceParams) ([]semanticapi.Location, error) {
+			return locs, nil
+		},
+	}
+	editor := &mockEditor{
+		editorFn: func(u workspaceapi.URI) (textapi.Handler, error) {
+			return &mockHandler{uri: u}, nil
+		},
+	}
+	var fh browserapi.Floating
+	wm := &mockWindowManager{
+		floatingFn: func(h browserapi.Floating, _ browserapi.FloatingConfig) (browserapi.Window, error) {
+			fh = h
+			return nil, nil
+		},
+	}
+	h := ReferencesHandler(
+		lsp, editor, wm, &mockResourceOpener{}, &mockNotifications{}, &mockFileSystem{},
+		rootURI, syncTick, nil, ReferencesConfig{ListConfig: DefaultLocationsConfig()},
+	)
+
+	uri, _ := workspaceapi.ParseURI("file:///workspace/src/pkg/handler.go")
+	cmd := textapi.Command{Name: "references", URI: uri, Resource: &mockHandler{uri: uri}}
+	cmd.Cursor.Content = term.Coordinates{X: 5, Y: 10}
+
+	err = h.HandleCommand(context.Background(), cmd)
+	require.NoError(t, err)
+	require.NotNil(t, fh)
+
+	lh := fh.(*locationsFloatingHandler)
+	require.Len(t, lh.entries, 3)
+	assert.Equal(t, "src/pkg/handler.go:11", lh.entries[0].display, "workspace nested path should be relative")
+	assert.Equal(t, "cmd/main.go:4", lh.entries[1].display, "workspace path should be relative")
+	assert.Equal(t, "/other/lib/ext.go:1", lh.entries[2].display, "out-of-workspace path should be absolute")
+}
+
+func TestReferencesZeroRootURI(t *testing.T) {
+	locs := []semanticapi.Location{
+		{
+			URI: "file:///workspace/pkg/foo.go",
+			Range: semanticapi.Range{
+				Start: semanticapi.Position{Line: 5, Character: 0},
+				End:   semanticapi.Position{Line: 5, Character: 3},
+			},
+		},
+	}
+	lsp := &mockLSP{
+		referencesFn: func(_ context.Context, _ semanticapi.ReferenceParams) ([]semanticapi.Location, error) {
+			return locs, nil
+		},
+	}
+	editor := &mockEditor{
+		editorFn: func(u workspaceapi.URI) (textapi.Handler, error) {
+			return &mockHandler{uri: u}, nil
+		},
+	}
+	var fh browserapi.Floating
+	wm := &mockWindowManager{
+		floatingFn: func(h browserapi.Floating, _ browserapi.FloatingConfig) (browserapi.Window, error) {
+			fh = h
+			return nil, nil
+		},
+	}
+	// Zero RootURI (not set) — paths should fall back to absolute.
+	h := ReferencesHandler(
+		lsp, editor, wm, &mockResourceOpener{}, &mockNotifications{}, &mockFileSystem{},
+		workspaceapi.URI{}, syncTick, nil, DefaultReferencesConfig(),
+	)
+
+	uri, _ := workspaceapi.ParseURI("file:///workspace/pkg/foo.go")
+	cmd := textapi.Command{Name: "references", URI: uri, Resource: &mockHandler{uri: uri}}
+	cmd.Cursor.Content = term.Coordinates{X: 0, Y: 5}
+
+	err := h.HandleCommand(context.Background(), cmd)
+	require.NoError(t, err)
+	require.NotNil(t, fh)
+
+	lh := fh.(*locationsFloatingHandler)
+	require.Len(t, lh.entries, 1)
+	assert.Equal(t, "/workspace/pkg/foo.go:6", lh.entries[0].display, "zero RootURI should produce absolute path")
 }
 
 func TestReferencesHandler(t *testing.T) {
@@ -145,7 +251,7 @@ func TestReferencesHandler(t *testing.T) {
 			}
 			h := ReferencesHandler(
 				lsp, editor, wm, &mockResourceOpener{}, &mockNotifications{}, &mockFileSystem{},
-				ReferencesConfig{RootURI: rootURI},
+				rootURI, syncTick, nil, DefaultReferencesConfig(),
 			)
 
 			uri, _ := workspaceapi.ParseURI("file:///project/a.go")

@@ -28,6 +28,7 @@ import (
 
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
+	"github.com/unstablebuild/rune-go-sdk/api/syntaxapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
 	"github.com/unstablebuild/rune-go-sdk/component"
@@ -36,13 +37,14 @@ import (
 
 // ImplementationConfig configures the "implementation" subcommand.
 type ImplementationConfig struct {
-	RootURI    workspaceapi.URI
 	ListConfig LocationsConfig
 }
 
 // DefaultImplementationConfig returns an ImplementationConfig with sensible defaults.
 func DefaultImplementationConfig() ImplementationConfig {
-	return ImplementationConfig{}
+	return ImplementationConfig{
+		ListConfig: DefaultLocationsConfig(),
+	}
 }
 
 // ImplementationHandler creates a textapi.CommandHandler that finds
@@ -52,22 +54,27 @@ func ImplementationHandler(
 	lsp semanticapi.LSP, editor textapi.Editor,
 	wm browserapi.WindowManager, opener browserapi.ResourceOpener,
 	notify browserapi.Notifications, fs workspaceapi.FileSystem,
-	cfg ImplementationConfig,
+	rootURI workspaceapi.URI, scheduleNextTick func(func()) bool,
+	parser syntaxapi.Parser, cfg ImplementationConfig,
 ) textapi.CommandHandler {
 	return &implementationHandler{
 		lsp: lsp, editor: editor, wm: wm, opener: opener,
-		notify: notify, fs: fs, cfg: cfg,
+		notify: notify, fs: fs, rootURI: rootURI,
+		scheduleNextTick: scheduleNextTick, parser: parser, cfg: cfg,
 	}
 }
 
 type implementationHandler struct {
-	lsp    semanticapi.LSP
-	editor textapi.Editor
-	wm     browserapi.WindowManager
-	opener browserapi.ResourceOpener
-	notify browserapi.Notifications
-	fs     workspaceapi.FileSystem
-	cfg    ImplementationConfig
+	lsp              semanticapi.LSP
+	editor           textapi.Editor
+	wm               browserapi.WindowManager
+	opener           browserapi.ResourceOpener
+	notify           browserapi.Notifications
+	fs               workspaceapi.FileSystem
+	rootURI          workspaceapi.URI
+	scheduleNextTick func(func()) bool
+	parser           syntaxapi.Parser
+	cfg              ImplementationConfig
 }
 
 func (h *implementationHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
@@ -86,9 +93,10 @@ func (h *implementationHandler) HandleCommand(ctx context.Context, cmd textapi.C
 	if len(entries) == 0 {
 		return nil
 	}
-	entries = enrichEntries(entries, h.cfg.RootURI, h.editor)
+	entries = enrichEntries(entries, h.rootURI)
 	handler := newLocationsFloatingHandler(
-		entries, h.opener, h.wm, h.editor, h.notify, h.fs, h.cfg.ListConfig,
+		entries, h.opener, h.wm, h.editor, h.notify, h.fs,
+		h.scheduleNextTick, h.parser, h.cfg.ListConfig,
 	)
 	_, err = h.wm.Floating(handler, browserapi.FloatingConfig{Alignment: component.AlignmentCentered})
 	return err
