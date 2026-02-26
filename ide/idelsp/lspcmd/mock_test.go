@@ -462,6 +462,8 @@ type mockLSP struct {
 	typeDefinitionFn    func(context.Context, semanticapi.TypeDefinitionParams) (semanticapi.LocationResult, error)
 	implementationFn    func(context.Context, semanticapi.ImplementationParams) (semanticapi.LocationResult, error)
 	referencesFn        func(context.Context, semanticapi.ReferenceParams) ([]semanticapi.Location, error)
+	prepareRenameFn     func(context.Context, semanticapi.PrepareRenameParams) (*semanticapi.PrepareRenameResult, error)
+	renameFn            func(context.Context, semanticapi.RenameParams) (*semanticapi.WorkspaceEdit, error)
 	signatureHelpFn     func(context.Context, semanticapi.SignatureHelpParams) (*semanticapi.SignatureHelp, error)
 	documentHighlightFn func(context.Context, semanticapi.DocumentHighlightParams) ([]semanticapi.DocumentHighlight, error)
 }
@@ -535,6 +537,15 @@ func (m *mockLSP) DocumentHighlight(
 	}
 	return nil, nil
 }
+func (m *mockLSP) PrepareRename(
+	ctx context.Context,
+	params semanticapi.PrepareRenameParams,
+) (*semanticapi.PrepareRenameResult, error) {
+	if m.prepareRenameFn != nil {
+		return m.prepareRenameFn(ctx, params)
+	}
+	return nil, nil
+}
 
 func (m *mockLSP) SignatureHelp(
 	ctx context.Context,
@@ -542,6 +553,16 @@ func (m *mockLSP) SignatureHelp(
 ) (*semanticapi.SignatureHelp, error) {
 	if m.signatureHelpFn != nil {
 		return m.signatureHelpFn(ctx, params)
+	}
+	return nil, nil
+}
+
+func (m *mockLSP) Rename(
+	ctx context.Context,
+	params semanticapi.RenameParams,
+) (*semanticapi.WorkspaceEdit, error) {
+	if m.renameFn != nil {
+		return m.renameFn(ctx, params)
 	}
 	return nil, nil
 }
