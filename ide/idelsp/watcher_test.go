@@ -24,11 +24,14 @@
 package idelsp
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
 )
 
 func TestResolveGlobPattern(t *testing.T) {
@@ -200,5 +203,58 @@ func TestMatchGlob(t *testing.T) {
 				"matchGlob(%q, %q)", tt.pattern, tt.path)
 		})
 	}
+}
+
+func TestInterceptCallback_NilCallback(t *testing.T) {
+	t.Parallel()
+	m := &Manager{
+		callback: nil,
+		watchers: make(map[string]map[string][]semanticapi.FileSystemWatcher),
+	}
+	cb := m.interceptCallback("test-server")
+	require.NotNil(t, cb, "interceptCallback must return non-nil even when callback is nil")
+
+	// RegisterCapability should track watchers without panicking.
+	err := cb.RegisterCapability(context.Background(),
+		semanticapi.RegistrationParams{
+			Registrations: []semanticapi.Registration{
+				{
+					ID:     "reg-1",
+					Method: "workspace/didChangeWatchedFiles",
+					RegisterOptions: json.RawMessage(
+						`{"watchers":[{"globPattern":"**/*.go"}]}`,
+					),
+				},
+			},
+		},
+	)
+	require.NoError(t, err)
+	m.mu.Lock()
+	regs, ok := m.watchers["test-server"]
+	m.mu.Unlock()
+	require.True(t, ok)
+	assert.Len(t, regs["reg-1"], 1)
+
+	// UnregisterCapability should remove watchers without panicking.
+	err = cb.UnregisterCapability(context.Background(),
+		semanticapi.UnregistrationParams{
+			Unregistrations: []semanticapi.Unregistration{
+				{
+					ID:     "reg-1",
+					Method: "workspace/didChangeWatchedFiles",
+				},
+			},
+		},
+	)
+	require.NoError(t, err)
+	m.mu.Lock()
+	regs = m.watchers["test-server"]
+	m.mu.Unlock()
+	assert.Empty(t, regs)
+
+	// Other methods should not panic — they delegate to nopLSPCallback.
+	assert.NoError(t, cb.ShowMessage(context.Background(),
+		semanticapi.ShowMessageParams{Message: "test"}))
+	assert.NoError(t, cb.CodeLensRefresh(context.Background()))
 }
 
