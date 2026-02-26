@@ -465,12 +465,13 @@ func (stubLSP) DidDeleteFiles(_ context.Context, _ semanticapi.DeleteFilesParams
 // methods for testing.
 type mockLSP struct {
 	stubLSP
-	completionFn     func(context.Context, semanticapi.CompletionParams) (semanticapi.CompletionResult, error)
-	definitionFn     func(context.Context, semanticapi.DefinitionParams) (semanticapi.LocationResult, error)
-	declarationFn    func(context.Context, semanticapi.DeclarationParams) (semanticapi.LocationResult, error)
-	typeDefinitionFn func(context.Context, semanticapi.TypeDefinitionParams) (semanticapi.LocationResult, error)
-	implementationFn func(context.Context, semanticapi.ImplementationParams) (semanticapi.LocationResult, error)
-	referencesFn     func(context.Context, semanticapi.ReferenceParams) ([]semanticapi.Location, error)
+	completionFn         func(context.Context, semanticapi.CompletionParams) (semanticapi.CompletionResult, error)
+	definitionFn         func(context.Context, semanticapi.DefinitionParams) (semanticapi.LocationResult, error)
+	declarationFn        func(context.Context, semanticapi.DeclarationParams) (semanticapi.LocationResult, error)
+	typeDefinitionFn     func(context.Context, semanticapi.TypeDefinitionParams) (semanticapi.LocationResult, error)
+	implementationFn     func(context.Context, semanticapi.ImplementationParams) (semanticapi.LocationResult, error)
+	referencesFn         func(context.Context, semanticapi.ReferenceParams) ([]semanticapi.Location, error)
+	documentHighlightFn  func(context.Context, semanticapi.DocumentHighlightParams) ([]semanticapi.DocumentHighlight, error)
 }
 
 func (m *mockLSP) Completion(
@@ -529,6 +530,16 @@ func (m *mockLSP) References(
 ) ([]semanticapi.Location, error) {
 	if m.referencesFn != nil {
 		return m.referencesFn(ctx, params)
+	}
+	return nil, nil
+}
+
+func (m *mockLSP) DocumentHighlight(
+	ctx context.Context,
+	params semanticapi.DocumentHighlightParams,
+) ([]semanticapi.DocumentHighlight, error) {
+	if m.documentHighlightFn != nil {
+		return m.documentHighlightFn(ctx, params)
 	}
 	return nil, nil
 }
