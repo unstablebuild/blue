@@ -283,8 +283,9 @@ func (s *debugServer) readLoop() {
 		if err != nil {
 			s.mu.Lock()
 			alive := s.alive
+			stopCalled := s.stopCalled
 			s.mu.Unlock()
-			if alive {
+			if alive && !stopCalled {
 				s.log.Warn("read error", "error", err)
 			}
 			s.closePending()

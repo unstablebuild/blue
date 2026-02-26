@@ -55,6 +55,7 @@ type Config struct {
 	CloseTimeout       time.Duration
 	EventHandleTimeout time.Duration
 	EventSubscriber    EventSubscriber
+	NoInitializeServer bool
 }
 
 // Manager is a multi-language DAP server manager.
@@ -195,6 +196,9 @@ func (m *Manager) handle(ev textapi.Event) error {
 func (m *Manager) ensureServer(
 	ctx context.Context, filename workspaceapi.URI,
 ) (*debugServer, error) {
+	if m.cfg.NoInitializeServer {
+		return nil, fmt.Errorf("server not initialized and auto-initialize config is false")
+	}
 	cfg, err := debugAdapterForFile(filename)
 	if err != nil {
 		return nil, err

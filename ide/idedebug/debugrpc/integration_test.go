@@ -34,17 +34,19 @@ import (
 func TestClient_Initialize(t *testing.T) {
 	tests := []struct {
 		name         string
-		args         *dap.InitializeRequestArguments
+		args         *debugapi.InitializeRequestArguments
 		wantCaps     *dap.Capabilities
 		wantCalled   bool
 	}{
 		{
 			name: "basic initialization",
-			args: &dap.InitializeRequestArguments{
-				ClientID:   "test-client",
-				ClientName: "Test Client",
-				AdapterID:  "test-adapter",
-				Locale:     "en-US",
+			args: &debugapi.InitializeRequestArguments{
+				InitializeRequestArguments: dap.InitializeRequestArguments{
+					ClientID:   "test-client",
+					ClientName: "Test Client",
+					AdapterID:  "test-adapter",
+					Locale:     "en-US",
+				},
 			},
 			wantCaps: &dap.Capabilities{
 				SupportsConfigurationDoneRequest: true,
@@ -54,8 +56,10 @@ func TestClient_Initialize(t *testing.T) {
 		},
 		{
 			name: "minimal initialization",
-			args: &dap.InitializeRequestArguments{
-				AdapterID: "minimal-adapter",
+			args: &debugapi.InitializeRequestArguments{
+				InitializeRequestArguments: dap.InitializeRequestArguments{
+					AdapterID: "minimal-adapter",
+				},
 			},
 			wantCaps: &dap.Capabilities{
 				SupportsConfigurationDoneRequest: true,
@@ -590,7 +594,7 @@ func newMockDebugger() *mockDebugger {
 	}
 }
 
-func (m *mockDebugger) Initialize(ctx context.Context, args *dap.InitializeRequestArguments) (*dap.Capabilities, error) {
+func (m *mockDebugger) Initialize(ctx context.Context, args *debugapi.InitializeRequestArguments) (*dap.Capabilities, error) {
 	m.initializeCalled = true
 	return m.capabilities, nil
 }

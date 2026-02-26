@@ -346,7 +346,7 @@ func (l *locationsFloatingHandler) loadHighlights(
 	if err != nil {
 		return
 	}
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 	highlighted := term.CloneCells(baseCells)
 	for {
 		loc, ok := iter.Next(context.Background())
