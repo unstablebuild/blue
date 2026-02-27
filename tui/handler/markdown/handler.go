@@ -67,6 +67,17 @@ func New(comp *markdown.Component, opts ...Option) *Handler {
 	return h
 }
 
+// SetComponent swaps the underlying markdown component. Selection
+// state is cleared and the component is resized to the handler's
+// current dimensions.
+func (h *Handler) SetComponent(comp *markdown.Component) {
+	h.comp = comp
+	h.ClearSelection()
+	if h.width > 0 || h.height > 0 {
+		h.comp.Resize(h.width, h.height)
+	}
+}
+
 // Close cancels any in-flight syntax highlighting goroutines
 // owned by the underlying component.
 func (h *Handler) Close() error {

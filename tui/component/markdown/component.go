@@ -161,6 +161,11 @@ func (c *Component) Dimensions() (width, height int) {
 	return maxWidth, totalHeight
 }
 
+// BlockHeights returns the cached block heights for debugging.
+func (c *Component) BlockHeights() []int {
+	return c.blockHeights
+}
+
 // LinkAt returns link information at the given screen
 // coordinates relative to the component's viewport.
 // Returns nil if no link is found at that position.
@@ -171,14 +176,30 @@ func (c *Component) LinkAt(x, y int) *LinkInfo {
 		blockHeight := c.blockHeights[i]
 		if docY >= blockY && docY < blockY+blockHeight {
 			relY := docY - blockY
-			_, url, ok := blk.SpanAt(x, relY)
-			if ok && url != "" {
-				text, _, _ := blk.SpanAt(x, relY)
-				return &LinkInfo{URL: url, Text: text}
+			if info := c.linkInBlock(blk, x, relY); info != nil {
+				return info
+			}
+			// Each block's height includes a trailing spacing row.
+			// If we landed on that spacing and the next block's first
+			// row has a link, return it so clicks just above a link
+			// still work.
+			if relY == blockHeight-1 && i+1 < len(c.blocks) {
+				if info := c.linkInBlock(c.blocks[i+1], x, 0); info != nil {
+					return info
+				}
 			}
 			return nil
 		}
 		blockY += blockHeight
+	}
+	return nil
+}
+
+func (c *Component) linkInBlock(blk block, x, relY int) *LinkInfo {
+	_, url, ok := blk.SpanAt(x, relY)
+	if ok && url != "" {
+		text, _, _ := blk.SpanAt(x, relY)
+		return &LinkInfo{URL: url, Text: text}
 	}
 	return nil
 }

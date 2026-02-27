@@ -445,3 +445,57 @@ Final section with unique content.`
 	assert.Contains(t, backToStart, "Section 1")
 	assert.NotContains(t, backToStart, "Section 4", "Content from later section leaked through")
 }
+
+func TestTableLinkAt(t *testing.T) {
+	// Table with a link in a cell.
+	content := "| Name | Link |\n|------|------|\n| foo | [bar](http://example.com) |"
+	md, err := New(content)
+	require.NoError(t, err)
+	md.Resize(40, 10)
+
+	// Table layout: top border (y=0), header (y=1), separator (y=2),
+	// data row (y=3), bottom border (y=4), spacing (y=5).
+	// The link cell is in the second column of the data row (y=3).
+	// Column widths: 40 total, 2 columns + 3 separators = 37 usable.
+	// Each column ≈ 18-19 chars. Column 0 starts at x=1, column 1
+	// starts at x=1+colWidth+1.
+
+	// Find the link in the data row.
+	link := md.LinkAt(22, 3)
+	require.NotNil(t, link, "should find link in table cell")
+	assert.Equal(t, "http://example.com", link.URL)
+
+	// Click on the header row should NOT find a link.
+	link = md.LinkAt(22, 1)
+	assert.Nil(t, link, "no link in header row")
+}
+
+func TestLinkAtOnSpacingRow(t *testing.T) {
+	// Two paragraphs: "Hello" then a link. Each paragraph block has
+	// height = content lines + 1 (trailing spacing). A click on the
+	// spacing row of the first block should still find the link in
+	// the adjacent block below.
+	content := "Hello\n\n[click me](http://example.com)"
+	md, err := New(content)
+	require.NoError(t, err)
+	md.Resize(40, 10)
+
+	// Block 0: "Hello"    → height 2 (1 line + 1 spacing), Y=0..1
+	// Block 1: "click me" → height 2 (1 line + 1 spacing), Y=2..3
+	require.Equal(t, []int{2, 2}, md.BlockHeights())
+
+	// Direct hit on the link text (Y=2, first content row of block 1).
+	link := md.LinkAt(0, 2)
+	require.NotNil(t, link, "direct click on link row")
+	assert.Equal(t, "http://example.com", link.URL)
+
+	// Click on the spacing row of block 0 (Y=1). The next block's
+	// first row has the link, so LinkAt should still find it.
+	link = md.LinkAt(0, 1)
+	require.NotNil(t, link, "click on spacing row above link")
+	assert.Equal(t, "http://example.com", link.URL)
+
+	// Click on block 0 content (Y=0) should NOT find a link.
+	link = md.LinkAt(0, 0)
+	assert.Nil(t, link, "no link on content row of first block")
+}
