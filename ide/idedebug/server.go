@@ -357,6 +357,9 @@ func (s *debugServer) writeRequest(req dap.Message) error {
 
 func (s *debugServer) closeConn() {
 	s.closeOnce.Do(func() {
+		s.mu.Lock()
+		s.alive = false
+		s.mu.Unlock()
 		if s.conn != nil {
 			_ = s.conn.Close()
 		}
