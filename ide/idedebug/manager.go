@@ -376,6 +376,14 @@ func (m *Manager) watchServer(
 	})
 
 	if retryErr != nil {
+		m.mu.Lock()
+		if m.servers[cfg.id] == srv {
+			delete(m.servers, cfg.id)
+		}
+		if m.activeSrv == srv {
+			m.activeSrv = nil
+		}
+		m.mu.Unlock()
 		m.log.Error("debug adapter failed after retries",
 			"adapter", cfg.command, "retries", m.cfg.MaxRetries, "error", retryErr)
 	}
