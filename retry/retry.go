@@ -106,7 +106,7 @@ func Retry(
 			return nil
 		}
 		if ctx.Err() != nil {
-			result = multierror.Append(result, ctx.Err())
+			return multierror.Append(multierror.Append(result, ctx.Err()), err)
 		}
 		if !retry {
 			// if we never allowed retries, pass error as is
