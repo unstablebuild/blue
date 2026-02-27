@@ -156,6 +156,19 @@ func (m *Manager) ConfigurationDone(ctx context.Context) error {
 		Request: srv.newRequest("configurationDone"),
 	}
 	_, err = srv.sendRequest(ctx, req)
+	if err != nil {
+		// If ConfigurationDone failed, check whether the root
+		// cause is a failed Launch/Attach. Its error message
+		// is more informative than the generic "No debug
+		// session started" that the adapter returns.
+		srv.mu.Lock()
+		launchErr := srv.launchErr
+		srv.launchErr = nil
+		srv.mu.Unlock()
+		if launchErr != nil {
+			return launchErr
+		}
+	}
 	return err
 }
 

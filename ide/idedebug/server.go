@@ -54,6 +54,12 @@ type debugServer struct {
 	alive      bool
 	log        *slog.Logger
 	caps       *dap.Capabilities
+	// launchErr stores the error from a failed DAP launch or
+	// attach response. These requests use writeRequest
+	// (fire-and-forget), so the response has no pending
+	// channel. readLoop captures the error here so that
+	// ConfigurationDone can surface it.
+	launchErr error
 }
 
 func newDebugServer(
@@ -301,7 +307,17 @@ func (s *debugServer) readLoop() {
 			if ok {
 				ch <- msg
 			} else {
-				s.log.Warn("unmatched response", "requestSeq", reqSeq)
+				resp := m.GetResponse()
+				if !resp.Success {
+					cmd := resp.Command
+					if cmd == "launch" || cmd == "attach" {
+						s.mu.Lock()
+						s.launchErr = fmt.Errorf("dap error: %s", resp.Message)
+						s.mu.Unlock()
+					}
+				}
+				s.log.Debug("unmatched response",
+					"requestSeq", reqSeq, "command", resp.Command, "success", resp.Success)
 			}
 		case dap.EventMessage:
 			s.eventSub.OnEvent(m)
