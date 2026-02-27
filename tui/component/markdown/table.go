@@ -148,11 +148,7 @@ func (t *tableBlock) SpanAt(x, y int) (text, url string, ok bool) {
 	for i, colWidth := range colWidths {
 		if x >= colX && x < colX+colWidth {
 			if i < len(row) {
-				text := row[i].String()
-				if len(text) > colWidth {
-					text = text[:colWidth]
-				}
-				return text, "", len(text) > 0
+				return spanAtInLine(row[i], x-colX)
 			}
 			return
 		}
