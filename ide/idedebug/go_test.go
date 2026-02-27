@@ -295,12 +295,16 @@ func TestE2E(t *testing.T) {
 						Config{MaxRetries: 1, EventSubscriber: eventSub},
 					)
 
+					initOpts, err := json.Marshal(map[string]any{
+						"langID":  "go",
+						"command": dlvBin + " dap --listen={addr}",
+					})
+					require.NoError(t, err)
+
 					caps, err := mgr.Initialize(
 						context.Background(),
 						&debugapi.InitializeRequestArguments{
-							InitializeRequestArguments: dap.InitializeRequestArguments{
-								AdapterID: "go",
-							},
+							InitializeOptions: initOpts,
 						},
 					)
 					require.NoError(t, err)
@@ -360,8 +364,14 @@ func TestE2E_NoReadErrorWarnings(t *testing.T) {
 	const breakpointLine = 27
 
 	// Install a warn-capturing slog handler.
+	// Use a TextHandler writing to stderr as the inner
+	// handler instead of slog.Default().Handler(). The
+	// default handler writes through the log package, and
+	// slog.SetDefault redirects the log package through our
+	// handler — creating a re-entrant deadlock on the log
+	// mutex.
 	h := &warnHandler{
-		inner: slog.Default().Handler(),
+		inner: slog.NewTextHandler(os.Stderr, nil),
 	}
 	orig := slog.Default()
 	slog.SetDefault(slog.New(h))
@@ -376,12 +386,16 @@ func TestE2E_NoReadErrorWarnings(t *testing.T) {
 		Config{MaxRetries: 1, EventSubscriber: eventSub},
 	)
 
+	initOpts, err := json.Marshal(map[string]any{
+		"langID":  "go",
+		"command": dlvBin + " dap --listen={addr}",
+	})
+	require.NoError(t, err)
+
 	caps, err := mgr.Initialize(
 		context.Background(),
 		&debugapi.InitializeRequestArguments{
-			InitializeRequestArguments: dap.InitializeRequestArguments{
-				AdapterID: "go",
-			},
+			InitializeOptions: initOpts,
 		},
 	)
 	require.NoError(t, err)
@@ -442,6 +456,60 @@ func (w *warnHandler) readErrors() []string {
 		msgs = append(msgs, r.Message)
 	}
 	return msgs
+}
+
+// TestE2E_LaunchErrorSurfaced verifies that when Launch
+// fails (e.g. because the program path doesn't exist), the
+// error is captured and surfaced by ConfigurationDone
+// instead of the generic "No debug session started" message.
+func TestE2E_LaunchErrorSurfaced(t *testing.T) {
+	t.Parallel()
+	dlvBin := findDlv(t)
+	tmpDir := setupTestWorkspace(t, "go")
+
+	uri := makeURI(t, "file://"+tmpDir)
+
+	executor := newTestExecutor(t)
+	eventSub := newTestEventSubscriber()
+	mgr := New(
+		uri,
+		executor,
+		&stubPkgManager{bin: dlvBin},
+		Config{MaxRetries: 1, EventSubscriber: eventSub},
+	)
+
+	initOpts, err := json.Marshal(map[string]any{
+		"langID":  "go",
+		"command": dlvBin + " dap --listen={addr}",
+	})
+	require.NoError(t, err)
+
+	caps, err := mgr.Initialize(
+		t.Context(),
+		&debugapi.InitializeRequestArguments{
+			InitializeOptions: initOpts,
+		},
+	)
+	require.NoError(t, err)
+	require.NotNil(t, caps)
+
+	// Launch with a nonexistent program. writeRequest
+	// (fire-and-forget) succeeds because the TCP write
+	// works, but dlv will fail to build the program.
+	err = mgr.Launch(t.Context(), debugapi.LaunchRequestArguments{
+		Program: "/nonexistent/path/to/program",
+	})
+	require.NoError(t, err, "Launch is fire-and-forget, should not error")
+
+	// ConfigurationDone should surface the actual launch
+	// failure instead of the generic "No debug session
+	// started" from dlv.
+	err = mgr.ConfigurationDone(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Failed to launch",
+		"expected the build error from dlv, got: %v", err)
+
+	require.NoError(t, mgr.Close())
 }
 
 // setupDebugSession performs the DAP launch sequence:
