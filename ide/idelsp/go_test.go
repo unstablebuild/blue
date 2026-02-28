@@ -1583,34 +1583,31 @@ func TestE2ECallbackProgress(t *testing.T) {
 	)
 	done := make(chan struct{})
 
-	callback := &testCallback{
-		onProgress: func(
-			p semanticapi.ProgressParams,
-		) {
-			var kind struct {
-				Kind string `json:"kind"`
-			}
-			if err := json.Unmarshal(
-				p.Value, &kind,
-			); err != nil {
-				return
-			}
-			progressMu.Lock()
-			defer progressMu.Unlock()
-			switch kind.Kind {
-			case "begin":
-				sawBegin = true
-			case "end":
-				if sawBegin {
-					sawEnd = true
-					select {
-					case <-done:
-					default:
-						close(done)
-					}
+	callback := &testCallback{onProgress: func(p semanticapi.ProgressParams) {
+		var kind struct {
+			Kind string `json:"kind"`
+		}
+		if err := json.Unmarshal(
+			p.Value, &kind,
+		); err != nil {
+			return
+		}
+		progressMu.Lock()
+		defer progressMu.Unlock()
+		switch kind.Kind {
+		case "begin":
+			sawBegin = true
+		case "end":
+			if sawBegin {
+				sawEnd = true
+				select {
+				case <-done:
+				default:
+					close(done)
 				}
 			}
-		},
+		}
+	},
 	}
 
 	params := autoInitParams(uri.String())
@@ -1824,6 +1821,161 @@ func TestE2ECallbackApplyEdit(t *testing.T) {
 		},
 	}
 	assert.Equal(t, expected, edit)
+	require.NoError(t, mgr.Close())
+}
+
+func TestE2ECallbackShowDocument(t *testing.T) {
+	t.Parallel()
+	goplsBin := findGopls(t)
+	tmpDir := setupTestWorkspace(t, "testdata")
+
+	mainPath := filepath.Join(tmpDir, "main.go")
+	mainContent, err := os.ReadFile(mainPath)
+	require.NoError(t, err)
+
+	mainURI := "file://" + mainPath
+	uri := makeURI(t, "file://"+tmpDir)
+	scheme := newTestScheme()
+
+	ctx, cancel := context.WithTimeout(
+		context.Background(), 30*time.Second,
+	)
+	defer cancel()
+
+	showDocCh := make(chan semanticapi.ShowDocumentParams, 1)
+	var loaded sync.WaitGroup
+	var loadReady sync.Once
+	callback := &testCallback{
+		onShowMessage: func(
+			params semanticapi.ShowMessageParams,
+		) {
+			if strings.Contains(
+				params.Message,
+				"Finished loading packages",
+			) {
+				loadReady.Do(loaded.Done)
+			}
+		},
+		onProgress: readyOnProgress(
+			&loadReady, &loaded,
+		),
+		onShowDocument: func(
+			p semanticapi.ShowDocumentParams,
+		) {
+			select {
+			case showDocCh <- p:
+			default:
+			}
+		},
+	}
+
+	// Build init params with showDocument capability.
+	// autoInitParams only declares workDoneProgress in the
+	// window capabilities, which means gopls doesn't know
+	// the client supports window/showDocument. Without
+	// "showDocument": {"support": true}, gopls will not
+	// call window/showDocument when source.doc is executed.
+	params := autoInitParams(uri.String())
+	var caps map[string]any
+	require.NoError(t, json.Unmarshal(
+		params.Capabilities, &caps,
+	))
+	windowCaps := caps["window"].(map[string]any)
+	windowCaps["showDocument"] = map[string]any{
+		"support": true,
+	}
+	capsJSON, err := json.Marshal(caps)
+	require.NoError(t, err)
+	params.Capabilities = capsJSON
+
+	initOpts, err := json.Marshal(map[string]any{
+		"langID":  "go",
+		"command": "gopls serve",
+	})
+	require.NoError(t, err)
+	params.InitializeOptions = initOpts
+
+	mgr := New(
+		uri, scheme, scheme,
+		&stubPkgManager{bin: goplsBin},
+		nil, nil,
+		Config{Callback: callback, MaxRetries: 1},
+	)
+
+	loaded.Add(1)
+	_, err = mgr.Initialize(ctx, params)
+	require.NoError(t, err)
+	require.NoError(t, mgr.DidOpen(ctx,
+		semanticapi.DidOpenTextDocumentParams{
+			TextDocument: semanticapi.TextDocumentItem{
+				URI:        mainURI,
+				LanguageID: "go",
+				Version:    0,
+				Text:       string(mainContent),
+			},
+		},
+	))
+	loaded.Wait()
+
+	// Request code actions on the Add function (line 38-40).
+	// With showDocument capability advertised, gopls should
+	// include source.doc among the available actions.
+	actions, err := mgr.CodeAction(ctx,
+		semanticapi.CodeActionParams{
+			TextDocument: semanticapi.TextDocumentIdentifier{
+				URI: mainURI,
+			},
+			Range: semanticapi.Range{
+				Start: semanticapi.Position{
+					Line: 38, Character: 0,
+				},
+				End: semanticapi.Position{
+					Line: 40, Character: 0,
+				},
+			},
+		},
+	)
+	require.NoError(t, err)
+
+	// Find the source.doc code action.
+	var docAction *semanticapi.CodeActionResult
+	for i := range actions {
+		a := actions[i].CodeAction
+		if a != nil && a.Kind == "source.doc" {
+			docAction = &actions[i]
+			break
+		}
+	}
+	if docAction == nil {
+		t.Skip(
+			"gopls version does not offer source.doc code action",
+		)
+	}
+	require.NotNil(t, docAction.CodeAction.Command,
+		"expected source.doc to have a command",
+	)
+
+	// Execute the command; gopls starts a doc server and
+	// calls window/showDocument with the documentation URL.
+	_, err = mgr.ExecuteCommand(ctx,
+		semanticapi.ExecuteCommandParams{
+			Command:   docAction.CodeAction.Command.Command,
+			Arguments: docAction.CodeAction.Command.Arguments,
+		},
+	)
+	require.NoError(t, err)
+
+	select {
+	case p := <-showDocCh:
+		// gopls opens a local HTTP URL pointing to the
+		// package documentation for the symbol.
+		assert.Contains(t, p.URI, "http")
+	case <-ctx.Done():
+		t.Fatal(
+			"timed out waiting for showDocument callback",
+		)
+	}
+
 	require.NoError(t, mgr.Close())
 }
 
@@ -2275,16 +2427,18 @@ func (p *stubPkgManager) LibDir(
 }
 
 type testCallback struct {
-	mu            sync.Mutex
-	onShowMessage func(params semanticapi.ShowMessageParams)
-	onProgress    func(semanticapi.ProgressParams)
-	onApplyEdit   func(semanticapi.ApplyWorkspaceEditParams)
-	diagnostics   []semanticapi.PublishDiagnosticsParams
-	messages      []semanticapi.ShowMessageParams
-	logMessages   []semanticapi.LogMessageParams
-	progress      []semanticapi.ProgressParams
-	applyEdits    []semanticapi.ApplyWorkspaceEditParams
-	onDiagnostics func(semanticapi.PublishDiagnosticsParams)
+	mu             sync.Mutex
+	onShowMessage  func(params semanticapi.ShowMessageParams)
+	onProgress     func(semanticapi.ProgressParams)
+	onApplyEdit    func(semanticapi.ApplyWorkspaceEditParams)
+	onShowDocument func(semanticapi.ShowDocumentParams)
+	diagnostics    []semanticapi.PublishDiagnosticsParams
+	messages       []semanticapi.ShowMessageParams
+	logMessages    []semanticapi.LogMessageParams
+	progress       []semanticapi.ProgressParams
+	applyEdits     []semanticapi.ApplyWorkspaceEditParams
+	showDocuments  []semanticapi.ShowDocumentParams
+	onDiagnostics  func(semanticapi.PublishDiagnosticsParams)
 }
 
 func (c *testCallback) ShowMessage(
@@ -2341,8 +2495,15 @@ func (c *testCallback) LogTrace(
 }
 
 func (c *testCallback) ShowDocument(
-	_ context.Context, _ semanticapi.ShowDocumentParams,
+	_ context.Context, params semanticapi.ShowDocumentParams,
 ) (semanticapi.ShowDocumentResult, error) {
+	c.mu.Lock()
+	c.showDocuments = append(c.showDocuments, params)
+	cb := c.onShowDocument
+	c.mu.Unlock()
+	if cb != nil {
+		cb(params)
+	}
 	return semanticapi.ShowDocumentResult{Success: true}, nil
 }
 

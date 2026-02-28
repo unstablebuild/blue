@@ -776,6 +776,9 @@ func autoInitParams(rootURI string) semanticapi.InitializeParams {
 		},
 		"window": map[string]any{
 			"workDoneProgress": true,
+			"showDocument": map[string]any{
+				"support": true,
+			},
 		},
 	}
 	capabilitiesData, err := json.Marshal(capabilities)
