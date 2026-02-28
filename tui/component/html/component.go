@@ -165,7 +165,7 @@ func (c *Component) Close() (ret error) {
 			ret = errors.Join(ret, err)
 		}
 	}
-	return nil
+	return ret
 }
 
 func fetch(ctx context.Context, client *http.Client, rawURL string, mdCfg markdown.Config) (*markdown.Component, error) {
