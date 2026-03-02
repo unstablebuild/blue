@@ -308,10 +308,18 @@ func (m *Manager) handle(ev textapi.Event) error {
 			})
 
 	case textapi.EventTypeRename:
-		return m.broadcastNotify(ctx, ev.URI, "workspace/didRenameFiles",
-			semanticapi.RenameFilesParams{
-				Files: []semanticapi.FileRename{
-					{OldURI: uri, NewURI: ev.Content},
+		// textapi.EventTypeRename doesn't contain the old/new path mapping
+		// so we simply tell the LSP server that the file has changed
+		// in which case it will try to read it and succeed (rename target)
+		// or fail (rename source), and apply the right changes internally.
+		return m.broadcastNotify(ctx,
+			workspaceapi.URI{}, "workspace/didChangeWatchedFiles",
+			semanticapi.DidChangeWatchedFilesParams{
+				Changes: []semanticapi.FileEvent{
+					{
+						URI:  uri,
+						Type: semanticapi.FileChangeTypeChanged,
+					},
 				},
 			})
 	default:
