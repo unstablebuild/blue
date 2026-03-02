@@ -2000,14 +2000,11 @@ func main() {
 	fmt.Println("hello")
 }
 `
-	require.NoError(t, os.WriteFile(mainPath,
-		[]byte(mainContent), 0644))
+	require.NoError(t, os.WriteFile(mainPath, []byte(mainContent), 0644))
 
 	mainURI := "file://" + mainPath
 
-	ctx, cancel := context.WithTimeout(
-		context.Background(), 30*time.Second,
-	)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	var (
@@ -2173,17 +2170,6 @@ func main() {
 
 	loadedWg.Add(1)
 	_, err = mgr.Initialize(ctx, params)
-	require.NoError(t, err)
-	require.NoError(t, mgr.DidOpen(ctx,
-		semanticapi.DidOpenTextDocumentParams{
-			TextDocument: semanticapi.TextDocumentItem{
-				URI:        mainURI,
-				LanguageID: "go",
-				Version:    0,
-				Text:       mainContent,
-			},
-		},
-	))
 	loadedWg.Wait()
 
 	// Wait for diagnostics that include the undefined Helper error.

@@ -32,7 +32,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -75,7 +74,6 @@ type Manager struct {
 	maxRetries    uint
 	servers       map[string]*langServer
 	files         map[string]*file
-	watchers      map[string]map[string][]semanticapi.FileSystemWatcher // serverID → registrationID → watchers
 	ctx           context.Context
 	cancel        context.CancelFunc
 	log           *slog.Logger
@@ -120,7 +118,6 @@ func New(
 		callback:      cfg.Callback,
 		servers:       make(map[string]*langServer),
 		files:         make(map[string]*file),
-		watchers:      make(map[string]map[string][]semanticapi.FileSystemWatcher),
 		ctx:           ctx,
 		cancel:        cancel,
 		evs:           make(chan textapi.Event, eventsBufferSize),
@@ -288,7 +285,7 @@ func (m *Manager) handle(ev textapi.Event) error {
 
 	case textapi.EventTypeChange:
 		return m.broadcastNotify(ctx,
-			ev.URI, "workspace/didChangeWatchedFiles",
+			workspaceapi.URI{}, "workspace/didChangeWatchedFiles",
 			semanticapi.DidChangeWatchedFilesParams{
 				Changes: []semanticapi.FileEvent{
 					{
@@ -408,7 +405,7 @@ func (m *Manager) initializeServer(
 
 	srv := newLangServer(
 		m.ctx, lang, binPath, m.executor, m.rootURI,
-		newCallbackAdapter(m.interceptCallback(lang.id), lang.id),
+		newCallbackAdapter(m.callback, lang.id),
 		params,
 	)
 
@@ -493,8 +490,6 @@ func (m *Manager) watchServer(
 		}
 	}
 
-	m.clearWatchers(lang.id)
-
 	strategy := retry.CombinedStrategy(
 		retry.LimitStrategy(m.maxRetries),
 		retry.ExponentialStrategy(500*time.Millisecond, 5*time.Second),
@@ -508,7 +503,7 @@ func (m *Manager) watchServer(
 			m.log.Debug("restarting lsp server", "language", lang.id)
 			srv := newLangServer(
 				m.ctx, srv.cfg, srv.binPath, m.executor, m.rootURI,
-				newCallbackAdapter(m.interceptCallback(lang.id), lang.id),
+				newCallbackAdapter(m.callback, lang.id),
 				srv.params,
 			)
 
@@ -588,84 +583,6 @@ func (m *Manager) allServers() []*langServer {
 	return servers
 }
 
-func (m *Manager) addWatchers(serverID, regID string, w []semanticapi.FileSystemWatcher) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	regs, ok := m.watchers[serverID]
-	if !ok {
-		regs = make(map[string][]semanticapi.FileSystemWatcher)
-		m.watchers[serverID] = regs
-	}
-	regs[regID] = w
-}
-
-func (m *Manager) removeWatchers(serverID, regID string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if regs, ok := m.watchers[serverID]; ok {
-		delete(regs, regID)
-	}
-}
-
-func (m *Manager) clearWatchers(serverID string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.watchers, serverID)
-}
-
-func (m *Manager) interceptCallback(serverID string) semanticapi.LSPCallback {
-	cb := m.callback
-	if cb == nil {
-		cb = nopLSPCallback{}
-	}
-	return &callbackInterceptor{
-		LSPCallback: cb,
-		manager:     m,
-		serverID:    serverID,
-		log:         slog.With("struct", "idelsp.callbackInterceptor", "server", serverID),
-	}
-}
-
-// serversWatchingFile returns servers that have registered
-// file watchers matching the given URI.
-func (m *Manager) serversWatchingFile(uri string) []*langServer {
-	// strip file:// and rootURI prefix to get a relative path
-	filePath := strings.TrimPrefix(uri, "file://")
-	rootPath := strings.TrimPrefix(m.rootURI, "file://")
-	relPath := strings.TrimPrefix(filePath, rootPath)
-	relPath = strings.TrimPrefix(relPath, "/")
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	seen := make(map[string]bool)
-	var result []*langServer
-	for serverID, regs := range m.watchers {
-		if seen[serverID] {
-			continue
-		}
-		for _, watchers := range regs {
-			if seen[serverID] {
-				break
-			}
-			for _, w := range watchers {
-				pattern, err := resolveGlobPattern(w.GlobPattern)
-				if err != nil {
-					continue
-				}
-				if matchGlob(pattern, relPath) || matchGlob(pattern, filePath) {
-					if srv, ok := m.servers[serverID]; ok {
-						result = append(result, srv)
-						seen[serverID] = true
-					}
-					break
-				}
-			}
-		}
-	}
-	return result
-}
-
 func (m *Manager) broadcastNotify(
 	ctx context.Context, uri workspaceapi.URI, method string, params any,
 ) (ret error) {
@@ -681,15 +598,7 @@ func (m *Manager) broadcastNotify(
 	uriStr := convertURI(uri)
 
 	// Tier 1: watcher-based routing — servers that registered
-	// file watchers matching this URI.
-	if servers := m.serversWatchingFile(uriStr); len(servers) > 0 {
-		for _, srv := range servers {
-			if err := srv.notify(ctx, method, params); err != nil {
-				ret = errors.Join(ret, err)
-			}
-		}
-		return ret
-	}
+	// file watchers matching this URI. This is not supported for now.
 
 	// Tier 2: language-based routing — match file extension to a known language.
 	cfg, err := languageForFile(uri)
@@ -706,8 +615,7 @@ func (m *Manager) broadcastNotify(
 	}
 
 	// Tier 3: broadcast to all running servers.
-	m.log.Debug("broadcasting to all servers",
-		"method", method, "uri", uriStr)
+	m.log.Debug("broadcasting to all servers", "method", method, "uri", uriStr)
 	for _, srv := range m.allServers() {
 		if err := srv.notify(ctx, method, params); err != nil {
 			ret = errors.Join(ret, err)

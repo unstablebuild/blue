@@ -131,10 +131,7 @@ func initGopls(t *testing.T, goplsBin string, files []testFile) *testEnv {
 		},
 		onProgress: readyOnProgressCh(&once, ready),
 	}
-	cfg := idelsp.Config{
-		MaxRetries: 1,
-		Callback:   cb,
-	}
+	cfg := idelsp.Config{MaxRetries: 1, Callback: cb}
 
 	mgr := idelsp.New(
 		uri,
