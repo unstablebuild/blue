@@ -51,10 +51,9 @@ const (
 // json object, must have two extra properties set: `langID` and `command`, which
 // determine the language identifier and the command (absolute path of the LSP
 // executable + args) used to run the server.
-func (m *Manager) Initialize(
-	ctx context.Context,
-	params semanticapi.InitializeParams,
-) (ret semanticapi.InitializeResult, err error) {
+func (m *Manager) Initialize(ctx context.Context, params semanticapi.InitializeParams) (
+	ret semanticapi.InitializeResult, err error,
+) {
 	if params.RootURI != m.rootURI {
 		err = errors.New("initializing LSP server for the wrong workspace: " +
 			"uris don't match")
@@ -132,16 +131,12 @@ func (m *Manager) Initialize(
 }
 
 // Initialized is a no-op; servers are initialized lazily.
-func (m *Manager) Initialized(
-	ctx context.Context,
-) error {
+func (m *Manager) Initialized(ctx context.Context) error {
 	return nil
 }
 
 // Shutdown shuts down all active servers.
-func (m *Manager) Shutdown(
-	ctx context.Context,
-) error {
+func (m *Manager) Shutdown(ctx context.Context) error {
 	servers := m.allServers()
 	var errs []error
 	for _, srv := range servers {
