@@ -337,19 +337,52 @@ func TestE2E(t *testing.T) {
 
 	t.Run("ExtractFunction", func(t *testing.T) {
 		t.Parallel()
-		env := initGopls(t, goplsBin, []testFile{
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: extractFuncSrc},
 		})
-		handler, me, _ := newTestHandler(t, env)
+		handler, me, _ := newTestHandler(t, env.testEnv)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
 		me.Register(resource)
-		// Cursor-only (no selection). Extract may not be offered.
-		cmd := goCmdAt("extract-function", uri, resource, 5, 0)
+
+		// Fire a selection event covering all statements in compute()
+		// (lines 5-8: "a := 1" through "fmt.Println(sum)").
+		me.fireEvent(t.Context(), textapi.Event{
+			Type:  textapi.EventTypeSelection,
+			URI:   uri,
+			Start: term.Coordinates{X: 1, Y: 5},
+			End:   term.Coordinates{X: 17, Y: 8},
+		})
+
+		cmd := goCmdAt("extract-function", uri, resource, 5, 1)
 
 		err := handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
+
+		// gopls applies extract-function via workspace/applyEdit
+		// (the code action returns a Command, not a direct Edit).
+		captured := env.capturedEdits()
+		require.NotEmpty(t, captured, "expected workspace/applyEdit from extract-function")
+
+		// Verify the edit contains a new function definition.
+		var editText strings.Builder
+		for _, ae := range captured {
+			for _, edits := range ae.Edit.Changes {
+				for _, e := range edits {
+					editText.WriteString(e.NewText)
+				}
+			}
+			for _, dc := range ae.Edit.DocumentChanges {
+				if dc.TextDocumentEdit != nil {
+					for _, e := range dc.TextDocumentEdit.Edits {
+						editText.WriteString(e.NewText)
+					}
+				}
+			}
+		}
+		assert.Contains(t, editText.String(), "newFunction",
+			"extracted function should be named newFunction (gopls default)")
 	})
 
 	t.Run("ExtractVariable", func(t *testing.T) {
