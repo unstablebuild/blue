@@ -25,11 +25,9 @@ package lspcmd
 
 import (
 	"context"
-	"sync"
 
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
-	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
 	"github.com/unstablebuild/rune-go-sdk/iterator"
 )
 
@@ -39,7 +37,7 @@ func FormatHandler(
 	lsp semanticapi.LSP, editor textapi.Editor,
 ) (textapi.CommandHandler, error) {
 	evs := []textapi.EventType{textapi.EventTypeSelection, textapi.EventTypeCursor}
-	sel := newSelectionTracker()
+	sel := NewSelectionTracker()
 	err := editor.SubscribeEvents(evs, sel)
 	if err != nil {
 		return nil, err
@@ -52,7 +50,7 @@ var _ textapi.CommandHandler = (*formatHandler)(nil)
 type formatHandler struct {
 	lsp    semanticapi.LSP
 	editor textapi.Editor
-	sel    *selectionTracker
+	sel    *SelectionTracker
 }
 
 func (h *formatHandler) HandleCommand(
@@ -98,7 +96,7 @@ func (h *formatHandler) formatFull(
 func (h *formatHandler) formatRange(
 	ctx context.Context, cmd textapi.Command,
 ) error {
-	selRange, ok := h.sel.get(cmd.URI)
+	selRange, ok := h.sel.Get(cmd.URI)
 	if !ok {
 		return h.formatFull(ctx, cmd)
 	}
@@ -119,46 +117,4 @@ func (h *formatHandler) formatRange(
 	}
 	ce := h.editor.CellEditor(cmd.Resource)
 	return ApplyEdits(ctx, ce, edits)
-}
-
-var _ textapi.EventHandler = (*selectionTracker)(nil)
-
-type selectionTracker struct {
-	mu   sync.Mutex
-	sels map[string]semanticapi.Range
-}
-
-func newSelectionTracker() *selectionTracker {
-	return &selectionTracker{
-		sels: make(
-			map[string]semanticapi.Range,
-		),
-	}
-}
-
-func (s *selectionTracker) Handle(
-	_ context.Context, ev textapi.Event,
-) bool {
-	uri := URIToLSP(ev.URI)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	switch ev.Type {
-	case textapi.EventTypeSelection:
-		s.sels[uri] = semanticapi.Range{Start: CoordToPos(ev.Start), End: CoordToPos(ev.End)}
-	case textapi.EventTypeCursor:
-		delete(s.sels, uri)
-	}
-	return false
-}
-
-func (s *selectionTracker) get(
-	uri workspaceapi.URI,
-) (semanticapi.Range, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	r, ok := s.sels[URIToLSP(uri)]
-	return r, ok
 }

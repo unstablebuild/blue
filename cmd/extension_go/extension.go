@@ -89,7 +89,10 @@ func (e *goExtension) ExtendWorkspace(
 	}
 	slog.Info("go extension: gopls initialized")
 
-	manual, handler := newGoHandler(lsp, editor, wm, notify)
+	manual, handler, err := newGoHandler(lsp, editor, wm, notify)
+	if err != nil {
+		return fmt.Errorf("go extension: create handler: %w", err)
+	}
 	if err := w.RegisterCommand(manual, handler); err != nil {
 		return fmt.Errorf("go extension: register command: %w", err)
 	}

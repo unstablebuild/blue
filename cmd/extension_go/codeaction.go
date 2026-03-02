@@ -42,11 +42,12 @@ func codeActionHandler(
 	lsp semanticapi.LSP, editor textapi.Editor,
 	notify browserapi.Notifications,
 	wm browserapi.WindowManager,
+	sel *lspcmd.SelectionTracker,
 	kind semanticapi.CodeActionKind,
 	noActionHint string,
 ) textapi.CommandHandler {
 	return &codeActionCmd{lsp: lsp, editor: editor, notify: notify,
-		wm: wm, kind: kind, noActionHint: noActionHint}
+		wm: wm, sel: sel, kind: kind, noActionHint: noActionHint}
 }
 
 var _ textapi.CommandHandler = (*codeActionCmd)(nil)
@@ -56,6 +57,7 @@ type codeActionCmd struct {
 	editor       textapi.Editor
 	notify       browserapi.Notifications
 	wm           browserapi.WindowManager
+	sel          *lspcmd.SelectionTracker
 	kind         semanticapi.CodeActionKind
 	noActionHint string
 }
@@ -67,8 +69,13 @@ func (h *codeActionCmd) HandleCommand(
 		return nil
 	}
 
-	cursorPos := lspcmd.CoordToPos(cmd.Cursor.Content)
-	rng := semanticapi.Range{Start: cursorPos, End: cursorPos}
+	rng, ok := h.sel.Get(cmd.URI)
+	if !ok {
+		cursorPos := lspcmd.CoordToPos(cmd.Cursor.Content)
+		rng = semanticapi.Range{Start: cursorPos, End: cursorPos}
+	} else {
+		rng = lspcmd.ClampRange(rng, h.editor, cmd.Resource)
+	}
 
 	params := semanticapi.CodeActionParams{
 		TextDocument: lspcmd.TextDocID(cmd.URI),

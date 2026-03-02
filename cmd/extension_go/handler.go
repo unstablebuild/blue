@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/unstablebuild/blue/ide/idelsp/lspcmd"
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
@@ -39,38 +40,44 @@ const cmdName = "go"
 func newGoHandler(
 	lsp semanticapi.LSP, editor textapi.Editor,
 	wm browserapi.WindowManager, notify browserapi.Notifications,
-) (textapi.CommandManual, textapi.CommandHandler) {
+) (textapi.CommandManual, textapi.CommandHandler, error) {
+	sel := lspcmd.NewSelectionTracker()
+	evs := []textapi.EventType{textapi.EventTypeSelection, textapi.EventTypeCursor}
+	if err := editor.SubscribeEvents(evs, sel); err != nil {
+		return textapi.CommandManual{}, nil, fmt.Errorf("subscribe selection events: %w", err)
+	}
+
 	handlers := map[string]textapi.CommandHandler{
 		// Source actions.
-		"organize-imports": codeActionHandler(lsp, editor, notify, wm, "source.organizeImports",
+		"organize-imports": codeActionHandler(lsp, editor, notify, wm, sel, "source.organizeImports",
 			"Imports are already organized"),
-		"fix-all": codeActionHandler(lsp, editor, notify, wm, "source.fixAll",
+		"fix-all": codeActionHandler(lsp, editor, notify, wm, sel, "source.fixAll",
 			"No automatic fixes available"),
-		"add-test": codeActionHandler(lsp, editor, notify, wm, "source.addTest",
+		"add-test": codeActionHandler(lsp, editor, notify, wm, sel, "source.addTest",
 			"Place cursor inside a function to generate a test"),
-		"assembly": codeActionHandler(lsp, editor, notify, wm, "source.assembly",
+		"assembly": codeActionHandler(lsp, editor, notify, wm, sel, "source.assembly",
 			"Place cursor inside a function to view assembly. Generic functions and init() are not supported"),
-		"doc": codeActionHandler(lsp, editor, notify, wm, "source.doc",
+		"doc": codeActionHandler(lsp, editor, notify, wm, sel, "source.doc",
 			"No documentation available for this package"),
-		"free-symbols": codeActionHandler(lsp, editor, notify, wm, "source.freesymbols",
+		"free-symbols": codeActionHandler(lsp, editor, notify, wm, sel, "source.freesymbols",
 			"Select a block of code to analyze its free symbols"),
 
 		// Refactoring actions.
-		"fill-struct": codeActionHandler(lsp, editor, notify, wm, "refactor.rewrite.fillStruct",
+		"fill-struct": codeActionHandler(lsp, editor, notify, wm, sel, "refactor.rewrite.fillStruct",
 			"Place cursor on a struct literal (e.g. Type{}) to fill fields"),
-		"fill-switch": codeActionHandler(lsp, editor, notify, wm, "refactor.rewrite.fillSwitch",
+		"fill-switch": codeActionHandler(lsp, editor, notify, wm, sel, "refactor.rewrite.fillSwitch",
 			"Place cursor on a switch statement to add missing cases"),
-		"add-tags": codeActionHandler(lsp, editor, notify, wm, "refactor.rewrite.addTags",
+		"add-tags": codeActionHandler(lsp, editor, notify, wm, sel, "refactor.rewrite.addTags",
 			"Place cursor on a struct field to add tags"),
-		"remove-tags": codeActionHandler(lsp, editor, notify, wm, "refactor.rewrite.removeTags",
+		"remove-tags": codeActionHandler(lsp, editor, notify, wm, sel, "refactor.rewrite.removeTags",
 			"Place cursor on a struct field with existing tags"),
-		"extract-function": codeActionHandler(lsp, editor, notify, wm, "refactor.extract.function",
+		"extract-function": codeActionHandler(lsp, editor, notify, wm, sel, "refactor.extract.function",
 			"Select one or more complete statements to extract"),
-		"extract-variable": codeActionHandler(lsp, editor, notify, wm, "refactor.extract.variable",
+		"extract-variable": codeActionHandler(lsp, editor, notify, wm, sel, "refactor.extract.variable",
 			"Select an expression to extract as a variable"),
-		"inline-call": codeActionHandler(lsp, editor, notify, wm, "refactor.inline.call",
+		"inline-call": codeActionHandler(lsp, editor, notify, wm, sel, "refactor.inline.call",
 			"Place cursor on a function call to inline it"),
-		"invert-if": codeActionHandler(lsp, editor, notify, wm, "refactor.rewrite.invertIf",
+		"invert-if": codeActionHandler(lsp, editor, notify, wm, sel, "refactor.rewrite.invertIf",
 			"Place cursor on an if-else statement to invert its condition"),
 
 		// Code lens commands.
@@ -114,7 +121,7 @@ func newGoHandler(
 		},
 	}
 
-	return manual, &goRouter{handlers: handlers}
+	return manual, &goRouter{handlers: handlers}, nil
 }
 
 var _ textapi.CommandHandler = (*goRouter)(nil)

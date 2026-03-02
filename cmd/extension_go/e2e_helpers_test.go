@@ -799,7 +799,8 @@ func newTestHandler(
 	t.Helper()
 	me := newMockEditor()
 	mn := &mockNotifications{}
-	_, handler := newGoHandler(env.mgr, me, nil, mn)
+	_, handler, err := newGoHandler(env.mgr, me, nil, mn)
+	require.NoError(t, err)
 	return handler, me, mn
 }
 
@@ -919,6 +920,7 @@ type mockEditor struct {
 	mu          sync.Mutex
 	handlers    map[string]textapi.Handler // URI string -> handler
 	cellEditors map[textapi.Handler]*mockCellEditor
+	evHandlers  []textapi.EventHandler
 }
 
 var _ textapi.Editor = (*mockEditor)(nil)
@@ -938,9 +940,22 @@ func (e *mockEditor) Register(h textapi.Handler) {
 }
 
 func (e *mockEditor) SubscribeEvents(
-	_ []textapi.EventType, _ textapi.EventHandler,
+	_ []textapi.EventType, h textapi.EventHandler,
 ) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.evHandlers = append(e.evHandlers, h)
 	return nil
+}
+
+// fireEvent sends an event to all subscribed event handlers.
+func (e *mockEditor) fireEvent(ctx context.Context, ev textapi.Event) {
+	e.mu.Lock()
+	handlers := append([]textapi.EventHandler{}, e.evHandlers...)
+	e.mu.Unlock()
+	for _, h := range handlers {
+		h.Handle(ctx, ev)
+	}
 }
 
 func (e *mockEditor) Editor(uri workspaceapi.URI) (textapi.Handler, error) {
