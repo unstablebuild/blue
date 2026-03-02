@@ -131,11 +131,14 @@ func applyHighlights(cells [][]term.Cell, hls []textapi.Location, codeBlock term
 }
 
 func (c *codeBlock) Height(width int) int {
-	c.w = width
 	if width <= 0 {
 		return 0
 	}
 	return len(c.cells) + 1
+}
+
+func (c *codeBlock) Resize(width, _ int) {
+	c.w = width
 }
 
 func (c *codeBlock) Draw(w term.Writer) {

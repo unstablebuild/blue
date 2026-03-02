@@ -31,11 +31,14 @@ func newHorizontalRuleBlock(cfg *Config) *horizontalRuleBlock {
 }
 
 func (hr *horizontalRuleBlock) Height(width int) int {
-	hr.w = width
 	if width <= 0 {
 		return 0
 	}
 	return 2
+}
+
+func (hr *horizontalRuleBlock) Resize(width, _ int) {
+	hr.w = width
 }
 
 func (hr *horizontalRuleBlock) Draw(w term.Writer) {

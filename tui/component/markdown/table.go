@@ -52,12 +52,15 @@ func newTableBlock(
 }
 
 func (t *tableBlock) Height(width int) int {
-	t.w = width
 	if width <= 0 || len(t.header) == 0 {
 		return 0
 	}
 	// top border + header + separator + rows + bottom border + spacing
 	return 1 + 1 + 1 + len(t.rows) + 1 + 1
+}
+
+func (t *tableBlock) Resize(width, _ int) {
+	t.w = width
 }
 
 func (t *tableBlock) Draw(w term.Writer) {

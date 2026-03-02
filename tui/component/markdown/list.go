@@ -52,8 +52,16 @@ func newListBlock(
 }
 
 func (l *listBlock) Height(width int) int {
-	l.w = width
 	return l.heightAtIndent(width, 0)
+}
+
+func (l *listBlock) Resize(width, _ int) {
+	l.w = width
+	for _, item := range l.items {
+		if item.nested != nil {
+			item.nested.Resize(width, 0)
+		}
+	}
 }
 
 func (l *listBlock) Draw(w term.Writer) {
@@ -82,7 +90,6 @@ func (l *listBlock) CharAt(x, y int) (rune, bool) {
 }
 
 func (l *listBlock) heightAtIndent(width, indent int) int {
-	l.w = width
 	if width <= indent+listIndent {
 		return 0
 	}

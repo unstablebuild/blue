@@ -20,6 +20,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/unstablebuild/rune-go-sdk/component"
 	"github.com/unstablebuild/rune-go-sdk/term"
 )
 
@@ -512,6 +513,20 @@ func TestTableLinkAt(t *testing.T) {
 	// Click on the header row should NOT find a link.
 	link = md.LinkAt(22, 1)
 	assert.Nil(t, link, "no link in header row")
+}
+
+func TestComponentHeight(t *testing.T) {
+	md, err := New("# Hello\n\nWorld")
+	require.NoError(t, err)
+	h := md.Height(40)
+	assert.Greater(t, h, 0)
+	assert.Equal(t, h, md.Height(40))
+}
+
+func TestComponentResponsiveInterface(t *testing.T) {
+	md, err := New("# Hello\n\nWorld")
+	require.NoError(t, err)
+	var _ component.Responsive = md
 }
 
 func TestLinkAtOnSpacingRow(t *testing.T) {

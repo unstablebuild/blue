@@ -41,8 +41,14 @@ func newBlockquoteBlock(
 }
 
 func (b *blockquoteBlock) Height(width int) int {
-	b.w = width
 	return b.heightAtIndent(width, 0)
+}
+
+func (b *blockquoteBlock) Resize(width, _ int) {
+	b.w = width
+	if b.nested != nil {
+		b.nested.Resize(width, 0)
+	}
 }
 
 func (b *blockquoteBlock) Draw(w term.Writer) {
