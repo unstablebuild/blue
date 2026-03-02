@@ -349,7 +349,7 @@ func TestApplyEditsOpensUnopenedFile(t *testing.T) {
 		},
 	}
 
-	err := applyWorkspaceEdit(context.Background(), editor, opener, edit)
+	err := ApplyWorkspaceEdit(context.Background(), editor, opener, edit)
 	require.NoError(t, err)
 	assert.True(t, opened["file:///unopened.go"],
 		"opener should be called for files not already open")
@@ -514,7 +514,7 @@ func TestApplyWorkspaceEditDocumentChanges(t *testing.T) {
 		},
 	}
 
-	err := applyWorkspaceEdit(context.Background(), editor, nil, edit)
+	err := ApplyWorkspaceEdit(context.Background(), editor, nil, edit)
 	require.NoError(t, err)
 	require.Len(t, calls, 1, "only DocumentChanges edits should be applied")
 	assert.Equal(t, "file:///correct.go", calls[0].uri)
@@ -569,7 +569,7 @@ func TestApplyWorkspaceEdit(t *testing.T) {
 		},
 	}
 
-	err := applyWorkspaceEdit(context.Background(), editor, nil, edit)
+	err := ApplyWorkspaceEdit(context.Background(), editor, nil, edit)
 	require.NoError(t, err)
 	require.Len(t, calls, 1)
 	assert.Equal(t, "file:///foo.go", calls[0].uri)

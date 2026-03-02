@@ -187,8 +187,8 @@ func (h *signatureHelpHandler) fetch(ev textapi.Event) {
 	defer cancel()
 
 	params := semanticapi.SignatureHelpParams{
-		TextDocument: textDocID(ev.URI),
-		Position:     coordToPos(ev.To),
+		TextDocument: TextDocID(ev.URI),
+		Position:     CoordToPos(ev.To),
 	}
 	result, err := h.lsp.SignatureHelp(ctx, params)
 	if err != nil {
@@ -285,8 +285,8 @@ func (h *signatureHelpHandler) HandleCommand(ctx context.Context, cmd textapi.Co
 		return nil
 	}
 	params := semanticapi.SignatureHelpParams{
-		TextDocument: textDocID(cmd.URI),
-		Position:     coordToPos(cmd.Cursor.Content),
+		TextDocument: TextDocID(cmd.URI),
+		Position:     CoordToPos(cmd.Cursor.Content),
 	}
 	result, err := h.lsp.SignatureHelp(ctx, params)
 	if err != nil {

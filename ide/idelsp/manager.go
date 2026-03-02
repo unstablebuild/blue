@@ -622,8 +622,7 @@ func (m *Manager) interceptCallback(serverID string) semanticapi.LSPCallback {
 		LSPCallback: cb,
 		manager:     m,
 		serverID:    serverID,
-		log: slog.With("struct", "idelsp.callbackInterceptor",
-			"server", serverID),
+		log:         slog.With("struct", "idelsp.callbackInterceptor", "server", serverID),
 	}
 }
 

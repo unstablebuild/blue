@@ -65,118 +65,6 @@ func matchGlob(pattern, filePath string) bool {
 	}
 	return false
 }
-
-// nopLSPCallback is a no-op implementation of
-// semanticapi.LSPCallback used when no callback is provided.
-type nopLSPCallback struct{}
-
-func (nopLSPCallback) ShowMessage(
-	_ context.Context, _ semanticapi.ShowMessageParams,
-) error {
-	return nil
-}
-
-func (nopLSPCallback) LogMessage(
-	_ context.Context, _ semanticapi.LogMessageParams,
-) error {
-	return nil
-}
-
-func (nopLSPCallback) PublishDiagnostics(
-	_ context.Context,
-	_ semanticapi.PublishDiagnosticsParams,
-) error {
-	return nil
-}
-
-func (nopLSPCallback) Progress(
-	_ context.Context, _ semanticapi.ProgressParams,
-) error {
-	return nil
-}
-
-func (nopLSPCallback) LogTrace(
-	_ context.Context, _ semanticapi.LogTraceParams,
-) error {
-	return nil
-}
-
-func (nopLSPCallback) ShowDocument(
-	_ context.Context, _ semanticapi.ShowDocumentParams,
-) (semanticapi.ShowDocumentResult, error) {
-	return semanticapi.ShowDocumentResult{}, nil
-}
-
-func (nopLSPCallback) ShowMessageRequest(
-	_ context.Context,
-	_ semanticapi.ShowMessageRequestParams,
-) (*semanticapi.MessageActionItem, error) {
-	return nil, nil
-}
-
-func (nopLSPCallback) WorkDoneProgressCreate(
-	_ context.Context,
-	_ semanticapi.WorkDoneProgressCreateParams,
-) error {
-	return nil
-}
-
-func (nopLSPCallback) ApplyEdit(
-	_ context.Context,
-	_ semanticapi.ApplyWorkspaceEditParams,
-) (semanticapi.ApplyWorkspaceEditResult, error) {
-	return semanticapi.ApplyWorkspaceEditResult{}, nil
-}
-
-func (nopLSPCallback) WorkspaceFolders(
-	_ context.Context,
-) ([]semanticapi.WorkspaceFolder, error) {
-	return nil, nil
-}
-
-func (nopLSPCallback) Configuration(
-	_ context.Context,
-	_ semanticapi.ConfigurationParams,
-) ([]json.RawMessage, error) {
-	return nil, nil
-}
-
-func (nopLSPCallback) RegisterCapability(
-	_ context.Context, _ semanticapi.RegistrationParams,
-) error {
-	return nil
-}
-
-func (nopLSPCallback) UnregisterCapability(
-	_ context.Context, _ semanticapi.UnregistrationParams,
-) error {
-	return nil
-}
-
-func (nopLSPCallback) CodeLensRefresh(
-	_ context.Context,
-) error {
-	return nil
-}
-
-func (nopLSPCallback) SemanticTokensRefresh(
-	_ context.Context,
-) error {
-	return nil
-}
-
-func (nopLSPCallback) InlayHintRefresh(
-	_ context.Context,
-) error {
-	return nil
-}
-
-func (nopLSPCallback) DiagnosticRefresh(
-	_ context.Context,
-) error {
-	return nil
-}
-
 // callbackInterceptor wraps an LSPCallback to intercept
 // RegisterCapability and UnregisterCapability for file watchers.
 type callbackInterceptor struct {
@@ -194,9 +82,9 @@ func (c *callbackInterceptor) RegisterCapability(
 			continue
 		}
 		var opts semanticapi.DidChangeWatchedFilesRegistrationOptions
-		if err := json.Unmarshal(reg.RegisterOptions, &opts); err != nil {
-			c.log.Warn("unmarshal watcher registration options",
-				"id", reg.ID, "error", err)
+		err := json.Unmarshal(reg.RegisterOptions, &opts)
+		if err != nil {
+			c.log.Warn("unmarshal watcher registration options", "id", reg.ID, "error", err)
 			continue
 		}
 		c.manager.addWatchers(c.serverID, reg.ID, opts.Watchers)
@@ -215,8 +103,7 @@ func (c *callbackInterceptor) UnregisterCapability(
 			continue
 		}
 		c.manager.removeWatchers(c.serverID, unreg.ID)
-		c.log.Debug("unregistered file watchers",
-			"server", c.serverID, "id", unreg.ID)
+		c.log.Debug("unregistered file watchers", "server", c.serverID, "id", unreg.ID)
 	}
 	return c.LSPCallback.UnregisterCapability(ctx, params)
 }

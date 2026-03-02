@@ -310,7 +310,7 @@ func (l *locationsFloatingHandler) loadPreview() {
 	if entry.uri == l.prevURI {
 		return
 	}
-	uri, err := lspToURI(entry.uri)
+	uri, err := LspToURI(entry.uri)
 	if err != nil {
 		l.previewCells = nil
 		l.prevURI = ""

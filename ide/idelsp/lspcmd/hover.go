@@ -78,8 +78,8 @@ func (h *hoverHandler) HandleCommand(ctx context.Context, cmd textapi.Command) e
 		return nil
 	}
 	params := semanticapi.HoverParams{
-		TextDocument: textDocID(cmd.URI),
-		Position:     coordToPos(cmd.Cursor.Content),
+		TextDocument: TextDocID(cmd.URI),
+		Position:     CoordToPos(cmd.Cursor.Content),
 	}
 	result, err := h.lsp.Hover(ctx, params)
 	if err != nil {

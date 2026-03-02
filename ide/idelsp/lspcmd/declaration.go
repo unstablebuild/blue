@@ -80,8 +80,8 @@ func (h *declarationHandler) HandleCommand(ctx context.Context, cmd textapi.Comm
 		return nil
 	}
 	params := semanticapi.DeclarationParams{
-		TextDocument: textDocID(cmd.URI),
-		Position:     coordToPos(cmd.Cursor.Content),
+		TextDocument: TextDocID(cmd.URI),
+		Position:     CoordToPos(cmd.Cursor.Content),
 	}
 	result, err := h.lsp.Declaration(ctx, params)
 	if err != nil {

@@ -78,7 +78,7 @@ func (h *formatHandler) formatFull(
 	ctx context.Context, cmd textapi.Command,
 ) error {
 	params := semanticapi.DocumentFormattingParams{
-		TextDocument: textDocID(cmd.URI),
+		TextDocument: TextDocID(cmd.URI),
 		Options: semanticapi.FormattingOptions{
 			TabSize:      4,
 			InsertSpaces: false,
@@ -92,7 +92,7 @@ func (h *formatHandler) formatFull(
 		return nil
 	}
 	ce := h.editor.CellEditor(cmd.Resource)
-	return applyEdits(ctx, ce, edits)
+	return ApplyEdits(ctx, ce, edits)
 }
 
 func (h *formatHandler) formatRange(
@@ -103,7 +103,7 @@ func (h *formatHandler) formatRange(
 		return h.formatFull(ctx, cmd)
 	}
 	params := semanticapi.DocumentRangeFormattingParams{
-		TextDocument: textDocID(cmd.URI),
+		TextDocument: TextDocID(cmd.URI),
 		Range:        selRange,
 		Options: semanticapi.FormattingOptions{
 			TabSize:      4,
@@ -118,7 +118,7 @@ func (h *formatHandler) formatRange(
 		return nil
 	}
 	ce := h.editor.CellEditor(cmd.Resource)
-	return applyEdits(ctx, ce, edits)
+	return ApplyEdits(ctx, ce, edits)
 }
 
 var _ textapi.EventHandler = (*selectionTracker)(nil)
@@ -139,14 +139,14 @@ func newSelectionTracker() *selectionTracker {
 func (s *selectionTracker) Handle(
 	_ context.Context, ev textapi.Event,
 ) bool {
-	uri := uriToLSP(ev.URI)
+	uri := URIToLSP(ev.URI)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	switch ev.Type {
 	case textapi.EventTypeSelection:
-		s.sels[uri] = semanticapi.Range{Start: coordToPos(ev.Start), End: coordToPos(ev.End)}
+		s.sels[uri] = semanticapi.Range{Start: CoordToPos(ev.Start), End: CoordToPos(ev.End)}
 	case textapi.EventTypeCursor:
 		delete(s.sels, uri)
 	}
@@ -159,6 +159,6 @@ func (s *selectionTracker) get(
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	r, ok := s.sels[uriToLSP(uri)]
+	r, ok := s.sels[URIToLSP(uri)]
 	return r, ok
 }

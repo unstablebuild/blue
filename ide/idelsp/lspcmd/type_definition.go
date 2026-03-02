@@ -80,8 +80,8 @@ func (h *typeDefinitionHandler) HandleCommand(ctx context.Context, cmd textapi.C
 		return nil
 	}
 	params := semanticapi.TypeDefinitionParams{
-		TextDocument: textDocID(cmd.URI),
-		Position:     coordToPos(cmd.Cursor.Content),
+		TextDocument: TextDocID(cmd.URI),
+		Position:     CoordToPos(cmd.Cursor.Content),
 	}
 	result, err := h.lsp.TypeDefinition(ctx, params)
 	if err != nil {
