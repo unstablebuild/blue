@@ -25,6 +25,7 @@ import (
 // Component renders markdown content in a terminal.
 // It implements component.ScrollableFloating.
 type Component struct {
+	cfg          *Config
 	blocks       []block
 	blockHeights []int // cached heights for each block at current width
 	anchors      map[string]int // anchor slug -> block index
@@ -48,16 +49,36 @@ func New(content string) (*Component, error) {
 // NewWithConfig creates a new markdown component with the given content
 // and custom configuration. Returns an error if parsing fails.
 func NewWithConfig(content string, cfg Config) (*Component, error) {
-	blocks, err := parse(content, &cfg)
-	if err != nil {
-		return nil, err
-	}
 	c := &Component{
-		blocks:  blocks,
+		cfg:     &cfg,
 		anchors: make(map[string]int),
 	}
-	c.buildAnchors()
+	if err := c.Init(content); err != nil {
+		return nil, err
+	}
 	return c, nil
+}
+
+// Init replaces the component's content by re-parsing the given markdown
+// string using the existing configuration. It resets the scroll offset and
+// recalculates block heights when the component has already been sized.
+func (c *Component) Init(content string) error {
+	blocks, err := parse(content, c.cfg)
+	if err != nil {
+		return err
+	}
+	c.closeBlocks()
+	c.blocks = blocks
+	c.offset = 0
+	c.anchors = make(map[string]int)
+	c.buildAnchors()
+	if c.width > 0 {
+		c.recalculateHeights(c.width)
+	} else {
+		c.blockHeights = nil
+		c.totalHeight = 0
+	}
+	return nil
 }
 
 // Anchor converts header text to a URL anchor slug.
@@ -370,12 +391,16 @@ func (c *Component) WordBoundsAt(
 
 // Close cancels any in-flight syntax highlighting goroutines.
 func (c *Component) Close() error {
+	c.closeBlocks()
+	return nil
+}
+
+func (c *Component) closeBlocks() {
 	for _, blk := range c.blocks {
 		if cb, ok := blk.(*codeBlock); ok {
 			cb.close()
 		}
 	}
-	return nil
 }
 
 func (c *Component) buildAnchors() {

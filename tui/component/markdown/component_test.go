@@ -529,6 +529,51 @@ func TestComponentResponsiveInterface(t *testing.T) {
 	var _ component.Responsive = md
 }
 
+func TestComponentInit(t *testing.T) {
+	md, err := New("# Hello\n\nWorld")
+	require.NoError(t, err)
+	md.Resize(40, 2)
+
+	// Scroll down so offset is non-zero.
+	md.SeekDown()
+	require.Greater(t, md.SeekOffset(), 0)
+
+	// Init with new content.
+	err = md.Init("# New\n\nContent\n\nMore")
+	require.NoError(t, err)
+
+	// Offset should be reset.
+	assert.Equal(t, 0, md.SeekOffset())
+
+	// Block heights should be recalculated for the existing width.
+	assert.Equal(t, len(md.blocks), len(md.blockHeights))
+	assert.Greater(t, md.totalHeight, 0)
+
+	// New anchors should be built (old ones gone).
+	_, hasOld := md.anchors["hello"]
+	assert.False(t, hasOld)
+	_, hasNew := md.anchors["new"]
+	assert.True(t, hasNew)
+
+	// Drawing should reflect the new content.
+	w := term.NewStringWriter(40, 10)
+	require.NoError(t, w.Clear(term.Attributes{}))
+	md.Draw(w)
+	require.NoError(t, w.Flush())
+	assert.Contains(t, w.String(), "New")
+	assert.NotContains(t, w.String(), "Hello")
+}
+
+func TestComponentInitBeforeResize(t *testing.T) {
+	md, err := New("# Hello")
+	require.NoError(t, err)
+	// Don't call Resize — width is 0.
+	err = md.Init("# World")
+	require.NoError(t, err)
+	assert.Nil(t, md.blockHeights)
+	assert.Equal(t, 0, md.totalHeight)
+}
+
 func TestLinkAtOnSpacingRow(t *testing.T) {
 	// Two paragraphs: "Hello" then a link. Each paragraph block has
 	// height = content lines + 1 (trailing spacing). A click on the
