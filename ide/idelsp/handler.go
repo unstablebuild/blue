@@ -760,7 +760,7 @@ func applyTextEdits(
 ) error {
 	sorted := make([]semanticapi.TextEdit, len(edits))
 	copy(sorted, edits)
-	sort.Slice(sorted, func(i, j int) bool {
+	sort.SliceStable(sorted, func(i, j int) bool {
 		a := sorted[i].Range.Start
 		b := sorted[j].Range.Start
 		if a.Line != b.Line {
@@ -768,6 +768,11 @@ func applyTextEdits(
 		}
 		return a.Character > b.Character
 	})
+	// Per the LSP spec, when multiple inserts share the same
+	// position, the array order defines the resulting text order.
+	// Since we apply bottom-to-top, same-position inserts must be
+	// reversed so the first-in-array insert ends up first in text.
+	reverseSameStartEdits(sorted)
 
 	cellEditor := editor.CellEditor(editorHandler)
 	for _, edit := range sorted {
@@ -786,6 +791,25 @@ func applyTextEdits(
 		}
 	}
 	return nil
+}
+
+// reverseSameStartEdits reverses each contiguous group of edits
+// sharing the same start position so that applying them bottom-to-top
+// produces the correct array-order text per the LSP spec.
+func reverseSameStartEdits(edits []semanticapi.TextEdit) {
+	for i := 0; i < len(edits); {
+		j := i + 1
+		for j < len(edits) &&
+			edits[j].Range.Start == edits[i].Range.Start {
+			j++
+		}
+		if j-i > 1 {
+			for l, r := i, j-1; l < r; l, r = l+1, r-1 {
+				edits[l], edits[r] = edits[r], edits[l]
+			}
+		}
+		i = j
+	}
 }
 
 func (h *CallbackHandler) applyCreateFile(
