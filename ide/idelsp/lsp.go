@@ -364,17 +364,8 @@ func (m *Manager) References(
 	if err != nil {
 		return nil, err
 	}
-	p := map[string]any{
-		"textDocument": map[string]any{
-			"uri": params.TextDocument.URI,
-		},
-		"position": params.Position,
-		"context": map[string]any{
-			"includeDeclaration": params.Context.IncludeDeclaration,
-		},
-	}
 	var result []semanticapi.Location
-	err = srv.call(ctx, "textDocument/references", p, &result)
+	err = srv.call(ctx, "textDocument/references", params, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -440,27 +431,8 @@ func (m *Manager) CodeAction(
 	if err != nil {
 		return nil, err
 	}
-	diags := make(
-		[]any, len(params.Context.Diagnostics),
-	)
-	for i, d := range params.Context.Diagnostics {
-		diags[i] = map[string]any{
-			"range":    d.Range,
-			"severity": int(d.Severity),
-			"message":  d.Message,
-		}
-	}
-	p := map[string]any{
-		"textDocument": map[string]any{
-			"uri": params.TextDocument.URI,
-		},
-		"range": params.Range,
-		"context": map[string]any{
-			"diagnostics": diags,
-		},
-	}
 	var result []lspCodeAction
-	err = srv.call(ctx, "textDocument/codeAction", p, &result)
+	err = srv.call(ctx, "textDocument/codeAction", params, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -522,19 +494,8 @@ func (m *Manager) Formatting(
 	if err != nil {
 		return nil, err
 	}
-	p := map[string]any{
-		"textDocument": map[string]any{
-			"uri": params.TextDocument.URI,
-		},
-		"options": map[string]any{
-			"tabSize":                params.Options.TabSize,
-			"insertSpaces":           params.Options.InsertSpaces,
-			"trimTrailingWhitespace": true,
-			"insertFinalNewline":     true,
-		},
-	}
 	var raw json.RawMessage
-	err = srv.call(ctx, "textDocument/formatting", p, &raw)
+	err = srv.call(ctx, "textDocument/formatting", params, &raw)
 	if err != nil {
 		return nil, err
 	}
@@ -557,18 +518,8 @@ func (m *Manager) RangeFormatting(
 	if err != nil {
 		return nil, err
 	}
-	p := map[string]any{
-		"textDocument": map[string]any{
-			"uri": params.TextDocument.URI,
-		},
-		"range": params.Range,
-		"options": map[string]any{
-			"tabSize":      params.Options.TabSize,
-			"insertSpaces": params.Options.InsertSpaces,
-		},
-	}
 	var raw json.RawMessage
-	err = srv.call(ctx, "textDocument/rangeFormatting", p, &raw)
+	err = srv.call(ctx, "textDocument/rangeFormatting", params, &raw)
 	if err != nil {
 		return nil, err
 	}
