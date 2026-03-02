@@ -74,6 +74,7 @@ type Manager struct {
 	maxRetries    uint
 	servers       map[string]*langServer
 	files         map[string]*file
+	pendingOpens  map[string]textapi.Event
 	ctx           context.Context
 	cancel        context.CancelFunc
 	log           *slog.Logger
@@ -118,6 +119,7 @@ func New(
 		callback:      cfg.Callback,
 		servers:       make(map[string]*langServer),
 		files:         make(map[string]*file),
+		pendingOpens:  make(map[string]textapi.Event),
 		ctx:           ctx,
 		cancel:        cancel,
 		evs:           make(chan textapi.Event, eventsBufferSize),
@@ -191,6 +193,13 @@ func (m *Manager) handle(ev textapi.Event) error {
 		m.log.Debug("process open", "file", uri, "size", len(ev.Content))
 		srv, err := m.ensureServer(ctx, ev.URI)
 		if err != nil {
+			if m.cfg.NoInitializeServer {
+				m.mu.Lock()
+				m.pendingOpens[uri] = ev
+				m.mu.Unlock()
+				m.log.Debug("tracked pending open for server init", "file", uri)
+				return nil
+			}
 			return err
 		}
 		f, err := m.ensureFile(ev.URI, ev.Content, srv.cfg.id)
@@ -210,6 +219,12 @@ func (m *Manager) handle(ev textapi.Event) error {
 	case textapi.EventTypeClose:
 		srv, err := m.serverForURI(uri)
 		if err != nil {
+			if m.cfg.NoInitializeServer {
+				m.mu.Lock()
+				delete(m.pendingOpens, uri)
+				m.mu.Unlock()
+				return nil
+			}
 			return err
 		}
 		return srv.notify(ctx, "textDocument/didClose",
@@ -429,10 +444,52 @@ func (m *Manager) initializeServer(
 	m.servers[lang.id] = srv
 	m.mu.Unlock()
 
+	m.sendPendingOpens(lang.id, srv)
+
 	go debug.CapturePanicReport(func() {
 		m.watchServer(&lang, srv)
 	})
 	return srv, nil
+}
+
+// sendPendingOpens sends didOpen for files that were opened before this
+// server existed. Only files whose language matches langID are sent;
+// the rest stay in pendingOpens for a future server init.
+func (m *Manager) sendPendingOpens(langID string, srv *langServer) {
+	m.mu.Lock()
+	var opens []textapi.Event
+	for uri, ev := range m.pendingOpens {
+		cfg, err := languageForFilename(uri)
+		if err != nil || cfg.id != langID {
+			continue
+		}
+		opens = append(opens, ev)
+		delete(m.pendingOpens, uri)
+	}
+	m.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(
+		context.Background(), m.cfg.EventHandleTimeout,
+	)
+	defer cancel()
+
+	for _, ev := range opens {
+		uri := convertURI(ev.URI)
+		f, err := m.ensureFile(ev.URI, ev.Content, langID)
+		if err != nil {
+			m.log.Error("send pending open", "error", err, "file", uri)
+			continue
+		}
+		_ = srv.notify(ctx, "textDocument/didOpen",
+			semanticapi.DidOpenTextDocumentParams{
+				TextDocument: semanticapi.TextDocumentItem{
+					URI:        uri,
+					LanguageID: f.languageID,
+					Version:    f.version,
+					Text:       ev.Content,
+				},
+			})
+	}
 }
 
 func (m *Manager) findBinary(
