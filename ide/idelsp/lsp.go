@@ -1123,7 +1123,7 @@ func (m *Manager) ExecuteCommand(
 			errs = append(errs, err)
 			continue
 		}
-		if raw != nil {
+		if raw != nil && string(raw) != "null" {
 			return string(raw), nil
 		}
 	}

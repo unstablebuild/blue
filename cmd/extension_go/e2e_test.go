@@ -36,6 +36,7 @@ import (
 
 	"github.com/unstablebuild/blue/ide/idelsp"
 	"github.com/unstablebuild/blue/ide/idelsp/lspcmd"
+	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
@@ -199,13 +200,15 @@ type stubResource struct {
 	uri workspaceapi.URI
 }
 
-func (s *stubResource) Handle(_ term.Event) (bool, bool)                   { return false, false }
-func (s *stubResource) Draw(_ term.Writer)                                 {}
-func (s *stubResource) Resize(_, _ int)                                    {}
-func (s *stubResource) Cursor() (term.Coordinates, term.CursorStyle, bool) { return term.Coordinates{}, 0, false }
-func (s *stubResource) Selection() (string, bool)                          { return "", false }
-func (s *stubResource) Close() error                                       { return nil }
-func (s *stubResource) Resource() workspaceapi.URI                         { return s.uri }
+func (s *stubResource) Handle(_ term.Event) (bool, bool) { return false, false }
+func (s *stubResource) Draw(_ term.Writer)               {}
+func (s *stubResource) Resize(_, _ int)                  {}
+func (s *stubResource) Cursor() (term.Coordinates, term.CursorStyle, bool) {
+	return term.Coordinates{}, 0, false
+}
+func (s *stubResource) Selection() (string, bool)  { return "", false }
+func (s *stubResource) Close() error               { return nil }
+func (s *stubResource) Resource() workspaceapi.URI { return s.uri }
 
 var _ textapi.Handler = (*stubResource)(nil)
 
@@ -635,15 +638,11 @@ type Config struct {
 		cmd := goCmdAt("test", uri, resource, 4, 5)
 
 		err := handler.HandleCommand(t.Context(), cmd)
-		// The handler executes gopls.run_tests which runs `go test`.
-		// This may fail in some environments, but should not return
-		// "unsupported command".
-		if err != nil {
-			assert.NotContains(t, err.Error(), "unsupported command")
-		} else {
-			msgs := mn.getMessages()
-			assert.NotEmpty(t, msgs, "expected a notification from test execution")
-		}
+		require.NoError(t, err)
+		assert.Len(t, mn.getMessages(), 1)
+		assert.Equal(t, mockNotification{
+			Level: browserapi.LevelInfo, Message: "Executed: run test",
+		}, mn.getMessages()[0])
 	})
 
 	t.Run("CodeLens/Generate", func(t *testing.T) {

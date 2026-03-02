@@ -159,10 +159,11 @@ func initGopls(t *testing.T, goplsBin string, files []testFile) *testEnv {
 
 		wsURI, err := workspaceapi.ParseURI(fileURI)
 		require.NoError(t, err)
+		// Rune's editor trims the trailing newline from file content.
 		mgr.Handle(ctx, textapi.Event{
 			Type:    textapi.EventTypeOpen,
 			URI:     wsURI,
-			Content: f.content,
+			Content: strings.TrimSuffix(f.content, "\n"),
 		})
 	}
 
@@ -293,10 +294,11 @@ func initGoplsWithApplyEdit(
 
 		wsURI, err := workspaceapi.ParseURI(fileURI)
 		require.NoError(t, err)
+		// Rune's editor trims the trailing newline from file content.
 		mgr.Handle(ctx, textapi.Event{
 			Type:    textapi.EventTypeOpen,
 			URI:     wsURI,
-			Content: f.content,
+			Content: strings.TrimSuffix(f.content, "\n"),
 		})
 	}
 
@@ -436,10 +438,11 @@ func initGoplsWithAutoInitParams(
 
 		wsURI, err := workspaceapi.ParseURI(fileURI)
 		require.NoError(t, err)
+		// Rune's editor trims the trailing newline from file content.
 		mgr.Handle(ctx, textapi.Event{
 			Type:    textapi.EventTypeOpen,
 			URI:     wsURI,
-			Content: f.content,
+			Content: strings.TrimSuffix(f.content, "\n"),
 		})
 	}
 

@@ -212,7 +212,7 @@ func (m *Manager) handle(ev textapi.Event) error {
 					URI:        uri,
 					LanguageID: f.languageID,
 					Version:    f.version,
-					Text:       ev.Content,
+					Text:       f.content,
 				},
 			})
 
@@ -239,9 +239,10 @@ func (m *Manager) handle(ev textapi.Event) error {
 		if err != nil {
 			return err
 		}
-		f, err := m.ensureFile(ev.URI, "", srv.cfg.id)
-		if err != nil {
-			return err
+		uriStr := convertURI(ev.URI)
+		f, ok := m.getFile(uriStr)
+		if !ok {
+			return errors.New("received edit event for non-open file")
 		}
 		m.mu.Lock()
 		m.files[f.docID.URI].version++
@@ -342,6 +343,13 @@ func (m *Manager) handle(ev textapi.Event) error {
 	}
 }
 
+func (m *Manager) getFile(uriStr string) (*file, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	f, ok := m.files[uriStr]
+	return f, ok
+}
+
 func (m *Manager) ensureFile(
 	uri workspaceapi.URI,
 	content string, languageID string,
@@ -350,17 +358,14 @@ func (m *Manager) ensureFile(
 	if languageID == "" || uri == (workspaceapi.URI{}) {
 		panic("empty params for ensuring available file")
 	}
-	m.mu.Lock()
-	f, ok := m.files[uriStr]
+	f, ok := m.getFile(uriStr)
 	if ok {
 		if content != "" {
 			m.files[uriStr].content = content
 			m.files[uriStr].version++
 		}
-		m.mu.Unlock()
 		return f, nil
 	}
-	m.mu.Unlock()
 	if content == "" {
 		f, err := m.fileSystem.Open(uri.Path())
 		if err != nil {
@@ -372,7 +377,7 @@ func (m *Manager) ensureFile(
 			return nil, fmt.Errorf("read workspace file: %w", err)
 		}
 		content = string(data)
-	} else {
+	} else if len(content) == 0 || content[len(content)-1] != '\n' {
 		// editor trims last EOL but LSP servers expect it
 		content += "\n"
 	}
@@ -486,7 +491,7 @@ func (m *Manager) sendPendingOpens(langID string, srv *langServer) {
 					URI:        uri,
 					LanguageID: f.languageID,
 					Version:    f.version,
-					Text:       ev.Content,
+					Text:       f.content,
 				},
 			})
 	}
