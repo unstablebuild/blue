@@ -181,6 +181,81 @@ func TestFetchPprofLinks(t *testing.T) {
 	}
 }
 
+// TestFetchLayoutTable verifies that HTML tables used for layout (no <thead>,
+// no <th>) are rendered as plain text without pipe-table syntax.
+func TestFetchLayoutTable(t *testing.T) {
+	const layoutHTML = `<html><body>
+<table>
+<tr><td>1.</td><td></td><td><a href="https://example.com">Motorola announces</a></td></tr>
+<tr><td></td><td>508 points by km</td></tr>
+</table>
+</body></html>`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, layoutHTML)
+	}))
+	defer srv.Close()
+
+	comp, err := fetch(context.Background(), srv.Client(), srv.URL, markdown.DefaultConfig())
+	require.NoError(t, err)
+
+	width, height := 80, 40
+	comp.Resize(width, height)
+
+	sw := term.NewStringWriter(width, height)
+	require.NoError(t, sw.Clear(term.Attributes{}))
+	comp.Draw(sw)
+	require.NoError(t, sw.Flush())
+	rendered := sw.String()
+	t.Logf("rendered:\n%s", rendered)
+
+	assert.NotContains(t, rendered, "|", "layout table should not contain pipe characters")
+	assert.Contains(t, rendered, "Motorola announces")
+	assert.Contains(t, rendered, "508 points by km")
+}
+
+// TestFetchMixedTables verifies that a page with both a data table
+// (has <thead>) and a layout table (no <thead>/<th>) renders the data
+// table as a pipe table and the layout table as plain text.
+func TestFetchMixedTables(t *testing.T) {
+	const mixedHTML = `<html><body>
+<table>
+<thead><tr><td>Count</td><td>Profile</td></tr></thead>
+<tr><td>2844</td><td>allocs</td></tr>
+</table>
+<table>
+<tr><td>layout</td><td>content</td></tr>
+</table>
+</body></html>`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, mixedHTML)
+	}))
+	defer srv.Close()
+
+	comp, err := fetch(context.Background(), srv.Client(), srv.URL, markdown.DefaultConfig())
+	require.NoError(t, err)
+
+	width, height := 80, 40
+	comp.Resize(width, height)
+
+	sw := term.NewStringWriter(width, height)
+	require.NoError(t, sw.Clear(term.Attributes{}))
+	comp.Draw(sw)
+	require.NoError(t, sw.Flush())
+	rendered := sw.String()
+	t.Logf("rendered:\n%s", rendered)
+
+	// Data table content should be present (rendered as a GFM table
+	// which goldmark turns into box-drawing borders).
+	assert.Contains(t, rendered, "2844")
+	assert.Contains(t, rendered, "allocs")
+
+	// Layout table content should be present as plain text.
+	assert.Contains(t, rendered, "layout")
+	assert.Contains(t, rendered, "content")
+}
+
 // TestRenderQueryConsistency verifies that for every rendered row containing
 // non-space text, SpanAt at that position also returns non-empty content.
 // This catches Y-offset discrepancies between Draw and SpanAt.

@@ -21,6 +21,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync/atomic"
 
 	"github.com/PuerkitoBio/goquery"
@@ -198,6 +199,7 @@ func fetch(ctx context.Context, client *http.Client, rawURL string, mdCfg markdo
 		},
 	})
 	converter.Use(plugin.GitHubFlavored())
+	converter.AddRules(layoutTableRules()...)
 
 	buf, err := converter.ConvertReader(resp.Body)
 	if err != nil {
@@ -205,4 +207,58 @@ func fetch(ctx context.Context, client *http.Client, rawURL string, mdCfg markdo
 	}
 
 	return markdown.NewWithConfig(buf.String(), mdCfg)
+}
+
+// isDataTable reports whether selec belongs to a data table (has
+// <thead> or <th> elements) as opposed to a layout table.
+func isDataTable(selec *goquery.Selection) bool {
+	table := selec.Closest("table")
+	if table.Length() == 0 {
+		return false
+	}
+	return table.ChildrenFiltered("thead").Length() > 0 ||
+		table.Find("th").Length() > 0
+}
+
+// layoutTableRules returns custom html-to-markdown rules that render
+// layout tables (no <thead>/<th>) as plain text instead of GFM pipe
+// tables.  Data tables fall through to the GitHubFlavored plugin rules.
+func layoutTableRules() []md.Rule {
+	return []md.Rule{
+		{
+			Filter: []string{"td", "th"},
+			Replacement: func(content string, selec *goquery.Selection, _ *md.Options) *string {
+				if isDataTable(selec) {
+					return nil // fall through to GFM rule
+				}
+				text := strings.TrimSpace(content)
+				if text == "" {
+					return md.String("")
+				}
+				return md.String(text + " ")
+			},
+		},
+		{
+			Filter: []string{"tr"},
+			Replacement: func(content string, selec *goquery.Selection, _ *md.Options) *string {
+				if isDataTable(selec) {
+					return nil
+				}
+				text := strings.TrimSpace(content)
+				if text == "" {
+					return md.String("")
+				}
+				return md.String(text + "\n")
+			},
+		},
+		{
+			Filter: []string{"table"},
+			Replacement: func(content string, selec *goquery.Selection, _ *md.Options) *string {
+				if isDataTable(selec) {
+					return nil
+				}
+				return md.String("\n\n" + strings.TrimSpace(content) + "\n\n")
+			},
+		},
+	}
 }
