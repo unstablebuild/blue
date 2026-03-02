@@ -340,6 +340,7 @@ func TestBlockDraw(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			require.NoError(t, w.Clear(term.Attributes{}))
 			h := tt.block.Height(20)
+			tt.block.Resize(20, h)
 			tt.block.Draw(w)
 			assert.Equal(t, tt.expectedRows, h)
 		})
@@ -567,7 +568,8 @@ func TestHeaderPrefixRendering(t *testing.T) {
 			block := newHeaderBlock(tt.level, textRun{{text: tt.content}}, &cfg)
 			w := term.NewStringWriter(tt.width, 4)
 			require.NoError(t, w.Clear(term.Attributes{}))
-			block.Height(tt.width)
+			h := block.Height(tt.width)
+			block.Resize(tt.width, h)
 			block.Draw(w)
 			require.NoError(t, w.Flush())
 
@@ -636,6 +638,7 @@ func TestNestedListDraw(t *testing.T) {
 	h := parentList.Height(width)
 	// Parent 1 (1) + Child A (1) + Child B (1) + Parent 2 (1) + spacing (1) = 5
 	require.Equal(t, 5, h)
+	parentList.Resize(width, h)
 
 	w := term.NewStringWriter(width, h)
 	require.NoError(t, w.Clear(term.Attributes{}))
@@ -665,6 +668,7 @@ func TestNestedListDrawDeep(t *testing.T) {
 
 	width := 30
 	h := root.Height(width)
+	root.Resize(width, h)
 	w := term.NewStringWriter(width, h)
 	require.NoError(t, w.Clear(term.Attributes{}))
 	root.Draw(w)
@@ -716,7 +720,8 @@ func TestHeaderPadding(t *testing.T) {
 	block := newHeaderBlock(1, textRun{{text: "Title"}}, &cfg)
 	w := term.NewStringWriter(15, 3)
 	require.NoError(t, w.Clear(term.Attributes{}))
-	block.Height(15)
+	h := block.Height(15)
+	block.Resize(15, h)
 	block.Draw(w)
 	require.NoError(t, w.Flush())
 
@@ -739,7 +744,8 @@ func TestHeaderWrappingWithPrefix(t *testing.T) {
 	block := newHeaderBlock(2, textRun{{text: "Long Title Here"}}, &cfg)
 	w := term.NewStringWriter(12, 5)
 	require.NoError(t, w.Clear(term.Attributes{}))
-	block.Height(12)
+	h := block.Height(12)
+	block.Resize(12, h)
 	block.Draw(w)
 	require.NoError(t, w.Flush())
 
@@ -934,7 +940,8 @@ func TestHeaderPrefixConfig(t *testing.T) {
 			block := newHeaderBlock(tt.level, textRun{{text: tt.content}}, &cfg)
 			w := term.NewStringWriter(tt.width, 4)
 			require.NoError(t, w.Clear(term.Attributes{}))
-			block.Height(tt.width)
+			h := block.Height(tt.width)
+			block.Resize(tt.width, h)
 			block.Draw(w)
 			require.NoError(t, w.Flush())
 
@@ -977,7 +984,8 @@ func TestHeaderBackgroundPadding(t *testing.T) {
 	block := newHeaderBlock(1, textRun{{text: "Title"}}, &cfg)
 	w := term.NewStringWriter(20, 4)
 	require.NoError(t, w.Clear(term.Attributes{}))
-	block.Height(20)
+	h := block.Height(20)
+	block.Resize(20, h)
 	block.Draw(w)
 	require.NoError(t, w.Flush())
 

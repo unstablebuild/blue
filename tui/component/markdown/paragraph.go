@@ -32,12 +32,15 @@ func newParagraphBlock(content textRun, cfg *Config) *paragraphBlock {
 }
 
 func (p *paragraphBlock) Height(width int) int {
-	p.w = width
 	if width <= 0 {
 		return 0
 	}
 	lines := countWrappedLines(p.content, width)
 	return lines + 1
+}
+
+func (p *paragraphBlock) Resize(width, _ int) {
+	p.w = width
 }
 
 func (p *paragraphBlock) Draw(w term.Writer) {

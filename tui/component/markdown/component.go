@@ -34,7 +34,10 @@ type Component struct {
 	totalHeight   int
 }
 
-var _ component.ScrollableFloating = (*Component)(nil)
+var (
+	_ component.ScrollableFloating = (*Component)(nil)
+	_ component.Responsive         = (*Component)(nil)
+)
 
 // New creates a new markdown component with the given content
 // using default styling. Returns an error if parsing fails.
@@ -386,11 +389,22 @@ func (c *Component) buildAnchors() {
 	}
 }
 
+// Height returns the total height needed to render all blocks at the
+// given width. This is a pure calculation with no side effects.
+func (c *Component) Height(width int) int {
+	total := 0
+	for _, blk := range c.blocks {
+		total += blk.Height(width)
+	}
+	return total
+}
+
 func (c *Component) recalculateHeights(width int) {
 	c.blockHeights = make([]int, len(c.blocks))
 	c.totalHeight = 0
 	for i, blk := range c.blocks {
 		h := blk.Height(width)
+		blk.Resize(width, h)
 		c.blockHeights[i] = h
 		c.totalHeight += h
 	}

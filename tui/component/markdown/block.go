@@ -28,6 +28,7 @@ type LinkInfo struct {
 
 type block interface {
 	Height(width int) int
+	Resize(width, height int)
 	Draw(w term.Writer)
 	Dimensions() (width, height int)
 	SpanAt(x, y int) (text, url string, ok bool)

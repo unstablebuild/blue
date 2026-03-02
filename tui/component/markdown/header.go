@@ -33,7 +33,6 @@ func newHeaderBlock(level int, content textRun, cfg *Config) *headerBlock {
 }
 
 func (h *headerBlock) Height(width int) int {
-	h.w = width
 	if width <= 0 {
 		return 0
 	}
@@ -42,6 +41,10 @@ func (h *headerBlock) Height(width int) int {
 	lines := countWrappedLines(h.content, effectiveWidth)
 	// 1 (above) + content lines + 1 (standard spacing)
 	return lines + 2
+}
+
+func (h *headerBlock) Resize(width, _ int) {
+	h.w = width
 }
 
 func (hb *headerBlock) Draw(w term.Writer) {
