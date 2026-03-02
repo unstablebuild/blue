@@ -2170,6 +2170,7 @@ func main() {
 
 	loadedWg.Add(1)
 	_, err = mgr.Initialize(ctx, params)
+	require.NoError(t, err)
 	loadedWg.Wait()
 
 	// Wait for diagnostics that include the undefined Helper error.
@@ -2217,6 +2218,161 @@ func Helper() {}
 	// Notify the LSP manager about the newly created file.
 	mgr.Handle(ctx, textapi.Event{
 		Type: textapi.EventTypeCreate,
+		URI:  helperURI,
+	})
+
+	// Wait for diagnostics for main.go to clear — the undefined
+	// Helper error should disappear now that helper.go exists.
+	timer2 := time.NewTimer(15 * time.Second)
+	defer timer2.Stop()
+	var cleared bool
+	for !cleared {
+		select {
+		case p := <-diagCh:
+			if p.URI != mainURI {
+				continue
+			}
+			// Check that no diagnostic mentions Helper anymore.
+			hasHelper := false
+			for _, d := range p.Diagnostics {
+				if strings.Contains(d.Message, "Helper") {
+					hasHelper = true
+					break
+				}
+			}
+			if !hasHelper {
+				cleared = true
+			}
+		case <-timer2.C:
+			t.Fatal("timed out waiting for diagnostics to clear after helper.go creation")
+		case <-ctx.Done():
+			t.Fatal("context cancelled waiting for diagnostics to clear")
+		}
+	}
+
+	require.NoError(t, mgr.Close())
+}
+
+func TestE2EFileRenameNotifiesGopls(t *testing.T) {
+	t.Parallel()
+	goplsBin := findGopls(t)
+	tmpDir := setupTestWorkspace(t, "")
+
+	uri := makeURI(t, "file://"+tmpDir)
+
+	// Write a valid workspace first.
+	goModPath := filepath.Join(tmpDir, "go.mod")
+	require.NoError(t, os.WriteFile(goModPath,
+		[]byte("module example.com/testmod\n\ngo 1.22\n"), 0644))
+
+	// Write main.go that references Helper() which doesn't exist yet.
+	mainPath := filepath.Join(tmpDir, "main.go")
+	mainContent := `package main
+
+func main() {
+	Helper()
+}
+`
+	require.NoError(t, os.WriteFile(mainPath,
+		[]byte(mainContent), 0644))
+	helperPath := filepath.Join(tmpDir, "helper.go.swp")
+	helperContent := `package main
+
+// Helper is a helper function.
+func Helper() {}
+`
+	require.NoError(t, os.WriteFile(helperPath,
+		[]byte(helperContent), 0644))
+	t.Cleanup(func() { _ = os.Remove(helperPath) })
+
+	mainURI := "file://" + mainPath
+
+	ctx, cancel := context.WithTimeout(
+		context.Background(), 30*time.Second,
+	)
+	defer cancel()
+
+	var (
+		loadedWg    sync.WaitGroup
+		loadedReady sync.Once
+	)
+
+	diagCh := make(chan semanticapi.PublishDiagnosticsParams, 32)
+	callback := &testCallback{
+		onShowMessage: func(params semanticapi.ShowMessageParams) {
+			if strings.Contains(params.Message, "Finished loading packages") {
+				loadedReady.Do(loadedWg.Done)
+			}
+		},
+		onProgress: readyOnProgress(&loadedReady, &loadedWg),
+		onDiagnostics: func(p semanticapi.PublishDiagnosticsParams) {
+			select {
+			case diagCh <- p:
+			default:
+			}
+		},
+	}
+
+	scheme := newTestScheme()
+	mgr := New(
+		uri,
+		scheme,
+		scheme,
+		&stubPkgManager{bin: goplsBin},
+		nil, // notifications
+		nil, // opener
+		Config{Callback: callback, MaxRetries: 1},
+	)
+
+	params := autoInitParams(uri.String())
+	initOpts, err := json.Marshal(map[string]any{
+		"langID":  "go",
+		"command": "gopls serve",
+	})
+	require.NoError(t, err)
+	params.InitializeOptions = initOpts
+
+	loadedWg.Add(1)
+	_, err = mgr.Initialize(ctx, params)
+	require.NoError(t, err)
+	loadedWg.Wait()
+
+	// Wait for diagnostics that include the undefined Helper error.
+	// This confirms our test setup is correct before proceeding.
+	timer := time.NewTimer(15 * time.Second)
+	defer timer.Stop()
+	var gotError bool
+	for !gotError {
+		select {
+		case p := <-diagCh:
+			if p.URI != mainURI {
+				continue
+			}
+			for _, d := range p.Diagnostics {
+				if strings.Contains(d.Message, "Helper") {
+					gotError = true
+					break
+				}
+			}
+		case <-timer.C:
+			t.Fatal("timed out waiting for diagnostics with undefined Helper error")
+		case <-ctx.Done():
+			t.Fatal("context cancelled waiting for diagnostics")
+		}
+	}
+
+	// Drain any remaining diagnostics from the initial load.
+	drainDiagnostics(diagCh, 1*time.Second)
+
+	helperPathTarget := filepath.Join(tmpDir, "helper.go")
+	require.NoError(t, os.Rename(helperPath, helperPathTarget))
+
+	helperURI, err := workspaceapi.ParseURI("file://" + helperPathTarget)
+	require.NoError(t, err)
+
+	// Notify the LSP manager about the newly created file.
+	mgr.Handle(ctx, textapi.Event{
+		Type: textapi.EventTypeRename,
 		URI:  helperURI,
 	})
 
