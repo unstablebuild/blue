@@ -515,6 +515,87 @@ func TestCallbackHandler_ShowDocument(t *testing.T) {
 	}
 }
 
+func TestCallbackHandler_ShowDocument_HTTP(t *testing.T) {
+	t.Parallel()
+
+	t.Run("HTTP URL opens floating HTML handler", func(t *testing.T) {
+		t.Parallel()
+		wm := &mockWindowManager{}
+		opener := &mockResourceOpener{}
+		h := NewCallbackHandler(
+			&mockNotifications{}, wm, opener, nil, nil,
+			"",
+			CallbackHandlerConfig{},
+		)
+		result, err := h.ShowDocument(t.Context(),
+			semanticapi.ShowDocumentParams{
+				URI: "http://localhost:8080/asm",
+			},
+		)
+		require.NoError(t, err)
+		assert.True(t, result.Success)
+		wm.mu.Lock()
+		assert.Equal(t, 1, wm.floatingCalls)
+		wm.mu.Unlock()
+		opener.mu.Lock()
+		assert.Empty(t, opener.opened)
+		opener.mu.Unlock()
+	})
+
+	t.Run("HTTPS URL opens floating HTML handler", func(t *testing.T) {
+		t.Parallel()
+		wm := &mockWindowManager{}
+		opener := &mockResourceOpener{}
+		h := NewCallbackHandler(
+			&mockNotifications{}, wm, opener, nil, nil,
+			"",
+			CallbackHandlerConfig{},
+		)
+		result, err := h.ShowDocument(t.Context(),
+			semanticapi.ShowDocumentParams{
+				URI: "https://pkg.go.dev/fmt",
+			},
+		)
+		require.NoError(t, err)
+		assert.True(t, result.Success)
+		wm.mu.Lock()
+		assert.Equal(t, 1, wm.floatingCalls)
+		wm.mu.Unlock()
+		opener.mu.Lock()
+		assert.Empty(t, opener.opened)
+		opener.mu.Unlock()
+	})
+
+	t.Run("file URL uses resource opener", func(t *testing.T) {
+		t.Parallel()
+		wm := &mockWindowManager{}
+		opener := &mockResourceOpener{}
+		notif := &mockNotifications{}
+		h := NewCallbackHandler(
+			notif, wm, opener, nil, nil,
+			"",
+			CallbackHandlerConfig{},
+		)
+		ctx := ContextWithMetadata(
+			t.Context(),
+			Metadata{ServerName: "gopls"},
+		)
+		result, err := h.ShowDocument(ctx,
+			semanticapi.ShowDocumentParams{
+				URI: "file:///tmp/foo.go",
+			},
+		)
+		require.NoError(t, err)
+		assert.True(t, result.Success)
+		wm.mu.Lock()
+		assert.Equal(t, 0, wm.floatingCalls)
+		wm.mu.Unlock()
+		opener.mu.Lock()
+		assert.Len(t, opener.opened, 1)
+		opener.mu.Unlock()
+	})
+}
+
 func TestCallbackHandler_WorkDoneProgressCreate(
 	t *testing.T,
 ) {
@@ -1420,6 +1501,30 @@ func (c *mockCellEditor) Edit(
 	)
 	return start, end, "", nil
 }
+
+type mockWindowManager struct {
+	mu            sync.Mutex
+	floatingCalls int
+}
+
+func (m *mockWindowManager) Floating(
+	_ browserapi.Floating, _ browserapi.FloatingConfig,
+) (browserapi.Window, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.floatingCalls++
+	return &mockWindow{}, nil
+}
+
+func (m *mockWindowManager) CloseWindow(
+	_ browserapi.Window,
+) error {
+	return nil
+}
+
+type mockWindow struct{}
+
+func (m *mockWindow) WindowID() uint64 { return 0 }
 
 type mockResourceOpener struct {
 	mu     sync.Mutex
