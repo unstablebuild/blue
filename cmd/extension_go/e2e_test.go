@@ -24,13 +24,17 @@
 package main
 
 import (
+	"context"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/unstablebuild/blue/ide/idelsp"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
@@ -867,6 +871,85 @@ func TestGoRouter(t *testing.T) {
 		})
 		require.NoError(t, err)
 	})
+}
+
+func TestE2EHandleOpenWorksWithNoInitializeServer(t *testing.T) {
+	t.Parallel()
+	goplsBin := findGopls(t)
+
+	diskContent := "package main\n\nfunc main() {}\n"
+
+	dir := setupWorkspace(t, "example.com/test", []testFile{
+		{name: "main.go", content: diskContent},
+	})
+	rootURI := "file://" + dir
+
+	uri, err := workspaceapi.ParseURI(rootURI)
+	require.NoError(t, err)
+
+	scheme := newTestScheme()
+
+	ready := make(chan struct{})
+	var once sync.Once
+	cb := &testCallback{
+		onShowMessage: func(params semanticapi.ShowMessageParams) {
+			if strings.Contains(params.Message, "Finished loading packages") ||
+				strings.Contains(params.Message, "background refresh finished") {
+				once.Do(func() { close(ready) })
+			}
+		},
+		onProgress: readyOnProgressCh(&once, ready),
+	}
+
+	mgr := idelsp.New(
+		uri, scheme, scheme,
+		&stubPkgManager{bin: goplsBin},
+		nil, nil,
+		idelsp.Config{
+			MaxRetries:         1,
+			Callback:           cb,
+			NoInitializeServer: true,
+		},
+	)
+	t.Cleanup(func() { require.NoError(t, mgr.Close()) })
+
+	ctx := context.Background()
+	params, err := goplsInitializeParams(rootURI)
+	require.NoError(t, err)
+
+	_, err = mgr.Initialize(ctx, params)
+	require.NoError(t, err)
+
+	mainURI := "file://" + filepath.Join(dir, "main.go")
+	fileURIs := map[string]string{"main.go": mainURI}
+	waitGoplsReady(t, ready, mgr, fileURIs)
+
+	// Open the file with overlay content that differs from disk.
+	// The overlay has an Add function that the disk version does not.
+	wsURI, err := workspaceapi.ParseURI(mainURI)
+	require.NoError(t, err)
+
+	mgr.Handle(ctx, textapi.Event{
+		Type:    textapi.EventTypeOpen,
+		URI:     wsURI,
+		Content: mainSrc, // contains Add at line 17
+	})
+
+	// Give handleEvs time to process the open event.
+	time.Sleep(1 * time.Second)
+
+	// Hover on Add (line 17, char 5) which only exists in the overlay.
+	// If didOpen was sent, gopls uses the overlay and returns hover info.
+	// If didOpen was dropped (bug), gopls reads from disk where line 17
+	// does not exist and returns nil.
+	hover, err := mgr.Hover(ctx, semanticapi.HoverParams{
+		TextDocument: semanticapi.TextDocumentIdentifier{URI: mainURI},
+		Position:     semanticapi.Position{Line: 17, Character: 5},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, hover,
+		"expected hover on Add — didOpen was likely not sent to gopls")
+	assert.Contains(t, hover.Contents.Value, "Add")
 }
 
 func TestAbsDiff(t *testing.T) {
