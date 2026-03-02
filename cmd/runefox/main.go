@@ -43,7 +43,8 @@ func main() {
 		return nil
 	})
 
-	h := htmlhandler.New(interrupter, u)
+	h := htmlhandler.New(interrupter, u,
+		htmlhandler.WithNavigationBar(htmlhandler.BarTop))
 	defer func() { _ = h.Close() }()
 
 	if err := tui.Run(h, tui.WithInputMode(term.InputEsc|term.InputMouse)); err != nil {

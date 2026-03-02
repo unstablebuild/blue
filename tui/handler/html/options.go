@@ -57,3 +57,22 @@ func WithComponentOptions(opts ...htmlcomp.Option) Option {
 		h.compOpts = append(h.compOpts, opts...)
 	}
 }
+
+// BarPosition specifies where the navigation bar appears.
+type BarPosition int
+
+const (
+	// BarTop places the navigation bar at the top of the handler.
+	BarTop BarPosition = iota
+	// BarBottom places the navigation bar at the bottom of the handler.
+	BarBottom
+)
+
+// WithNavigationBar adds a navigation bar with back/forward buttons
+// and a URL input box at the specified position.
+func WithNavigationBar(pos BarPosition) Option {
+	return func(h *Handler) {
+		h.barPos = pos
+		h.bar = newNavigationBar("")
+	}
+}

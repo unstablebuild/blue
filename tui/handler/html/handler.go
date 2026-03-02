@@ -20,6 +20,7 @@ import (
 
 	htmlcomp "github.com/unstablebuild/blue/tui/component/html"
 	"github.com/unstablebuild/blue/tui/component/markdown"
+	"github.com/unstablebuild/rune-go-sdk/component"
 	"github.com/unstablebuild/rune-go-sdk/handler"
 	"github.com/unstablebuild/rune-go-sdk/mouse"
 	"github.com/unstablebuild/rune-go-sdk/term"
@@ -71,6 +72,12 @@ type Handler struct {
 
 	width, height int
 
+	// Navigation bar state.
+	bar         *navigationBar
+	barPos      BarPosition
+	contentDrag bool // true during a mouse drag started in the content area
+	barDrag     bool // true during a mouse drag started in the bar input area
+
 	// Component options (immutable after construction).
 	httpClient *http.Client
 	mdCfg      markdown.Config
@@ -114,13 +121,45 @@ func (h *Handler) Close() error {
 func (h *Handler) Resize(width, height int) {
 	h.width = width
 	h.height = height
-	h.current.Resize(width, height)
+	h.current.Resize(width, h.contentHeight())
+	if h.bar != nil {
+		h.bar.Resize(width)
+	}
 }
 
 // Draw renders the HTML content with selection highlighting.
 func (h *Handler) Draw(w term.Writer) {
-	h.current.Draw(w)
+	if h.bar == nil {
+		h.current.Draw(w)
+		h.drawSelection(w, h.height)
+		return
+	}
 
+	barY, contentY := h.barContentOffsets()
+	ch := h.contentHeight()
+
+	// Draw bar.
+	barW := &component.VirtualWriter{
+		Writer: w,
+		Offset: term.Coordinates{X: 0, Y: barY},
+		Width:  h.width,
+		Height: barHeight,
+	}
+	h.bar.Draw(barW)
+
+	// Draw content.
+	contentW := &component.VirtualWriter{
+		Writer: w,
+		Offset: term.Coordinates{X: 0, Y: contentY},
+		Width:  h.width,
+		Height: ch,
+	}
+	h.current.Draw(contentW)
+	h.drawSelection(contentW, ch)
+}
+
+// drawSelection renders the selection highlight overlay.
+func (h *Handler) drawSelection(w term.Writer, viewHeight int) {
 	if !h.hasSelection || h.current.State() != htmlcomp.StateLoaded {
 		return
 	}
@@ -130,7 +169,7 @@ func (h *Handler) Draw(w term.Writer) {
 
 	for y := start.Y; y <= end.Y; y++ {
 		screenY := y - offset
-		if screenY < 0 || screenY >= h.height {
+		if screenY < 0 || screenY >= viewHeight {
 			continue
 		}
 
@@ -152,11 +191,18 @@ func (h *Handler) Draw(w term.Writer) {
 // Handle processes keyboard and mouse events.
 func (h *Handler) Handle(ev term.Event) (exit, handled bool) {
 	if ev.Type == term.EventMouse {
+		if h.bar != nil {
+			return h.handleMouseWithBar(ev)
+		}
 		return h.m.Handle(ev)
 	}
 
 	if ev.Type != term.EventKey {
 		return false, false
+	}
+
+	if h.bar != nil && h.bar.focused {
+		return h.handleKeyBarFocused(ev)
 	}
 
 	if h.current.State() != htmlcomp.StateLoaded {
@@ -167,13 +213,21 @@ func (h *Handler) Handle(ev term.Event) (exit, handled bool) {
 }
 
 // Cursor returns the cursor position, style, and visibility.
-// The HTML handler does not show a cursor.
 func (h *Handler) Cursor() (term.Coordinates, term.CursorStyle, bool) {
+	if h.bar != nil && h.bar.focused {
+		pos, style, show := h.bar.Cursor()
+		barY, _ := h.barContentOffsets()
+		pos.Y += barY
+		return pos, style, show
+	}
 	return term.Coordinates{}, term.CursorStyleDefault, false
 }
 
 // Selection returns the selected text if any.
 func (h *Handler) Selection() (string, bool) {
+	if h.bar != nil && h.bar.focused {
+		return h.bar.Selection()
+	}
 	if !h.hasSelection || h.current.State() != htmlcomp.StateLoaded {
 		return "", false
 	}
@@ -332,8 +386,8 @@ func (h *Handler) SelectLine(y int) {
 // Width returns the current width.
 func (h *Handler) Width() int { return h.width }
 
-// Height returns the current height.
-func (h *Handler) Height() int { return h.height }
+// Height returns the content viewport height (excluding any navigation bar).
+func (h *Handler) Height() int { return h.contentHeight() }
 
 // screenToDoc converts screen coordinates to document coordinates.
 func (h *Handler) screenToDoc(pos term.Coordinates) term.Coordinates {
@@ -498,7 +552,7 @@ func (h *Handler) handleKeyLoaded(ev term.Event, r *markdown.Component) (exit, h
 
 // scrollPage scrolls by one page. direction is -1 for up, 1 for down.
 func (h *Handler) scrollPage(r *markdown.Component, direction int) {
-	lines := max(1, h.height)
+	lines := max(1, h.contentHeight())
 	if direction > 0 {
 		for range lines {
 			if !r.SeekDown() {
@@ -516,7 +570,7 @@ func (h *Handler) scrollPage(r *markdown.Component, direction int) {
 
 // scrollHalfPage scrolls by half a page. direction is -1 for up, 1 for down.
 func (h *Handler) scrollHalfPage(r *markdown.Component, direction int) {
-	lines := max(1, h.height/2)
+	lines := max(1, h.contentHeight()/2)
 	if direction > 0 {
 		for range lines {
 			if !r.SeekDown() {
@@ -612,6 +666,118 @@ func (h *Handler) showURL(u *url.URL) {
 	h.current = comp
 	h.ClearSelection()
 	if h.width > 0 || h.height > 0 {
-		comp.Resize(h.width, h.height)
+		comp.Resize(h.width, h.contentHeight())
 	}
+	h.syncBar()
+}
+
+// ── Navigation bar helpers ──────────────────────────────────────────
+
+// contentHeight returns the height available for the HTML content.
+func (h *Handler) contentHeight() int {
+	if h.bar != nil {
+		return max(0, h.height-barHeight)
+	}
+	return h.height
+}
+
+// barContentOffsets returns the Y offsets for the bar and content areas.
+func (h *Handler) barContentOffsets() (barY, contentY int) {
+	if h.barPos == BarTop {
+		return 0, barHeight
+	}
+	return h.height - barHeight, 0
+}
+
+// syncBar updates the navigation bar URL and button state from the
+// current history entry.
+func (h *Handler) syncBar() {
+	if h.bar == nil || len(h.history) == 0 {
+		return
+	}
+	h.bar.setURL(h.history[h.historyIdx].String())
+	h.bar.buttons.backDim = h.historyIdx <= 0
+	h.bar.buttons.fwdDim = h.historyIdx >= len(h.history)-1
+}
+
+// handleMouseWithBar routes mouse events between the bar and content.
+func (h *Handler) handleMouseWithBar(ev term.Event) (exit, handled bool) {
+	barY, contentY := h.barContentOffsets()
+
+	// During a content drag, all events go to mouse.Mouse.
+	if h.contentDrag {
+		if ev.Key == term.MouseRelease {
+			h.contentDrag = false
+		}
+		ev.MouseY -= contentY
+		return h.m.Handle(ev)
+	}
+
+	// During a bar drag, all events go to the bar's frame so that
+	// double-click, triple-click, and drag selection work correctly.
+	if h.barDrag {
+		if ev.Key == term.MouseRelease {
+			h.barDrag = false
+		}
+		ev.MouseY -= barY
+		return h.bar.handleMouse(ev)
+	}
+
+	// Left-clicks in the bar area are handled by the bar.
+	if ev.Key == term.MouseLeft &&
+		ev.MouseY >= barY && ev.MouseY < barY+barHeight {
+		result := h.bar.handleClick(ev.MouseX, ev.MouseY-barY)
+		switch result {
+		case clickBack:
+			h.goBack()
+			return false, true
+		case clickForward:
+			h.goForward()
+			return false, true
+		case clickInput:
+			h.barDrag = true
+			if !h.bar.focused {
+				h.bar.setFocused(true)
+			}
+			ev.MouseY -= barY
+			return h.bar.handleMouse(ev)
+		}
+		return false, true
+	}
+
+	// Left-clicks in the content area start a drag and unfocus the bar.
+	if ev.Key == term.MouseLeft {
+		h.contentDrag = true
+		if h.bar.focused {
+			h.bar.setFocused(false)
+		}
+	}
+
+	// Translate coordinates into content space and delegate.
+	ev.MouseY -= contentY
+	return h.m.Handle(ev)
+}
+
+// handleKeyBarFocused handles keyboard events when the bar is focused.
+func (h *Handler) handleKeyBarFocused(ev term.Event) (exit, handled bool) {
+	switch ev.Key {
+	case term.KeyEsc:
+		h.bar.setFocused(false)
+		return false, true
+	case term.KeyEnter:
+		urlStr := h.bar.input.Text()
+		u, err := url.Parse(urlStr)
+		if err == nil && (u.Scheme == "http" || u.Scheme == "https") {
+			h.navigateTo(u)
+		}
+		h.bar.setFocused(false)
+		return false, true
+	}
+
+	if ev.Mod&term.ModCtrl != 0 && ev.Ch == 'c' {
+		h.bar.setFocused(false)
+		return false, true
+	}
+
+	return h.bar.inner.Handle(ev)
 }
