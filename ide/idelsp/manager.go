@@ -372,9 +372,6 @@ func (m *Manager) ensureFile(
 func (m *Manager) ensureServer(
 	ctx context.Context, filename workspaceapi.URI,
 ) (*langServer, error) {
-	if m.cfg.NoInitializeServer {
-		return nil, fmt.Errorf("server not initialized and auto-initialize config is false")
-	}
 	lang, err := languageForFile(filename)
 	if err != nil {
 		return nil, err
@@ -386,6 +383,10 @@ func (m *Manager) ensureServer(
 		return srv, nil
 	}
 	m.mu.Unlock()
+
+	if m.cfg.NoInitializeServer {
+		return nil, fmt.Errorf("server not initialized and auto-initialize config is false")
+	}
 
 	return m.initializeServer(ctx, lang, autoInitParams(m.rootURI))
 }
