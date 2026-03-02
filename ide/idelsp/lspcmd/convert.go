@@ -63,13 +63,19 @@ func LspToURI(s string) (workspaceapi.URI, error) {
 
 // ApplyEdits applies a set of LSP TextEdits to a CellEditor in reverse
 // document order so that earlier positions remain valid.
+//
+// Per the LSP spec, when multiple inserts share the same position,
+// the array order defines the order in which the inserted strings
+// appear in the resulting text. Since we apply edits sequentially
+// from bottom to top, same-position inserts must be reversed so the
+// first-in-array insert is applied last (ending up first in the text).
 func ApplyEdits(
 	ctx context.Context, ce textapi.CellEditor, edits []semanticapi.TextEdit,
 ) error {
 	sorted := make([]semanticapi.TextEdit, len(edits))
 	copy(sorted, edits)
 
-	sort.Slice(sorted, func(i, j int) bool {
+	sort.SliceStable(sorted, func(i, j int) bool {
 		si := sorted[i].Range.Start
 		sj := sorted[j].Range.Start
 		if si.Line != sj.Line {
@@ -77,6 +83,7 @@ func ApplyEdits(
 		}
 		return si.Character > sj.Character
 	})
+	reverseSameStartEdits(sorted)
 
 	for _, edit := range sorted {
 		start := PosToCoord(edit.Range.Start)
@@ -88,4 +95,25 @@ func ApplyEdits(
 		}
 	}
 	return nil
+}
+
+// reverseSameStartEdits reverses each contiguous group of edits
+// sharing the same start position. This is needed because when
+// applying edits bottom-to-top, each insert at position P pushes
+// previous text at P downward. Reversing ensures the first-in-array
+// insert ends up first in the resulting text, per the LSP spec.
+func reverseSameStartEdits(edits []semanticapi.TextEdit) {
+	for i := 0; i < len(edits); {
+		j := i + 1
+		for j < len(edits) &&
+			edits[j].Range.Start == edits[i].Range.Start {
+			j++
+		}
+		if j-i > 1 {
+			for l, r := i, j-1; l < r; l, r = l+1, r-1 {
+				edits[l], edits[r] = edits[r], edits[l]
+			}
+		}
+		i = j
+	}
 }

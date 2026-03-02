@@ -1005,3 +1005,68 @@ func (e *mockEditor) editsFor(h textapi.Handler) []mockEdit {
 	defer ce.mu.Unlock()
 	return append([]mockEdit{}, ce.edits...)
 }
+
+// bufferCellEditor implements textapi.CellEditor and maintains an in-memory
+// text buffer, applying edits as a real editor would. This allows tests to
+// verify the final document content after a sequence of edits.
+type bufferCellEditor struct {
+	lines []string
+}
+
+var _ textapi.CellEditor = (*bufferCellEditor)(nil)
+
+func newBufferCellEditor(initial string) *bufferCellEditor {
+	lines := strings.Split(initial, "\n")
+	return &bufferCellEditor{lines: lines}
+}
+
+func (b *bufferCellEditor) Edit(
+	_ context.Context, start, end term.Coordinates, text string,
+) (term.Coordinates, term.Coordinates, string, error) {
+	// Clamp coordinates to buffer bounds.
+	if start.Y < 0 {
+		start.Y = 0
+	}
+	if start.Y >= len(b.lines) {
+		start.Y = len(b.lines) - 1
+	}
+	if start.X < 0 {
+		start.X = 0
+	}
+	if start.X > len(b.lines[start.Y]) {
+		start.X = len(b.lines[start.Y])
+	}
+	if end.Y < 0 {
+		end.Y = 0
+	}
+	if end.Y >= len(b.lines) {
+		end.Y = len(b.lines) - 1
+	}
+	if end.X < 0 {
+		end.X = 0
+	}
+	if end.X > len(b.lines[end.Y]) {
+		end.X = len(b.lines[end.Y])
+	}
+
+	// Build the content before and after the replaced range.
+	before := b.lines[start.Y][:start.X]
+	after := b.lines[end.Y][end.X:]
+
+	// Combine before + new text + after and re-split into lines.
+	combined := before + text + after
+	newLines := strings.Split(combined, "\n")
+
+	// Replace the affected lines.
+	result := make([]string, 0, start.Y+len(newLines)+len(b.lines)-end.Y-1)
+	result = append(result, b.lines[:start.Y]...)
+	result = append(result, newLines...)
+	result = append(result, b.lines[end.Y+1:]...)
+	b.lines = result
+
+	return start, end, "", nil
+}
+
+func (b *bufferCellEditor) String() string {
+	return strings.Join(b.lines, "\n")
+}

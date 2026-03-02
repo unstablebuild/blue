@@ -35,6 +35,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/unstablebuild/blue/ide/idelsp"
+	"github.com/unstablebuild/blue/ide/idelsp/lspcmd"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
@@ -493,6 +494,66 @@ type Config struct {
 
 		err := handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
+	})
+
+	// Regression: go add-test should produce a test file with
+	// the package declaration at the top, not at the bottom.
+	// When gopls sends workspace/applyEdit with multiple inserts
+	// at the same position, the array order must define the
+	// resulting text order per the LSP spec.
+	t.Run("AddTest/EditOrder", func(t *testing.T) {
+		t.Parallel()
+
+		// Use a source with only Greet (no existing test file)
+		// so gopls creates a fresh test file.
+		addTestSrc := "package main\n\nfunc Add(a, b int) int {\n\treturn a + b\n}\n"
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
+			{name: "main.go", content: addTestSrc},
+		})
+		handler, me, _ := newTestHandler(t, env.testEnv)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor on "Add" (line 2, char 5).
+		cmd := goCmdAt("add-test", uri, resource, 2, 5)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// workspace/applyEdit is sent synchronously within
+		// ExecuteCommand, so captured edits are available
+		// immediately after HandleCommand returns.
+		captured := env.capturedEdits()
+		require.NotEmpty(t, captured, "gopls should have sent workspace/applyEdit")
+
+		// Collect all TextEdits destined for the test file.
+		var testEdits []semanticapi.TextEdit
+		for _, ae := range captured {
+			for _, dc := range ae.Edit.DocumentChanges {
+				if dc.TextDocumentEdit != nil &&
+					strings.HasSuffix(dc.TextDocumentEdit.TextDocument.URI, "_test.go") {
+					testEdits = append(testEdits, dc.TextDocumentEdit.Edits...)
+				}
+			}
+			for fileURI, edits := range ae.Edit.Changes {
+				if strings.HasSuffix(fileURI, "_test.go") {
+					testEdits = append(testEdits, edits...)
+				}
+			}
+		}
+		require.NotEmpty(t, testEdits, "expected edits for the test file")
+
+		// Apply the edits through lspcmd.ApplyEdits — the function
+		// under test — and reconstruct the resulting buffer content.
+		buf := newBufferCellEditor("")
+		err = lspcmd.ApplyEdits(t.Context(), buf, testEdits)
+		require.NoError(t, err)
+
+		content := buf.String()
+		assert.True(t, strings.HasPrefix(content, "package"),
+			"generated test file must start with 'package', got:\n%s", content)
+		assert.Contains(t, content, "func Test")
 	})
 
 	t.Run("Assembly", func(t *testing.T) {
