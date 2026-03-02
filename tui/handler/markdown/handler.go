@@ -39,7 +39,7 @@ import (
 //   - u:           Scroll up half page
 //   - q/Esc:       Exit (returns exit=true)
 //
-// It implements handler.ScrollableFloating and mouse.Delegate.
+// It implements handler.ScrollableFloating and handler.Responsive.
 type Handler struct {
 	comp           *markdown.Component
 	mouse          *mouse.Mouse
@@ -52,7 +52,21 @@ type Handler struct {
 }
 
 var _ handler.ScrollableFloating = (*Handler)(nil)
-var _ mouse.Delegate = (*Handler)(nil)
+var _ handler.Responsive = (*Handler)(nil)
+
+// mouseDelegate adapts a Handler to satisfy mouse.Delegate, which requires
+// Height() int (viewport height), while the handler's own Height(width int) int
+// satisfies handler.Responsive.
+type mouseDelegate struct {
+	*Handler
+}
+
+var _ mouse.Delegate = (*mouseDelegate)(nil)
+
+// Height returns the viewport height for the mouse delegate.
+func (d *mouseDelegate) Height() int {
+	return d.height
+}
 
 // New creates a new markdown handler wrapping the given component.
 func New(comp *markdown.Component, opts ...Option) *Handler {
@@ -63,7 +77,7 @@ func New(comp *markdown.Component, opts ...Option) *Handler {
 	for _, opt := range opts {
 		opt(h)
 	}
-	h.mouse = mouse.New(h)
+	h.mouse = mouse.New(&mouseDelegate{h})
 	return h
 }
 
@@ -349,9 +363,11 @@ func (h *Handler) Width() int {
 	return h.width
 }
 
-// Height returns the current height.
-func (h *Handler) Height() int {
-	return h.height
+// Height returns the total height needed to render the markdown content at the
+// given width. It delegates to the underlying component's Height method. This
+// satisfies the component.Responsive interface.
+func (h *Handler) Height(width int) int {
+	return h.comp.Height(width)
 }
 
 // screenToDoc converts screen coordinates to document coordinates.
