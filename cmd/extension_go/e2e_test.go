@@ -952,6 +952,176 @@ func TestE2EHandleOpenWorksWithNoInitializeServer(t *testing.T) {
 	assert.Contains(t, hover.Contents.Value, "Add")
 }
 
+func TestE2EHandleOpenRaceWithInitialize(t *testing.T) {
+	t.Parallel()
+	goplsBin := findGopls(t)
+
+	diskContent := "package main\n\nfunc main() {}\n"
+
+	dir := setupWorkspace(t, "example.com/test", []testFile{
+		{name: "main.go", content: diskContent},
+	})
+	rootURI := "file://" + dir
+
+	uri, err := workspaceapi.ParseURI(rootURI)
+	require.NoError(t, err)
+
+	scheme := newTestScheme()
+
+	ready := make(chan struct{})
+	var once sync.Once
+	cb := &testCallback{
+		onShowMessage: func(params semanticapi.ShowMessageParams) {
+			if strings.Contains(params.Message, "Finished loading packages") ||
+				strings.Contains(params.Message, "background refresh finished") {
+				once.Do(func() { close(ready) })
+			}
+		},
+		onProgress: readyOnProgressCh(&once, ready),
+	}
+
+	mgr := idelsp.New(
+		uri, scheme, scheme,
+		&stubPkgManager{bin: goplsBin},
+		nil, nil,
+		idelsp.Config{
+			MaxRetries:         1,
+			Callback:           cb,
+			NoInitializeServer: true,
+		},
+	)
+	t.Cleanup(func() { require.NoError(t, mgr.Close()) })
+
+	ctx := context.Background()
+
+	mainURI := "file://" + filepath.Join(dir, "main.go")
+	wsURI, err := workspaceapi.ParseURI(mainURI)
+	require.NoError(t, err)
+
+	// Send EventTypeOpen BEFORE Initialize — simulates the race
+	// where the IDE re-opens session files before the extension
+	// has called Initialize.
+	mgr.Handle(ctx, textapi.Event{
+		Type:    textapi.EventTypeOpen,
+		URI:     wsURI,
+		Content: mainSrc, // overlay with Add at line 17
+	})
+
+	// Give handleEvs time to track the pending open (no server yet).
+	time.Sleep(200 * time.Millisecond)
+
+	// Now Initialize — this creates the gopls server and sends
+	// didOpen for pending files as part of server init.
+	params, err := goplsInitializeParams(rootURI)
+	require.NoError(t, err)
+
+	_, err = mgr.Initialize(ctx, params)
+	require.NoError(t, err)
+
+	fileURIs := map[string]string{"main.go": mainURI}
+	waitGoplsReady(t, ready, mgr, fileURIs)
+
+	// Hover on Add (line 17, char 5) which only exists in the overlay.
+	// If the pending open was sent during Initialize, gopls uses the
+	// overlay and returns hover info. If it was dropped, gopls reads
+	// from disk where Add does not exist and returns nil.
+	hover, err := mgr.Hover(ctx, semanticapi.HoverParams{
+		TextDocument: semanticapi.TextDocumentIdentifier{URI: mainURI},
+		Position:     semanticapi.Position{Line: 17, Character: 5},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, hover,
+		"expected hover on Add — pending didOpen was likely not sent during Initialize")
+	assert.Contains(t, hover.Contents.Value, "Add")
+}
+
+func TestE2EHandleOpenCloseRaceWithInitialize(t *testing.T) {
+	t.Parallel()
+	goplsBin := findGopls(t)
+
+	diskContent := "package main\n\nfunc main() {}\n"
+
+	dir := setupWorkspace(t, "example.com/test", []testFile{
+		{name: "main.go", content: diskContent},
+	})
+	rootURI := "file://" + dir
+
+	uri, err := workspaceapi.ParseURI(rootURI)
+	require.NoError(t, err)
+
+	scheme := newTestScheme()
+
+	ready := make(chan struct{})
+	var once sync.Once
+	cb := &testCallback{
+		onShowMessage: func(params semanticapi.ShowMessageParams) {
+			if strings.Contains(params.Message, "Finished loading packages") ||
+				strings.Contains(params.Message, "background refresh finished") {
+				once.Do(func() { close(ready) })
+			}
+		},
+		onProgress: readyOnProgressCh(&once, ready),
+	}
+
+	mgr := idelsp.New(
+		uri, scheme, scheme,
+		&stubPkgManager{bin: goplsBin},
+		nil, nil,
+		idelsp.Config{
+			MaxRetries:         1,
+			Callback:           cb,
+			NoInitializeServer: true,
+		},
+	)
+	t.Cleanup(func() { require.NoError(t, mgr.Close()) })
+
+	ctx := context.Background()
+
+	mainURI := "file://" + filepath.Join(dir, "main.go")
+	wsURI, err := workspaceapi.ParseURI(mainURI)
+	require.NoError(t, err)
+
+	// Open then close BEFORE Initialize — the file should NOT be
+	// sent as didOpen during server init because it's no longer open.
+	mgr.Handle(ctx, textapi.Event{
+		Type:    textapi.EventTypeOpen,
+		URI:     wsURI,
+		Content: mainSrc, // overlay with Add at line 17
+	})
+	mgr.Handle(ctx, textapi.Event{
+		Type: textapi.EventTypeClose,
+		URI:  wsURI,
+	})
+
+	// Give handleEvs time to process both events.
+	time.Sleep(200 * time.Millisecond)
+
+	// Initialize — should NOT send didOpen (file was closed).
+	params, err := goplsInitializeParams(rootURI)
+	require.NoError(t, err)
+
+	_, err = mgr.Initialize(ctx, params)
+	require.NoError(t, err)
+
+	fileURIs := map[string]string{"main.go": mainURI}
+	waitGoplsReady(t, ready, mgr, fileURIs)
+
+	// Hover on line 17 where Add would be in the overlay. Since the
+	// file was closed before Initialize, gopls should NOT have the
+	// overlay — it reads from disk where line 17 doesn't exist.
+	// gopls may return nil hover or an error (line out of range).
+	hover, err := mgr.Hover(ctx, semanticapi.HoverParams{
+		TextDocument: semanticapi.TextDocumentIdentifier{URI: mainURI},
+		Position:     semanticapi.Position{Line: 17, Character: 5},
+	})
+	if err == nil {
+		assert.Nil(t, hover,
+			"expected no hover at line 17 — closed file should not have been sent as didOpen")
+	}
+	// err != nil is also acceptable: gopls rejects the position because
+	// the disk file only has a few lines (no overlay was sent).
+}
+
 func TestAbsDiff(t *testing.T) {
 	t.Parallel()
 	assert.Equal(t, uint32(5), absDiff(10, 5))
