@@ -68,10 +68,10 @@ func (h *renameHandler) HandleCommand(ctx context.Context, cmd textapi.Command) 
 	if cmd.Resource == nil {
 		return nil
 	}
-	pos := coordToPos(cmd.Cursor.Content)
+	pos := CoordToPos(cmd.Cursor.Content)
 
 	prep, err := h.lsp.PrepareRename(ctx, semanticapi.PrepareRenameParams{
-		TextDocument: textDocID(cmd.URI),
+		TextDocument: TextDocID(cmd.URI),
 		Position:     pos,
 	})
 	if err != nil {
@@ -146,7 +146,7 @@ func (r *renameFloatingHandler) Handle(ev term.Event) (bool, bool) {
 	}
 
 	edit, err := r.lsp.Rename(r.ctx, semanticapi.RenameParams{
-		TextDocument: textDocID(r.uri),
+		TextDocument: TextDocID(r.uri),
 		Position:     r.position,
 		NewName:      newName,
 	})
@@ -158,12 +158,12 @@ func (r *renameFloatingHandler) Handle(ev term.Event) (bool, bool) {
 		return true, true
 	}
 
-	err = applyWorkspaceEdit(r.ctx, r.editor, r.opener, edit)
+	err = ApplyWorkspaceEdit(r.ctx, r.editor, r.opener, edit)
 	if err != nil {
 		slog.Warn("rename apply", "err", err)
 		return true, true
 	}
-	notifyDidChange(r.ctx, r.lsp, edit)
+	NotifyDidChange(r.ctx, r.lsp, edit)
 	return true, true
 }
 
@@ -193,11 +193,11 @@ func (r *renameFloatingHandler) Close() error {
 	return nil
 }
 
-// applyWorkspaceEdit applies a WorkspaceEdit by routing
+// ApplyWorkspaceEdit applies a WorkspaceEdit by routing
 // each file's text edits through the editor API.
 // Per the LSP spec, DocumentChanges is preferred over
 // Changes when both are present.
-func applyWorkspaceEdit(
+func ApplyWorkspaceEdit(
 	ctx context.Context, editor textapi.Editor,
 	opener browserapi.ResourceOpener,
 	edit *semanticapi.WorkspaceEdit,
@@ -206,7 +206,7 @@ func applyWorkspaceEdit(
 		for _, dc := range edit.DocumentChanges {
 			switch {
 			case dc.TextDocumentEdit != nil:
-				err := applyEditsForURI(ctx, editor, opener,
+				err := ApplyEditsForURI(ctx, editor, opener,
 					dc.TextDocumentEdit.TextDocument.URI, dc.TextDocumentEdit.Edits,
 				)
 				if err != nil {
@@ -225,7 +225,7 @@ func applyWorkspaceEdit(
 		return nil
 	}
 	for uriStr, edits := range edit.Changes {
-		err := applyEditsForURI(ctx, editor, opener, uriStr, edits)
+		err := ApplyEditsForURI(ctx, editor, opener, uriStr, edits)
 		if err != nil {
 			return err
 		}
@@ -233,9 +233,9 @@ func applyWorkspaceEdit(
 	return nil
 }
 
-// notifyDidChange sends textDocument/didChange notifications to
+// NotifyDidChange sends textDocument/didChange notifications to
 // the language server for every file touched by the workspace edit.
-func notifyDidChange(
+func NotifyDidChange(
 	ctx context.Context, lsp semanticapi.LSP,
 	edit *semanticapi.WorkspaceEdit,
 ) {
@@ -244,7 +244,7 @@ func notifyDidChange(
 			if dc.TextDocumentEdit != nil {
 				err := lsp.DidChange(ctx, semanticapi.DidChangeTextDocumentParams{
 					TextDocument:   dc.TextDocumentEdit.TextDocument,
-					ContentChanges: textEditsToChanges(dc.TextDocumentEdit.Edits),
+					ContentChanges: TextEditsToChanges(dc.TextDocumentEdit.Edits),
 				})
 				if err != nil {
 					slog.Warn("rename didChange", "err", err)
@@ -256,7 +256,7 @@ func notifyDidChange(
 	for uri, edits := range edit.Changes {
 		err := lsp.DidChange(ctx, semanticapi.DidChangeTextDocumentParams{
 			TextDocument:   semanticapi.VersionedTextDocumentIdentifier{URI: uri},
-			ContentChanges: textEditsToChanges(edits),
+			ContentChanges: TextEditsToChanges(edits),
 		})
 		if err != nil {
 			slog.Warn("rename didChange", "err", err)
@@ -264,7 +264,9 @@ func notifyDidChange(
 	}
 }
 
-func textEditsToChanges(edits []semanticapi.TextEdit) []semanticapi.TextDocumentContentChangeEvent {
+// TextEditsToChanges converts a slice of TextEdits to
+// TextDocumentContentChangeEvents suitable for didChange.
+func TextEditsToChanges(edits []semanticapi.TextEdit) []semanticapi.TextDocumentContentChangeEvent {
 	changes := make([]semanticapi.TextDocumentContentChangeEvent, len(edits))
 	for i, e := range edits {
 		r := e.Range
@@ -276,12 +278,12 @@ func textEditsToChanges(edits []semanticapi.TextEdit) []semanticapi.TextDocument
 	return changes
 }
 
-func applyEditsForURI(
+func ApplyEditsForURI(
 	ctx context.Context, editor textapi.Editor,
 	opener browserapi.ResourceOpener,
 	uriStr string, edits []semanticapi.TextEdit,
 ) error {
-	uri, err := lspToURI(uriStr)
+	uri, err := LspToURI(uriStr)
 	if err != nil {
 		return fmt.Errorf("parse URI %s: %w", uriStr, err)
 	}
@@ -295,7 +297,7 @@ func applyEditsForURI(
 		return fmt.Errorf("editor for %s: %w", uri.Name(), err)
 	}
 	ce := editor.CellEditor(handler)
-	if err := applyEdits(ctx, ce, edits); err != nil {
+	if err := ApplyEdits(ctx, ce, edits); err != nil {
 		return fmt.Errorf("apply edits for %s: %w", uri.Name(), err)
 	}
 	return nil

@@ -126,8 +126,8 @@ type completeHandler struct {
 
 func (h *completeHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
 	params := semanticapi.CompletionParams{
-		TextDocument: textDocID(cmd.URI),
-		Position:     coordToPos(cmd.Cursor.Content),
+		TextDocument: TextDocID(cmd.URI),
+		Position:     CoordToPos(cmd.Cursor.Content),
 		Context: &semanticapi.CompletionContext{
 			TriggerKind: semanticapi.CompletionTriggerKindInvoked,
 		},
@@ -349,7 +349,7 @@ func (c *completionHandler) applyItem(label string) error {
 	switch {
 	case item.TextEdit != nil:
 		edits := []semanticapi.TextEdit{*item.TextEdit}
-		return applyEdits(ctx, ce, edits)
+		return ApplyEdits(ctx, ce, edits)
 	case item.InsertText != "":
 		cur, err := c.editor.Cursor(c.resource)
 		if err != nil {

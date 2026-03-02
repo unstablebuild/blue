@@ -57,7 +57,7 @@ func doNavigate(
 	e locationEntry, opener browserapi.ResourceOpener,
 	wm browserapi.WindowManager, editor textapi.Editor,
 ) error {
-	uri, err := lspToURI(e.uri)
+	uri, err := LspToURI(e.uri)
 	if err != nil {
 		return err
 	}
@@ -76,7 +76,7 @@ func doNavigate(
 	if err != nil {
 		return err
 	}
-	target := posToCoord(e.rng.Start)
+	target := PosToCoord(e.rng.Start)
 	if err := editor.SetCursor(eh, target); err != nil {
 		if cur, curErr := editor.Cursor(eh); curErr == nil && cur == target {
 			return nil
@@ -121,7 +121,7 @@ func enrichEntries(
 	entries []locationEntry, rootURI workspaceapi.URI,
 ) []locationEntry {
 	for i, e := range entries {
-		uri, err := lspToURI(e.uri)
+		uri, err := LspToURI(e.uri)
 		var rel string
 		if err == nil {
 			rel = workspaceapi.RelPath(rootURI, uri)

@@ -82,8 +82,8 @@ func (h *referencesHandler) HandleCommand(ctx context.Context, cmd textapi.Comma
 		return nil
 	}
 	params := semanticapi.ReferenceParams{
-		TextDocument: textDocID(cmd.URI),
-		Position:     coordToPos(cmd.Cursor.Content),
+		TextDocument: TextDocID(cmd.URI),
+		Position:     CoordToPos(cmd.Cursor.Content),
 		Context:      semanticapi.ReferenceContext{IncludeDeclaration: true},
 	}
 	locs, err := h.lsp.References(ctx, params)

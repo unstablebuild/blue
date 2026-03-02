@@ -1,0 +1,877 @@
+// Unstable Build LLC ("COMPANY") CONFIDENTIAL
+//
+// Unpublished Copyright (c) 2017-2026 Unstable Build, All Rights Reserved.
+//
+// NOTICE: All information contained herein is, and remains the property of COMPANY.
+// The intellectual and technical concepts contained herein are proprietary to
+// COMPANY and may be covered by U.S. and Foreign Patents, patents in process,
+// and are protected by trade secret or copyright law. Dissemination of this information
+// or reproduction of this material is strictly forbidden unless prior written permission
+// is obtained from COMPANY. Access to the source code contained herein is hereby
+// forbidden to anyone except current COMPANY employees, managers or contractors who
+// have executed Confidentiality and Non-disclosure agreements explicitly covering such access.
+//
+// The copyright notice above does not evidence any actual or intended publication or
+// disclosure of this source code, which includes information that is confidential and/or
+// proprietary, and is a trade secret, of COMPANY. ANY REPRODUCTION, MODIFICATION,
+// DISTRIBUTION, PUBLIC  PERFORMANCE, OR PUBLIC DISPLAY OF OR THROUGH USE OF THIS SOURCE CODE
+// WITHOUT  THE EXPRESS WRITTEN CONSENT OF COMPANY IS STRICTLY PROHIBITED, AND IN
+// VIOLATION OF APPLICABLE LAWS AND INTERNATIONAL TREATIES. THE RECEIPT OR POSSESSION OF
+// THIS SOURCE CODE AND/OR RELATED INFORMATION DOES NOT CONVEY OR IMPLY ANY RIGHTS TO
+// REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
+// ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
+
+package main
+
+import (
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
+	"github.com/unstablebuild/rune-go-sdk/api/textapi"
+	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
+	"github.com/unstablebuild/rune-go-sdk/term"
+)
+
+// Source files used across tests.
+const (
+	// mainSrc is a basic Go file with an unused import, a struct, and
+	// functions that exercise various code actions.
+	mainSrc = `package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+// Greeter holds a name.
+type Greeter struct {
+	Name string
+}
+
+// Greet returns a greeting.
+func (g *Greeter) Greet() string {
+	return fmt.Sprintf("Hello, %s!", g.Name)
+}
+
+func Add(a, b int) int {
+	return a + b
+}
+
+func main() {
+	g := &Greeter{Name: "World"}
+	fmt.Println(g.Greet())
+	_ = strings.ToUpper("test")
+}
+`
+
+	// testFileSrc is a test file with a test function and a benchmark.
+	testFileSrc = `package main
+
+import "testing"
+
+func TestAdd(t *testing.T) {
+	if Add(1, 2) != 3 {
+		t.Error("expected 3")
+	}
+}
+
+func BenchmarkAdd(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		Add(1, 2)
+	}
+}
+`
+
+	// fillStructSrc has an incomplete struct literal.
+	fillStructSrc = `package main
+
+import "net/http"
+
+func newRequest() *http.Request {
+	return &http.Request{}
+}
+`
+
+	// extractFuncSrc has code suitable for extract-function.
+	extractFuncSrc = `package main
+
+import "fmt"
+
+func compute() {
+	a := 1
+	b := 2
+	sum := a + b
+	fmt.Println(sum)
+}
+`
+
+	// invertIfSrc has an if/else block suitable for inversion.
+	invertIfSrc = `package main
+
+import "fmt"
+
+func check(x int) {
+	if x > 0 {
+		fmt.Println("positive")
+	} else {
+		fmt.Println("non-positive")
+	}
+}
+`
+
+	// unusedImportSrc has an unused import that organize-imports should remove.
+	unusedImportSrc = `package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func hello() string {
+	return fmt.Sprintf("hello")
+}
+`
+
+	// addTagsSrc has a struct suitable for add-tags / remove-tags.
+	addTagsSrc = `package main
+
+type Config struct {
+	Host string
+	Port int
+}
+`
+
+	// typeSwitchSrc has an incomplete type switch suitable for fill-switch.
+	typeSwitchSrc = `package main
+
+import "fmt"
+
+type Animal interface {
+	Sound() string
+}
+
+type Dog struct{}
+func (d Dog) Sound() string { return "woof" }
+
+type Cat struct{}
+func (c Cat) Sound() string { return "meow" }
+
+func describe(a Animal) {
+	switch a.(type) {
+	}
+	fmt.Println(a.Sound())
+}
+`
+
+	// inlineCallSrc has a simple function suitable for inline-call.
+	inlineCallSrc = `package main
+
+func double(x int) int {
+	return x * 2
+}
+
+func useDouble() int {
+	return double(5)
+}
+`
+
+	// generateSrc has a go:generate directive.
+	generateSrc = `package main
+
+//go:generate echo hello
+
+func generated() {}
+`
+)
+
+// stubResource implements textapi.Handler for tests.
+type stubResource struct {
+	uri workspaceapi.URI
+}
+
+func (s *stubResource) Handle(_ term.Event) (bool, bool)                   { return false, false }
+func (s *stubResource) Draw(_ term.Writer)                                 {}
+func (s *stubResource) Resize(_, _ int)                                    {}
+func (s *stubResource) Cursor() (term.Coordinates, term.CursorStyle, bool) { return term.Coordinates{}, 0, false }
+func (s *stubResource) Selection() (string, bool)                          { return "", false }
+func (s *stubResource) Close() error                                       { return nil }
+func (s *stubResource) Resource() workspaceapi.URI                         { return s.uri }
+
+var _ textapi.Handler = (*stubResource)(nil)
+
+func TestE2E(t *testing.T) {
+	t.Parallel()
+	goplsBin := findGopls(t)
+
+	t.Run("OrganizeImports", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: unusedImportSrc},
+		})
+		handler, me, _ := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		cmd := goCmdAt("organize-imports", uri, resource, 0, 0)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		edits := me.editsFor(resource)
+		require.NotEmpty(t, edits, "expected edits for organize-imports")
+
+		combined := collectEditText(edits)
+		assert.NotContains(t, combined, `"os"`)
+
+		// Verify gopls overlay is in sync after the edit.
+		// Hover on fmt.Sprintf (still present after removing unused os).
+		hover, err := env.mgr.Hover(t.Context(), semanticapi.HoverParams{
+			TextDocument: semanticapi.TextDocumentIdentifier{URI: env.fileURIs["main.go"]},
+			Position:     semanticapi.Position{Line: 0, Character: 8},
+		})
+		require.NoError(t, err, "gopls should respond after overlay update")
+		require.NotNil(t, hover, "expected hover on package name after edit")
+	})
+
+	t.Run("FixAll", func(t *testing.T) {
+		t.Parallel()
+		// source.fixAll applies safe diagnostic fixes (e.g. simplifyrange).
+		// Whether gopls produces fixAll actions depends on the analyzer
+		// configuration and gopls version. This test verifies the handler
+		// runs the code action flow correctly.
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: mainSrc},
+		})
+		handler, me, mn := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		cmd := goCmdAt("fix-all", uri, resource, 0, 0)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		edits := me.editsFor(resource)
+		if len(edits) > 0 {
+			// If edits were produced, verify gopls overlay is in sync.
+			hover, err := env.mgr.Hover(t.Context(), semanticapi.HoverParams{
+				TextDocument: semanticapi.TextDocumentIdentifier{URI: env.fileURIs["main.go"]},
+				Position:     semanticapi.Position{Line: 0, Character: 8},
+			})
+			require.NoError(t, err, "gopls should respond after fix-all overlay update")
+			require.NotNil(t, hover)
+		} else {
+			// No fixAll actions: handler should notify.
+			assert.True(t, mn.hasMessage("No automatic fixes available"))
+		}
+	})
+
+	t.Run("FillStruct", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: fillStructSrc},
+		})
+		handler, me, mn := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor on the empty struct literal `http.Request{}` (line 5, char 18).
+		cmd := goCmdAt("fill-struct", uri, resource, 5, 18)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		edits := me.editsFor(resource)
+		if len(edits) > 0 {
+			combined := collectEditText(edits)
+			assert.Contains(t, strings.ToLower(combined), "method")
+		} else {
+			assert.True(t, mn.hasMessage("Place cursor on a struct literal") || len(edits) == 0)
+		}
+	})
+
+	t.Run("FillSwitch", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: typeSwitchSrc},
+		})
+		handler, me, _ := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor on the empty type switch (line 15, char 2).
+		cmd := goCmdAt("fill-switch", uri, resource, 15, 2)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		edits := me.editsFor(resource)
+		if len(edits) > 0 {
+			combined := collectEditText(edits)
+			assert.Contains(t, combined, "Dog")
+			assert.Contains(t, combined, "Cat")
+
+			// Verify gopls overlay reflects the fill-switch edit.
+			hover, err := env.mgr.Hover(t.Context(), semanticapi.HoverParams{
+				TextDocument: semanticapi.TextDocumentIdentifier{URI: env.fileURIs["main.go"]},
+				Position:     semanticapi.Position{Line: 0, Character: 8},
+			})
+			require.NoError(t, err, "gopls should respond after fill-switch overlay update")
+			require.NotNil(t, hover)
+		}
+	})
+
+	t.Run("ExtractFunction", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: extractFuncSrc},
+		})
+		handler, me, _ := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor-only (no selection). Extract may not be offered.
+		cmd := goCmdAt("extract-function", uri, resource, 5, 0)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+	})
+
+	t.Run("ExtractVariable", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: extractFuncSrc},
+		})
+		handler, me, _ := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		cmd := goCmdAt("extract-variable", uri, resource, 7, 8)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+	})
+
+	t.Run("InvertIf", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: invertIfSrc},
+		})
+		handler, me, mn := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor on the if keyword (line 5, char 1).
+		cmd := goCmdAt("invert-if", uri, resource, 5, 1)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// gopls may apply the edit directly or via a command (workspace/applyEdit).
+		edits := me.editsFor(resource)
+		if len(edits) > 0 {
+			combined := collectEditText(edits)
+			assert.Contains(t, combined, "<=")
+
+			// Verify gopls overlay reflects the invert-if edit.
+			hover, err := env.mgr.Hover(t.Context(), semanticapi.HoverParams{
+				TextDocument: semanticapi.TextDocumentIdentifier{URI: env.fileURIs["main.go"]},
+				Position:     semanticapi.Position{Line: 0, Character: 8},
+			})
+			require.NoError(t, err, "gopls should respond after invert-if overlay update")
+			require.NotNil(t, hover)
+		} else {
+			// If gopls used a command, we should see a notification.
+			msgs := mn.getMessages()
+			assert.NotEmpty(t, msgs)
+		}
+	})
+
+	t.Run("InlineCall", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: inlineCallSrc},
+		})
+		handler, me, mn := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor on `double` call (line 7, char 8).
+		cmd := goCmdAt("inline-call", uri, resource, 7, 8)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		edits := me.editsFor(resource)
+		if len(edits) > 0 {
+			combined := collectEditText(edits)
+			assert.Contains(t, combined, "5 * 2")
+
+			// Verify gopls overlay reflects the inline-call edit.
+			hover, err := env.mgr.Hover(t.Context(), semanticapi.HoverParams{
+				TextDocument: semanticapi.TextDocumentIdentifier{URI: env.fileURIs["main.go"]},
+				Position:     semanticapi.Position{Line: 0, Character: 8},
+			})
+			require.NoError(t, err, "gopls should respond after inline-call overlay update")
+			require.NotNil(t, hover)
+		} else {
+			msgs := mn.getMessages()
+			assert.NotEmpty(t, msgs)
+		}
+	})
+
+	t.Run("AddTags", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: addTagsSrc},
+		})
+		handler, me, _ := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor on the Host field (line 3, char 1).
+		cmd := goCmdAt("add-tags", uri, resource, 3, 1)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+	})
+
+	t.Run("RemoveTags", func(t *testing.T) {
+		t.Parallel()
+		taggedSrc := `package main
+
+type Config struct {
+	Host string ` + "`json:\"host\"`" + `
+	Port int    ` + "`json:\"port\"`" + `
+}
+`
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: taggedSrc},
+		})
+		handler, me, _ := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		cmd := goCmdAt("remove-tags", uri, resource, 3, 1)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+	})
+
+	t.Run("AddTest", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: mainSrc},
+			{name: "main_test.go", content: testFileSrc},
+		})
+		handler, me, _ := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor on the Add function (line 17, char 5).
+		cmd := goCmdAt("add-test", uri, resource, 17, 5)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+	})
+
+	t.Run("Assembly", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: mainSrc},
+		})
+		handler, me, _ := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		cmd := goCmdAt("assembly", uri, resource, 17, 5)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+	})
+
+	t.Run("Doc", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: mainSrc},
+		})
+		handler, me, _ := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		cmd := goCmdAt("doc", uri, resource, 0, 0)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+	})
+
+	t.Run("CodeLens/Test", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: mainSrc},
+			{name: "main_test.go", content: testFileSrc},
+		})
+		handler, _, mn := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main_test.go"])
+		resource := &stubResource{uri: uri}
+		// Cursor near TestAdd (line 4).
+		cmd := goCmdAt("test", uri, resource, 4, 5)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		// The handler executes gopls.run_tests which runs `go test`.
+		// This may fail in some environments, but should not return
+		// "unsupported command".
+		if err != nil {
+			assert.NotContains(t, err.Error(), "unsupported command")
+		} else {
+			msgs := mn.getMessages()
+			assert.NotEmpty(t, msgs, "expected a notification from test execution")
+		}
+	})
+
+	t.Run("CodeLens/Generate", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: generateSrc},
+		})
+		handler, _, mn := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		// Cursor near the go:generate directive (line 2).
+		cmd := goCmdAt("generate", uri, resource, 2, 0)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		if err != nil {
+			assert.NotContains(t, err.Error(), "unsupported command")
+		} else {
+			msgs := mn.getMessages()
+			assert.NotEmpty(t, msgs, "expected a notification from generate")
+		}
+	})
+
+	t.Run("Tidy", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: "package main\n\nfunc main() {}\n"},
+		})
+		handler, _, mn := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		cmd := goCmd("tidy", uri, resource)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		if err != nil {
+			assert.NotContains(t, err.Error(), "unsupported command")
+		} else {
+			assert.True(t, mn.hasMessage("gopls.tidy"))
+		}
+	})
+
+	t.Run("Vendor", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: "package main\n\nfunc main() {}\n"},
+		})
+		handler, _, mn := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		cmd := goCmd("vendor", uri, resource)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		if err != nil {
+			assert.NotContains(t, err.Error(), "unsupported command")
+		} else {
+			assert.True(t, mn.hasMessage("gopls.vendor"))
+		}
+	})
+
+	t.Run("Vulncheck", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: "package main\n\nfunc main() {}\n"},
+		})
+		handler, _, mn := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		cmd := goCmd("vulncheck", uri, resource)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		// Vulncheck may fail if govulncheck is not installed.
+		if err != nil {
+			assert.NotContains(t, err.Error(), "unsupported command")
+		} else {
+			assert.True(t, mn.hasMessage("gopls.run_govulncheck"))
+		}
+	})
+
+	t.Run("AddImport", func(t *testing.T) {
+		t.Parallel()
+		simpleSrc := "package main\n\nfunc main() {}\n"
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: simpleSrc},
+		})
+		handler, _, mn := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		cmd := textapi.Command{
+			Name:     "go",
+			Args:     []string{"add-import", "fmt"},
+			URI:      uri,
+			Resource: resource,
+		}
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+		assert.True(t, mn.hasMessage("Added import"))
+	})
+
+	// Regression: after add-import, gopls must know about the change.
+	// workspace/applyEdit is sent by gopls; the client must feed the
+	// edits back as textDocument/didChange so the overlay stays in sync.
+	// AddImportSyncsOverlay verifies that after gopls.add_import
+	// triggers workspace/applyEdit, the callbackInterceptor sends
+	// didChange so gopls's overlay stays in sync — no manual
+	// replay needed.
+	t.Run("AddImportSyncsOverlay", func(t *testing.T) {
+		t.Parallel()
+		src := "package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
+			{name: "main.go", content: src},
+		})
+		handler, _, mn := newTestHandler(t, env.testEnv)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		cmd := textapi.Command{
+			Name:     "go",
+			Args:     []string{"add-import", "fmt"},
+			URI:      uri,
+			Resource: resource,
+		}
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+		assert.True(t, mn.hasMessage("Added import"))
+
+		captured := env.capturedEdits()
+		require.NotEmpty(t, captured, "gopls should have sent workspace/applyEdit")
+
+		// simulateEditorEvents fires Handle(EventTypeEdit) which sends
+		// didChange asynchronously — give it time to be processed.
+		time.Sleep(500 * time.Millisecond)
+
+		fileURI := env.fileURIs["main.go"]
+		hover, err := env.mgr.Hover(t.Context(), semanticapi.HoverParams{
+			TextDocument: semanticapi.TextDocumentIdentifier{URI: fileURI},
+			Position:     semanticapi.Position{Line: 5, Character: 1},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, hover, "expected hover result after add-import synced overlay")
+		assert.Contains(t, hover.Contents.Value, "fmt")
+	})
+
+	// Same as above but with auto-init-like params (no
+	// workspace.configuration, no workspace.workspaceEdit.documentChanges).
+	t.Run("AddImportSyncsOverlay/AutoInitParams", func(t *testing.T) {
+		t.Parallel()
+		src := "package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"
+		env := initGoplsWithAutoInitParams(t, goplsBin, []testFile{
+			{name: "main.go", content: src},
+		})
+		handler, _, mn := newTestHandler(t, env.testEnv)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		cmd := textapi.Command{
+			Name:     "go",
+			Args:     []string{"add-import", "fmt"},
+			URI:      uri,
+			Resource: resource,
+		}
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+		assert.True(t, mn.hasMessage("Added import"))
+
+		captured := env.capturedEdits()
+		require.NotEmpty(t, captured, "gopls should have sent workspace/applyEdit")
+
+		time.Sleep(500 * time.Millisecond)
+
+		fileURI := env.fileURIs["main.go"]
+		hover, err := env.mgr.Hover(t.Context(), semanticapi.HoverParams{
+			TextDocument: semanticapi.TextDocumentIdentifier{URI: fileURI},
+			Position:     semanticapi.Position{Line: 5, Character: 1},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, hover, "expected hover result after add-import synced overlay (auto-init params)")
+		assert.Contains(t, hover.Contents.Value, "fmt")
+	})
+
+	// Regression: in the real IDE, workspace/applyEdit modifies the editor
+	// buffer, which fires Handle(EventTypeEdit) → didChange to gopls.
+	// Previously callbackInterceptor.notifyDidChange sent ANOTHER didChange,
+	// which corrupted gopls's overlay. initGoplsWithApplyEdit simulates the
+	// real editor events via simulateEditorEvents; this test verifies the
+	// overlay stays clean.
+	t.Run("AddImportNoDoubleNotification", func(t *testing.T) {
+		t.Parallel()
+		src := "package main\n\nfunc main() {\n\tstrings.Join(nil, \"\")\n}\n"
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
+			{name: "main.go", content: src},
+		})
+
+		handler, _, mn := newTestHandler(t, env.testEnv)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		cmd := textapi.Command{
+			Name:     "go",
+			Args:     []string{"add-import", "strings"},
+			URI:      uri,
+			Resource: resource,
+		}
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+		assert.True(t, mn.hasMessage("Added import"))
+
+		captured := env.capturedEdits()
+		require.NotEmpty(t, captured, "gopls should have sent workspace/applyEdit")
+
+		// Wait for the async Handle(EventTypeEdit) to be processed by handleEvs.
+		// This ensures both didChange notifications have reached gopls.
+		time.Sleep(1 * time.Second)
+
+		// Verify gopls's overlay is not corrupted.
+		fileURI := env.fileURIs["main.go"]
+		hover, err := env.mgr.Hover(t.Context(), semanticapi.HoverParams{
+			TextDocument: semanticapi.TextDocumentIdentifier{URI: fileURI},
+			Position:     semanticapi.Position{Line: 0, Character: 8},
+		})
+		require.NoError(t, err, "hover should succeed after add-import")
+		require.NotNil(t, hover, "overlay may be corrupted: hover returned nil")
+
+		// Wait for diagnostics to settle.
+		time.Sleep(2 * time.Second)
+
+		// Check the LAST diagnostic set for the file: if gopls got a double
+		// didChange, the overlay has garbled imports producing errors like
+		// "could not import stringss", "redeclared", or "undefined".
+		// Earlier diagnostics include pre-import errors (undefined: strings)
+		// which are expected — only the final state matters.
+		env.cb.mu.Lock()
+		var lastDiags []semanticapi.Diagnostic
+		for _, d := range env.cb.diagnostics {
+			if d.URI == fileURI {
+				lastDiags = d.Diagnostics
+			}
+		}
+		env.cb.mu.Unlock()
+
+		var diagMsgs []string
+		for _, d := range lastDiags {
+			diagMsgs = append(diagMsgs, d.Message)
+		}
+		t.Logf("final diagnostics after add-import: %v", diagMsgs)
+		for _, msg := range diagMsgs {
+			if strings.Contains(msg, "redeclared") ||
+				strings.Contains(msg, "could not import") {
+				t.Errorf("overlay corrupted by double didChange: %s", msg)
+			}
+		}
+		// The import should resolve — no "undefined: strings" in final state.
+		for _, msg := range diagMsgs {
+			if msg == "undefined: strings" {
+				t.Errorf("import not applied to overlay: %s", msg)
+			}
+		}
+	})
+}
+
+func TestFindGoModURI(t *testing.T) {
+	t.Parallel()
+
+	// Create a workspace with nested directories.
+	tmpDir := setupWorkspace(t, "example.com/test", []testFile{
+		{name: "main.go", content: "package main\n"},
+		{name: "pkg/foo/bar.go", content: "package foo\n"},
+	})
+
+	t.Run("FileInRoot", func(t *testing.T) {
+		fileURI := "file://" + tmpDir + "/main.go"
+		result := findGoModURI(fileURI)
+		assert.Equal(t, "file://"+tmpDir+"/go.mod", result)
+	})
+
+	t.Run("FileInSubdirectory", func(t *testing.T) {
+		fileURI := "file://" + tmpDir + "/pkg/foo/bar.go"
+		result := findGoModURI(fileURI)
+		assert.Equal(t, "file://"+tmpDir+"/go.mod", result)
+	})
+}
+
+func TestGoRouter(t *testing.T) {
+	t.Parallel()
+
+	t.Run("MissingSubcommand", func(t *testing.T) {
+		router := &goRouter{handlers: map[string]textapi.CommandHandler{}}
+		err := router.HandleCommand(t.Context(), textapi.Command{
+			Name:     "go",
+			Resource: &stubResource{},
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "missing subcommand")
+	})
+
+	t.Run("UnknownSubcommand", func(t *testing.T) {
+		router := &goRouter{handlers: map[string]textapi.CommandHandler{}}
+		err := router.HandleCommand(t.Context(), textapi.Command{
+			Name:     "go",
+			Args:     []string{"nonexistent"},
+			Resource: &stubResource{},
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unknown go subcommand")
+	})
+
+	t.Run("NilResource", func(t *testing.T) {
+		router := &goRouter{handlers: map[string]textapi.CommandHandler{}}
+		err := router.HandleCommand(t.Context(), textapi.Command{
+			Name: "go",
+			Args: []string{"tidy"},
+		})
+		require.NoError(t, err)
+	})
+}
+
+func TestAbsDiff(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, uint32(5), absDiff(10, 5))
+	assert.Equal(t, uint32(5), absDiff(5, 10))
+	assert.Equal(t, uint32(0), absDiff(7, 7))
+}

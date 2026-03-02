@@ -34,29 +34,36 @@ import (
 	"github.com/unstablebuild/rune-go-sdk/term"
 )
 
-func posToCoord(p semanticapi.Position) term.Coordinates {
+// PosToCoord converts an LSP Position to terminal Coordinates.
+func PosToCoord(p semanticapi.Position) term.Coordinates {
 	return term.Coordinates{X: int(p.Character), Y: int(p.Line)}
 }
 
-func coordToPos(c term.Coordinates) semanticapi.Position {
+// CoordToPos converts terminal Coordinates to an LSP Position.
+func CoordToPos(c term.Coordinates) semanticapi.Position {
 	return semanticapi.Position{Line: uint32(c.Y), Character: uint32(c.X)}
 }
 
-func textDocID(uri workspaceapi.URI) semanticapi.TextDocumentIdentifier {
+// TextDocID converts a workspace URI to an LSP TextDocumentIdentifier.
+func TextDocID(uri workspaceapi.URI) semanticapi.TextDocumentIdentifier {
 	return semanticapi.TextDocumentIdentifier{
-		URI: uriToLSP(uri),
+		URI: URIToLSP(uri),
 	}
 }
 
-func uriToLSP(u workspaceapi.URI) string {
+// URIToLSP converts a workspace URI to an LSP-compatible file:// URI string.
+func URIToLSP(u workspaceapi.URI) string {
 	return fmt.Sprintf("file://%s", u.Path())
 }
 
-func lspToURI(s string) (workspaceapi.URI, error) {
+// LspToURI converts an LSP file:// URI string to a workspace URI.
+func LspToURI(s string) (workspaceapi.URI, error) {
 	return workspaceapi.ParseURI(s)
 }
 
-func applyEdits(
+// ApplyEdits applies a set of LSP TextEdits to a CellEditor in reverse
+// document order so that earlier positions remain valid.
+func ApplyEdits(
 	ctx context.Context, ce textapi.CellEditor, edits []semanticapi.TextEdit,
 ) error {
 	sorted := make([]semanticapi.TextEdit, len(edits))
@@ -72,8 +79,8 @@ func applyEdits(
 	})
 
 	for _, edit := range sorted {
-		start := posToCoord(edit.Range.Start)
-		end := posToCoord(edit.Range.End)
+		start := PosToCoord(edit.Range.Start)
+		end := PosToCoord(edit.Range.End)
 		if _, _, _, err := ce.Edit(
 			ctx, start, end, edit.NewText,
 		); err != nil {

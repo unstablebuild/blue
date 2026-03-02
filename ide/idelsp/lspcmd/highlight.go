@@ -134,8 +134,8 @@ func (h *highlightHandler) Handle(_ context.Context, ev textapi.Event) bool {
 }
 
 func (h *highlightHandler) onCursor(ev textapi.Event) {
-	uri := uriToLSP(ev.URI)
-	pos := coordToPos(ev.From)
+	uri := URIToLSP(ev.URI)
+	pos := CoordToPos(ev.From)
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -222,8 +222,8 @@ func (h *highlightHandler) applyHighlights(
 	locs := make([]textapi.Location, len(highlights))
 	for i, hl := range highlights {
 		locs[i] = textapi.Location{
-			From: posToCoord(hl.Range.Start),
-			To:   posToCoord(hl.Range.End),
+			From: PosToCoord(hl.Range.Start),
+			To:   PosToCoord(hl.Range.End),
 			Attr: h.highlightKindToAttr(hl.Kind),
 		}
 	}
