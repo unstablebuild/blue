@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/tui/component/markdown"
+	"github.com/unstablebuild/rune-go-sdk/handler"
 	"github.com/unstablebuild/rune-go-sdk/handler/handlertest"
 	"github.com/unstablebuild/rune-go-sdk/mouse"
 	"github.com/unstablebuild/rune-go-sdk/term"
@@ -68,7 +69,24 @@ func TestResize(t *testing.T) {
 	h.Resize(80, 24)
 
 	assert.Equal(t, 80, h.Width())
-	assert.Equal(t, 24, h.Height())
+}
+
+func TestHeight(t *testing.T) {
+	comp, err := markdown.New("# Hello\n\nWorld")
+	require.NoError(t, err)
+
+	h := New(comp)
+	ht := h.Height(40)
+	assert.Greater(t, ht, 0)
+	assert.Equal(t, ht, h.Height(40))
+}
+
+func TestResponsiveInterface(t *testing.T) {
+	comp, err := markdown.New("# Hello\n\nWorld")
+	require.NoError(t, err)
+
+	h := New(comp)
+	var _ handler.Responsive = h
 }
 
 func TestSelectionStartEnd(t *testing.T) {
