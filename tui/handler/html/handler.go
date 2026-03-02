@@ -273,8 +273,21 @@ func (h *Handler) MaxSeekOffset() int {
 }
 
 // Dimensions returns the ideal content dimensions.
+// When the current page is still loading, it returns sensible defaults
+// capped to the current viewport so the floating window keeps a stable
+// size while content is fetched.
 func (h *Handler) Dimensions() (width, height int) {
-	return h.current.Dimensions()
+	if h.current.State() == htmlcomp.StateLoaded {
+		return h.current.Dimensions()
+	}
+	w, ht := 100, 50
+	if h.width > 0 {
+		w = min(w, h.width)
+	}
+	if h.height > 0 {
+		ht = min(ht, h.height)
+	}
+	return w, ht
 }
 
 // ScrollUp scrolls the content up by n lines.

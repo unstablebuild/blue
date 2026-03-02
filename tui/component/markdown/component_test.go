@@ -15,6 +15,7 @@
 package markdown
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -444,6 +445,49 @@ Final section with unique content.`
 	backToStart := w.String()
 	assert.Contains(t, backToStart, "Section 1")
 	assert.NotContains(t, backToStart, "Section 4", "Content from later section leaked through")
+}
+
+func TestNestedListRendersWithoutGap(t *testing.T) {
+	// Regression test: a nested list followed by a heading should not have
+	// a large blank gap between them. Before the fix, Height counted nested
+	// items but Draw skipped them, leaving blank rows equal to the nested
+	// item count.
+	content := "- Parent\n    - Child 1\n    - Child 2\n\n## Heading"
+	md, err := New(content)
+	require.NoError(t, err)
+
+	width, height := 30, 15
+	w := term.NewStringWriter(width, height)
+	require.NoError(t, w.Clear(term.Attributes{}))
+	md.Resize(width, height)
+	md.Draw(w)
+	require.NoError(t, w.Flush())
+
+	output := w.String()
+	lines := strings.Split(output, "\n")
+
+	childLine := -1
+	headingLine := -1
+	for i, line := range lines {
+		if strings.Contains(line, "Child 1") {
+			childLine = i
+		}
+		if strings.Contains(line, "Heading") {
+			headingLine = i
+		}
+	}
+
+	assert.GreaterOrEqual(t, childLine, 0, "nested item 'Child 1' must be rendered")
+	assert.GreaterOrEqual(t, headingLine, 0, "'Heading' must be rendered")
+
+	// The gap between the nested list and the heading should be small:
+	// Child 2 is 1 line after Child 1, then list trailing space (1),
+	// header above padding (1), heading content. So heading should be
+	// at most ~4 lines after Child 1 — not 10+ blank lines.
+	if childLine >= 0 && headingLine >= 0 {
+		gap := headingLine - childLine
+		assert.LessOrEqual(t, gap, 5, "excessive gap between nested list and heading")
+	}
 }
 
 func TestTableLinkAt(t *testing.T) {
