@@ -29,11 +29,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
+	"github.com/unstablebuild/blue/tui/handler/html"
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/config"
 	"github.com/unstablebuild/rune-go-sdk/api/schemeapi"
@@ -61,23 +64,15 @@ type Refresher interface {
 // WindowManager provides floating window management for
 // LSP callback prompts.
 type WindowManager interface {
-	Floating(
-		h browserapi.Floating,
-		cfg browserapi.FloatingConfig,
-	) (browserapi.Window, error)
+	Floating(h browserapi.Floating, cfg browserapi.FloatingConfig) (browserapi.Window, error)
 	CloseWindow(browserapi.Window) error
 }
 
 // Editor provides text editing capabilities needed by
 // LSP callbacks.
 type Editor interface {
-	Editor(
-		resource workspaceapi.URI,
-	) (textapi.Handler, error)
-	SetLocationList(
-		textapi.Handler, textapi.LocationPriority,
-		string, textapi.LocationList,
-	) error
+	Editor(resource workspaceapi.URI) (textapi.Handler, error)
+	SetLocationList(textapi.Handler, textapi.LocationPriority, string, textapi.LocationList) error
 	SetCursor(textapi.Handler, term.Coordinates) error
 	CellEditor(textapi.Handler) textapi.CellEditor
 }
@@ -87,6 +82,7 @@ type Editor interface {
 type CallbackHandlerConfig struct {
 	Config           config.Config
 	Refresher        Refresher
+	Interrupter      term.Interrupter
 	ScheduleNextTick func(fn func()) bool
 }
 
@@ -101,6 +97,7 @@ type CallbackHandler struct {
 	rootURI          string
 	config           config.Config
 	refresher        Refresher
+	interrupter      term.Interrupter
 	scheduleNextTick func(fn func()) bool
 
 	mu       sync.Mutex
@@ -123,6 +120,10 @@ func NewCallbackHandler(
 	if r == nil {
 		r = nopRefresher{}
 	}
+	interrupter := cfg.Interrupter
+	if interrupter == nil {
+		interrupter = term.NopInterrupter()
+	}
 	sched := cfg.ScheduleNextTick
 	if sched == nil {
 		sched = func(fn func()) bool {
@@ -139,6 +140,7 @@ func NewCallbackHandler(
 		rootURI:          rootURI,
 		config:           cfg.Config,
 		refresher:        r,
+		interrupter:      interrupter,
 		scheduleNextTick: sched,
 		progress:         make(map[string]string),
 	}
@@ -317,36 +319,32 @@ func (h *CallbackHandler) Progress(
 }
 
 // LogTrace logs a trace message at debug level.
-func (h *CallbackHandler) LogTrace(
-	ctx context.Context, params semanticapi.LogTraceParams,
-) error {
-	slog.Log(
-		ctx, slog.LevelDebug, params.Message,
-		"verbose", params.Verbose,
-	)
+func (h *CallbackHandler) LogTrace(ctx context.Context, params semanticapi.LogTraceParams) error {
+	slog.Log(ctx, slog.LevelDebug, params.Message, "verbose", params.Verbose)
 	return nil
 }
 
 // ShowDocument requests the client to display a document.
 func (h *CallbackHandler) ShowDocument(
-	ctx context.Context,
-	params semanticapi.ShowDocumentParams,
+	ctx context.Context, params semanticapi.ShowDocumentParams,
 ) (semanticapi.ShowDocumentResult, error) {
+	if strings.HasPrefix(params.URI, "http://") || strings.HasPrefix(params.URI, "https://") {
+		return h.showHTTPDocument(params.URI)
+	}
+
 	uri, err := workspaceapi.ParseURI(params.URI)
 	if err != nil {
-		return semanticapi.ShowDocumentResult{
-			Success: false,
-		}, fmt.Errorf("parse URI: %w", err)
+		return semanticapi.ShowDocumentResult{Success: false}, fmt.Errorf("parse URI: %w", err)
 	}
 	prefix := "LSP"
-	if md, ok := metadataFromContext(ctx); ok &&
-		md.ServerName != "" {
+	md, ok := metadataFromContext(ctx)
+	if ok && md.ServerName != "" {
 		prefix = md.ServerName
 	}
 	sel := params.Selection
 	resultCh := make(chan semanticapi.ShowDocumentResult, 1)
 	errCh := make(chan error, 1)
-	ok := h.scheduleNextTick(func() {
+	ok = h.scheduleNextTick(func() {
 		if _, err := h.resourceOpener.Open(uri); err != nil {
 			errCh <- fmt.Errorf("open resource: %w", err)
 			return
@@ -356,10 +354,7 @@ func (h *CallbackHandler) ShowDocument(
 		if sel != nil {
 			eh, err := h.editor.Editor(uri)
 			if err == nil {
-				cursor := term.Coordinates{
-					X: int(sel.Start.Character),
-					Y: int(sel.Start.Line),
-				}
+				cursor := term.Coordinates{X: int(sel.Start.Character), Y: int(sel.Start.Line)}
 				_ = h.editor.SetCursor(eh, cursor)
 			}
 		}
@@ -376,6 +371,38 @@ func (h *CallbackHandler) ShowDocument(
 		return semanticapi.ShowDocumentResult{Success: false}, err
 	case <-ctx.Done():
 		return semanticapi.ShowDocumentResult{Success: false}, ctx.Err()
+	}
+}
+
+func (h *CallbackHandler) showHTTPDocument(rawURL string) (
+	semanticapi.ShowDocumentResult, error,
+) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return semanticapi.ShowDocumentResult{Success: false}, fmt.Errorf("parse URL: %w", err)
+	}
+	resultCh := make(chan semanticapi.ShowDocumentResult, 1)
+	errCh := make(chan error, 1)
+	handler := html.New(h.interrupter, parsed)
+	ok := h.scheduleNextTick(func() {
+		_, err := h.windowManager.Floating(handler, browserapi.FloatingConfig{
+			Alignment: component.AlignmentCentered,
+		})
+		if err != nil {
+			errCh <- fmt.Errorf("show floating: %w", err)
+			return
+		}
+		resultCh <- semanticapi.ShowDocumentResult{Success: true}
+	})
+	if !ok {
+		return semanticapi.ShowDocumentResult{}, errCouldNotSchedule
+	}
+
+	select {
+	case result := <-resultCh:
+		return result, nil
+	case err := <-errCh:
+		return semanticapi.ShowDocumentResult{Success: false}, err
 	}
 }
 
