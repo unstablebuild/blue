@@ -610,6 +610,72 @@ func TestNestedListSpacing(t *testing.T) {
 	assert.Equal(t, 6, parentList.Height(30))
 }
 
+func TestNestedListDraw(t *testing.T) {
+	// Regression test: nested list items must be drawn, not just counted
+	// in height. Previously, nested listBlock instances had l.w == 0
+	// (only the top-level list's Height call set l.w), so drawAtIndent
+	// checked "l.w <= indent+listIndent" → "0 <= anything" → true, and
+	// returned 0 immediately, skipping all nested content. Height still
+	// counted nested items, so blank rows appeared in their place.
+	cfg := DefaultConfig()
+
+	nestedList := newListBlock(false, 1, []listItem{
+		{content: textRun{{text: "Child A"}}},
+		{content: textRun{{text: "Child B"}}},
+	}, &cfg)
+
+	parentList := newListBlock(false, 1, []listItem{
+		{
+			content: textRun{{text: "Parent 1"}},
+			nested:  nestedList,
+		},
+		{content: textRun{{text: "Parent 2"}}},
+	}, &cfg)
+
+	width := 30
+	h := parentList.Height(width)
+	// Parent 1 (1) + Child A (1) + Child B (1) + Parent 2 (1) + spacing (1) = 5
+	require.Equal(t, 5, h)
+
+	w := term.NewStringWriter(width, h)
+	require.NoError(t, w.Clear(term.Attributes{}))
+	parentList.Draw(w)
+	require.NoError(t, w.Flush())
+
+	output := w.String()
+	assert.Contains(t, output, "Child A", "nested item must be drawn")
+	assert.Contains(t, output, "Child B", "nested item must be drawn")
+	assert.Contains(t, output, "Parent 1")
+	assert.Contains(t, output, "Parent 2")
+}
+
+func TestNestedListDrawDeep(t *testing.T) {
+	// Three levels of nesting to verify the fix propagates recursively.
+	cfg := DefaultConfig()
+
+	grandchild := newListBlock(false, 1, []listItem{
+		{content: textRun{{text: "Grandchild"}}},
+	}, &cfg)
+	child := newListBlock(false, 1, []listItem{
+		{content: textRun{{text: "Child"}}, nested: grandchild},
+	}, &cfg)
+	root := newListBlock(false, 1, []listItem{
+		{content: textRun{{text: "Root"}}, nested: child},
+	}, &cfg)
+
+	width := 30
+	h := root.Height(width)
+	w := term.NewStringWriter(width, h)
+	require.NoError(t, w.Clear(term.Attributes{}))
+	root.Draw(w)
+	require.NoError(t, w.Flush())
+
+	output := w.String()
+	assert.Contains(t, output, "Root")
+	assert.Contains(t, output, "Child")
+	assert.Contains(t, output, "Grandchild", "deeply nested item must be drawn")
+}
+
 func TestHeaderDimensions(t *testing.T) {
 	cfg := DefaultConfig()
 	tests := []struct {

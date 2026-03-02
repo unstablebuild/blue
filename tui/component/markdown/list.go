@@ -82,6 +82,7 @@ func (l *listBlock) CharAt(x, y int) (rune, bool) {
 }
 
 func (l *listBlock) heightAtIndent(width, indent int) int {
+	l.w = width
 	if width <= indent+listIndent {
 		return 0
 	}
@@ -231,7 +232,7 @@ func (l *listBlock) spanAtIndent(x, y, indent int) (text, url string, ok bool) {
 
 		if item.nested != nil {
 			nestedHeight := item.nested.heightAtIndent(l.w, indent+listIndent)
-			if y >= currentY && y < currentY+nestedHeight-1 {
+			if y >= currentY && y < currentY+nestedHeight {
 				return item.nested.spanAtIndent(x, y-currentY, indent+listIndent)
 			}
 			currentY += nestedHeight
@@ -276,7 +277,7 @@ func (l *listBlock) charAtIndent(x, y, indent int) (rune, bool) {
 
 		if item.nested != nil {
 			nestedHeight := item.nested.heightAtIndent(l.w, indent+listIndent)
-			if y >= currentY && y < currentY+nestedHeight-1 {
+			if y >= currentY && y < currentY+nestedHeight {
 				return item.nested.charAtIndent(x, y-currentY, indent+listIndent)
 			}
 			currentY += nestedHeight
