@@ -105,11 +105,10 @@ func (s *langServer) start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create socket pair: %v", err)
 	}
-	stdinR := os.NewFile(uintptr(fds[1]), "stdin-lsp")
-	stdinW := os.NewFile(uintptr(fds[0]), "stdin-ide")
-
-	stdoutW := os.NewFile(uintptr(fds[1]), "stdout-lsp")
-	stdoutR := os.NewFile(uintptr(fds[0]), "stdout-ide")
+	// One os.File per fd to avoid GC finalizer races that can
+	// close reused file descriptors in other goroutines.
+	lspFile := os.NewFile(uintptr(fds[1]), "file+net lsp")
+	ideFile := os.NewFile(uintptr(fds[0]), "file+net ide")
 
 	watchCh := make(chan error, 1)
 	watcher := workspaceapi.ChanProcessWatcher(watchCh)
@@ -117,8 +116,8 @@ func (s *langServer) start(ctx context.Context) error {
 	cmd := workspaceapi.Cmd{
 		Path:    s.binPath,
 		Args:    s.cfg.args,
-		Stdin:   stdinR,
-		Stdout:  stdoutW,
+		Stdin:   lspFile,
+		Stdout:  lspFile,
 		Watcher: watcher,
 	}
 
@@ -129,23 +128,28 @@ func (s *langServer) start(ctx context.Context) error {
 	s.log.Info("starting server", "path", cmd.Path, "args", cmd.Args)
 	pid, err := s.executor.StartCommand(lifecycleContext, cmd)
 	if err != nil {
-		_ = stdinR.Close()
-		_ = stdinW.Close()
-		_ = stdoutR.Close()
-		_ = stdoutW.Close()
+		_ = lspFile.Close()
+		_ = ideFile.Close()
 		return fmt.Errorf(
 			"start %s: %w", s.cfg.command, err,
 		)
 	}
+	// StartCommand duped the fd; close our copy.
+	_ = lspFile.Close()
 
-	stdout, err := net.FileConn(stdoutR)
+	stdout, err := net.FileConn(ideFile)
 	if err != nil {
+		_ = ideFile.Close()
 		return fmt.Errorf("new stdout file conn: %w", err)
 	}
-	stdin, err := net.FileConn(stdinW)
+	stdin, err := net.FileConn(ideFile)
 	if err != nil {
+		_ = stdout.Close()
+		_ = ideFile.Close()
 		return fmt.Errorf("new stdin file conn: %w", err)
 	}
+	// FileConn duped the fd; close our copy.
+	_ = ideFile.Close()
 	s.pid = pid
 	s.watcher = watchCh
 	framer := jsonrpc2.HeaderFramer()

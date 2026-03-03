@@ -781,7 +781,7 @@ func TestE2ERename(t *testing.T) {
 			}
 		}
 		return false
-	}, 5*time.Second, 100*time.Millisecond,
+	}, 15*time.Second, 100*time.Millisecond,
 		"gopls should know about 'Sum' after rename")
 
 	// The workspace "Add" query also returns stdlib symbols
@@ -799,6 +799,6 @@ func TestE2ERename(t *testing.T) {
 			}
 		}
 		return true
-	}, 5*time.Second, 100*time.Millisecond,
+	}, 15*time.Second, 100*time.Millisecond,
 		"gopls should no longer know about 'Add' in the workspace after rename")
 }

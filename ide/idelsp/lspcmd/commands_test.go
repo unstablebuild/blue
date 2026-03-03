@@ -452,7 +452,17 @@ func TestE2ESignatureHelpAutoTrigger(t *testing.T) {
 	assert.Contains(t, gotLoc.Message, "**", "message should contain bold markers")
 	assert.Contains(t, gotLoc.Message, "Add(", "message should contain the Add signature")
 
-	// Fire a cursor event and verify the location list is cleared.
+	// Fire a cursor event to consume the editSeen flag (in a real
+	// editor the cursor moves as a result of the edit, producing
+	// this first cursor event which should NOT clear the help).
+	capturedHandler.Handle(ctx, textapi.Event{
+		Type: textapi.EventTypeCursor,
+		URI:  mainWSURI,
+		From: term.Coordinates{X: 17, Y: 45},
+	})
+
+	// Fire a second cursor event (simulating a deliberate cursor
+	// navigation) and verify the location list is cleared.
 	capturedHandler.Handle(ctx, textapi.Event{
 		Type: textapi.EventTypeCursor,
 		URI:  mainWSURI,
