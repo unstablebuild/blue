@@ -163,7 +163,6 @@ func (r *renameFloatingHandler) Handle(ev term.Event) (bool, bool) {
 		slog.Warn("rename apply", "err", err)
 		return true, true
 	}
-	NotifyDidChange(r.ctx, r.lsp, edit)
 	return true, true
 }
 
@@ -233,50 +232,6 @@ func ApplyWorkspaceEdit(
 	return nil
 }
 
-// NotifyDidChange sends textDocument/didChange notifications to
-// the language server for every file touched by the workspace edit.
-func NotifyDidChange(
-	ctx context.Context, lsp semanticapi.LSP,
-	edit *semanticapi.WorkspaceEdit,
-) {
-	if len(edit.DocumentChanges) > 0 {
-		for _, dc := range edit.DocumentChanges {
-			if dc.TextDocumentEdit != nil {
-				err := lsp.DidChange(ctx, semanticapi.DidChangeTextDocumentParams{
-					TextDocument:   dc.TextDocumentEdit.TextDocument,
-					ContentChanges: TextEditsToChanges(dc.TextDocumentEdit.Edits),
-				})
-				if err != nil {
-					slog.Warn("rename didChange", "err", err)
-				}
-			}
-		}
-		return
-	}
-	for uri, edits := range edit.Changes {
-		err := lsp.DidChange(ctx, semanticapi.DidChangeTextDocumentParams{
-			TextDocument:   semanticapi.VersionedTextDocumentIdentifier{URI: uri},
-			ContentChanges: TextEditsToChanges(edits),
-		})
-		if err != nil {
-			slog.Warn("rename didChange", "err", err)
-		}
-	}
-}
-
-// TextEditsToChanges converts a slice of TextEdits to
-// TextDocumentContentChangeEvents suitable for didChange.
-func TextEditsToChanges(edits []semanticapi.TextEdit) []semanticapi.TextDocumentContentChangeEvent {
-	changes := make([]semanticapi.TextDocumentContentChangeEvent, len(edits))
-	for i, e := range edits {
-		r := e.Range
-		changes[i] = semanticapi.TextDocumentContentChangeEvent{
-			Range: &r,
-			Text:  e.NewText,
-		}
-	}
-	return changes
-}
 
 func ApplyEditsForURI(
 	ctx context.Context, editor textapi.Editor,

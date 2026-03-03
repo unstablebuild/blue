@@ -74,15 +74,15 @@ func TestE2ECommands(t *testing.T) {
 
 	scheme := newTestScheme()
 
-	var wg sync.WaitGroup
+	readyCh := make(chan struct{})
 	var ready sync.Once
 	callback := &e2eCallback{
 		onShowMessage: func(params semanticapi.ShowMessageParams) {
 			if strings.Contains(params.Message, "Finished loading packages") {
-				ready.Do(wg.Done)
+				ready.Do(func() { close(readyCh) })
 			}
 		},
-		onProgress: readyOnProgress(&ready, &wg),
+		onProgress: readyOnProgress(&ready, readyCh),
 	}
 
 	mgr := idelsp.New(
@@ -92,7 +92,6 @@ func TestE2ECommands(t *testing.T) {
 
 	ctx := context.Background()
 
-	wg.Add(1)
 	ev := textapi.Event{
 		Type:    textapi.EventTypeOpen,
 		URI:     mainWSURI,
@@ -116,7 +115,7 @@ func TestE2ECommands(t *testing.T) {
 		Content: string(testContent),
 	})
 
-	wg.Wait()
+	waitReady(t, readyCh)
 	t.Cleanup(func() { _ = mgr.Close() })
 
 	editor := &mockEditor{
@@ -307,15 +306,15 @@ func TestE2ESignatureHelpAutoTrigger(t *testing.T) {
 
 	scheme := newTestScheme()
 
-	var wg sync.WaitGroup
+	readyCh := make(chan struct{})
 	var ready sync.Once
 	callback := &e2eCallback{
 		onShowMessage: func(params semanticapi.ShowMessageParams) {
 			if strings.Contains(params.Message, "Finished loading packages") {
-				ready.Do(wg.Done)
+				ready.Do(func() { close(readyCh) })
 			}
 		},
-		onProgress: readyOnProgress(&ready, &wg),
+		onProgress: readyOnProgress(&ready, readyCh),
 	}
 
 	mgr := idelsp.New(
@@ -359,13 +358,12 @@ func TestE2ESignatureHelpAutoTrigger(t *testing.T) {
 	assert.Contains(t, triggerChars, ",", "trigger chars should include ','")
 
 	// Open the test file so gopls knows about it.
-	wg.Add(1)
 	mgr.Handle(ctx, textapi.Event{
 		Type:    textapi.EventTypeOpen,
 		URI:     mainWSURI,
 		Content: string(mainContent),
 	})
-	wg.Wait()
+	waitReady(t, readyCh)
 
 	// Set up the editor mock to capture the subscribed event handler.
 	var capturedHandler textapi.EventHandler

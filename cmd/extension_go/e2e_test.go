@@ -286,7 +286,7 @@ func TestE2E(t *testing.T) {
 		env := initGopls(t, goplsBin, []testFile{
 			{name: "main.go", content: fillStructSrc},
 		})
-		handler, me, mn := newTestHandler(t, env)
+		handler, me, mn := newTestHandlerWithEditorEvents(t, env)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -301,6 +301,17 @@ func TestE2E(t *testing.T) {
 		if len(edits) > 0 {
 			combined := collectEditText(edits)
 			assert.Contains(t, strings.ToLower(combined), "method")
+
+			// Wait for gopls to publish diagnostics after processing the
+			// edit events, then verify the overlay is not corrupted.
+			fileURI := env.fileURIs["main.go"]
+			diags := waitForDiagnostics(t, env.cb, fileURI, 5*time.Second)
+			for _, d := range diags {
+				if d.Severity == 1 { // Error
+					t.Errorf("overlay corrupted after fill-struct: %s (line %d)",
+						d.Message, d.Range.Start.Line)
+				}
+			}
 		} else {
 			assert.True(t, mn.hasMessage("Place cursor on a struct literal") || len(edits) == 0)
 		}
@@ -311,7 +322,7 @@ func TestE2E(t *testing.T) {
 		env := initGopls(t, goplsBin, []testFile{
 			{name: "main.go", content: typeSwitchSrc},
 		})
-		handler, me, _ := newTestHandler(t, env)
+		handler, me, _ := newTestHandlerWithEditorEvents(t, env)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -328,13 +339,16 @@ func TestE2E(t *testing.T) {
 			assert.Contains(t, combined, "Dog")
 			assert.Contains(t, combined, "Cat")
 
-			// Verify gopls overlay reflects the fill-switch edit.
-			hover, err := env.mgr.Hover(t.Context(), semanticapi.HoverParams{
-				TextDocument: semanticapi.TextDocumentIdentifier{URI: env.fileURIs["main.go"]},
-				Position:     semanticapi.Position{Line: 0, Character: 8},
-			})
-			require.NoError(t, err, "gopls should respond after fill-switch overlay update")
-			require.NotNil(t, hover)
+			// Wait for gopls to publish diagnostics after processing the
+			// edit events, then verify the overlay is not corrupted.
+			fileURI := env.fileURIs["main.go"]
+			diags := waitForDiagnostics(t, env.cb, fileURI, 5*time.Second)
+			for _, d := range diags {
+				if d.Severity == 1 { // Error
+					t.Errorf("overlay corrupted after fill-switch: %s (line %d)",
+						d.Message, d.Range.Start.Line)
+				}
+			}
 		}
 	})
 
@@ -386,6 +400,56 @@ func TestE2E(t *testing.T) {
 		}
 		assert.Contains(t, editText.String(), "newFunction",
 			"extracted function should be named newFunction (gopls default)")
+
+		// --- Second extraction from the newly extracted function. ---
+		// If gopls's overlay is in sync with the applied edit, it
+		// should be able to extract a subset of newFunction's body.
+		// If the overlay is stale, gopls still sees the old source
+		// and the selected lines won't correspond to extractable code.
+		ctx := t.Context()
+
+		// Wait for gopls to learn about newFunction (overlay sync).
+		var fnStartLine uint32
+		require.Eventually(t, func() bool {
+			syms, err := env.mgr.WorkspaceSymbol(ctx, semanticapi.WorkspaceSymbolParams{
+				Query: "newFunction",
+			})
+			if err != nil {
+				return false
+			}
+			for _, s := range syms {
+				if s.Name == "newFunction" &&
+					strings.Contains(s.Location.URI, env.dir) {
+					fnStartLine = s.Location.Range.Start.Line
+					return true
+				}
+			}
+			return false
+		}, 5*time.Second, 100*time.Millisecond,
+			"gopls should know about 'newFunction' after first extract")
+
+		// newFunction body starts at fnStartLine+1. Select the first
+		// two statements (a := 1, b := 2) for the second extraction.
+		// Use X=0 on the line past the selection to cover full lines.
+		bodyStart := int(fnStartLine) + 1
+
+		me.fireEvent(ctx, textapi.Event{
+			Type:  textapi.EventTypeSelection,
+			URI:   uri,
+			Start: term.Coordinates{X: 0, Y: bodyStart},
+			End:   term.Coordinates{X: 0, Y: bodyStart + 2},
+		})
+
+		prevCount := len(env.capturedEdits())
+		cmd2 := goCmdAt("extract-function", uri, resource, bodyStart, 1)
+
+		err = handler.HandleCommand(ctx, cmd2)
+		require.NoError(t, err,
+			"second extract-function should not error if gopls overlay is in sync")
+
+		captured2 := env.capturedEdits()
+		require.Greater(t, len(captured2), prevCount,
+			"gopls overlay stale: second extract-function produced no workspace/applyEdit")
 	})
 
 	t.Run("ExtractVariable", func(t *testing.T) {
@@ -409,7 +473,7 @@ func TestE2E(t *testing.T) {
 		env := initGopls(t, goplsBin, []testFile{
 			{name: "main.go", content: invertIfSrc},
 		})
-		handler, me, mn := newTestHandler(t, env)
+		handler, me, mn := newTestHandlerWithEditorEvents(t, env)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -426,13 +490,16 @@ func TestE2E(t *testing.T) {
 			combined := collectEditText(edits)
 			assert.Contains(t, combined, "<=")
 
-			// Verify gopls overlay reflects the invert-if edit.
-			hover, err := env.mgr.Hover(t.Context(), semanticapi.HoverParams{
-				TextDocument: semanticapi.TextDocumentIdentifier{URI: env.fileURIs["main.go"]},
-				Position:     semanticapi.Position{Line: 0, Character: 8},
-			})
-			require.NoError(t, err, "gopls should respond after invert-if overlay update")
-			require.NotNil(t, hover)
+			// Wait for gopls to publish diagnostics after processing the
+			// edit events, then verify the overlay is not corrupted.
+			fileURI := env.fileURIs["main.go"]
+			diags := waitForDiagnostics(t, env.cb, fileURI, 5*time.Second)
+			for _, d := range diags {
+				if d.Severity == 1 { // Error
+					t.Errorf("overlay corrupted after invert-if: %s (line %d)",
+						d.Message, d.Range.Start.Line)
+				}
+			}
 		} else {
 			// If gopls used a command, we should see a notification.
 			msgs := mn.getMessages()
@@ -445,7 +512,7 @@ func TestE2E(t *testing.T) {
 		env := initGopls(t, goplsBin, []testFile{
 			{name: "main.go", content: inlineCallSrc},
 		})
-		handler, me, mn := newTestHandler(t, env)
+		handler, me, mn := newTestHandlerWithEditorEvents(t, env)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -461,13 +528,16 @@ func TestE2E(t *testing.T) {
 			combined := collectEditText(edits)
 			assert.Contains(t, combined, "5 * 2")
 
-			// Verify gopls overlay reflects the inline-call edit.
-			hover, err := env.mgr.Hover(t.Context(), semanticapi.HoverParams{
-				TextDocument: semanticapi.TextDocumentIdentifier{URI: env.fileURIs["main.go"]},
-				Position:     semanticapi.Position{Line: 0, Character: 8},
-			})
-			require.NoError(t, err, "gopls should respond after inline-call overlay update")
-			require.NotNil(t, hover)
+			// Wait for gopls to publish diagnostics after processing the
+			// edit events, then verify the overlay is not corrupted.
+			fileURI := env.fileURIs["main.go"]
+			diags := waitForDiagnostics(t, env.cb, fileURI, 5*time.Second)
+			for _, d := range diags {
+				if d.Severity == 1 { // Error
+					t.Errorf("overlay corrupted after inline-call: %s (line %d)",
+						d.Message, d.Range.Start.Line)
+				}
+			}
 		} else {
 			msgs := mn.getMessages()
 			assert.NotEmpty(t, msgs)
