@@ -113,8 +113,10 @@ var (
 )
 
 type signatureHelpHandler struct {
-	mu     sync.Mutex
-	cancel context.CancelFunc
+	mu       sync.Mutex
+	cancel   context.CancelFunc
+	editSeen bool // suppresses cursor-clear after edits
+	active   bool // true when a signature help location is showing
 
 	lsp        semanticapi.LSP
 	editor     textapi.Editor
@@ -135,8 +137,10 @@ func (h *signatureHelpHandler) Handle(_ context.Context, ev textapi.Event) bool 
 	return false
 }
 
-// onEdit fires on every edit event. When the last character
-// typed is a trigger character it launches an async fetch.
+// onEdit fires on every edit event. Trigger characters always
+// launch a fetch. Non-trigger characters re-fetch only when
+// signature help is already showing, so the LSP server can
+// decide whether the cursor is still inside a function call.
 func (h *signatureHelpHandler) onEdit(ev textapi.Event) {
 	if ev.Content == "" {
 		return
@@ -147,12 +151,16 @@ func (h *signatureHelpHandler) onEdit(ev textapi.Event) {
 		slog.Debug("signature help: last rune error")
 		return
 	}
-	if _, ok := h.triggerSet[string(lastRune)]; !ok {
-		slog.Debug("signature help: not part of trigger set", "rune", string(lastRune))
-		return
-	}
+
+	_, isTrigger := h.triggerSet[string(lastRune)]
 
 	h.mu.Lock()
+	h.editSeen = true
+	if !isTrigger && !h.active {
+		h.mu.Unlock()
+		slog.Debug("signature help: not a trigger and not active", "rune", string(lastRune))
+		return
+	}
 	if h.cancel != nil {
 		h.cancel()
 		h.cancel = nil
@@ -162,13 +170,21 @@ func (h *signatureHelpHandler) onEdit(ev textapi.Event) {
 	go debug.CapturePanicReport(func() { h.fetch(ev) })
 }
 
-// onCursor cancels any in-flight fetch and clears the location list.
+// onCursor cancels any in-flight fetch and clears the location
+// list, unless the cursor moved as a result of an edit (in which
+// case the re-fetch from onEdit handles it).
 func (h *signatureHelpHandler) onCursor(ev textapi.Event) {
 	h.mu.Lock()
+	if h.editSeen {
+		h.editSeen = false
+		h.mu.Unlock()
+		return
+	}
 	if h.cancel != nil {
 		h.cancel()
 		h.cancel = nil
 	}
+	h.active = false
 	h.mu.Unlock()
 
 	h.sched(func() {
@@ -201,6 +217,10 @@ func (h *signatureHelpHandler) fetch(ev textapi.Event) {
 	}
 	if result == nil || len(result.Signatures) == 0 {
 		slog.Debug("signature help: no signatures")
+		h.mu.Lock()
+		h.active = false
+		h.mu.Unlock()
+		h.sched(func() { h.clearLocation(ev.URI) })
 		return
 	}
 
@@ -214,6 +234,10 @@ func (h *signatureHelpHandler) fetch(ev textapi.Event) {
 		Message: msg,
 	}
 	slog.Debug("setting signature help", "location", loc)
+
+	h.mu.Lock()
+	h.active = true
+	h.mu.Unlock()
 
 	h.sched(func() {
 		h.setLocation(ev.URI, textapi.LocationSlice([]textapi.Location{loc}))
