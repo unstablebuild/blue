@@ -32,7 +32,14 @@ type tableBlock struct {
 	rows       [][]textRun
 	alignments []tableAlignment
 	cfg        *Config
-	w          int // width from last Height call
+	w          int // width from last Resize call
+
+	// Cached wrapping state (computed in Resize).
+	colWidths     []int
+	wrappedHeader [][]textRun  // [col] → wrapped lines
+	wrappedRows   [][][]textRun // [row][col] → wrapped lines
+	headerHeight  int
+	rowHeights    []int
 }
 
 var _ block = (*tableBlock)(nil)
@@ -55,12 +62,91 @@ func (t *tableBlock) Height(width int) int {
 	if width <= 0 || len(t.header) == 0 {
 		return 0
 	}
-	// top border + header + separator + rows + bottom border + spacing
-	return 1 + 1 + 1 + len(t.rows) + 1 + 1
+
+	numCols := len(t.header)
+	colWidths := t.calculateColumnWidths(width, numCols)
+
+	headerHeight := 1
+	for i, h := range t.header {
+		if n := countWrappedLines(h, colWidths[i]); n > headerHeight {
+			headerHeight = n
+		}
+	}
+
+	totalRowHeight := 0
+	for _, row := range t.rows {
+		rowHeight := 1
+		for i := range numCols {
+			var cell textRun
+			if i < len(row) {
+				cell = row[i]
+			}
+			if n := countWrappedLines(cell, colWidths[i]); n > rowHeight {
+				rowHeight = n
+			}
+		}
+		totalRowHeight += rowHeight
+	}
+
+	// top border + header + separator + data rows + bottom border + spacing
+	return 1 + headerHeight + 1 + totalRowHeight + 1 + 1
 }
 
 func (t *tableBlock) Resize(width, _ int) {
 	t.w = width
+	if width <= 0 || len(t.header) == 0 {
+		return
+	}
+
+	numCols := len(t.header)
+	t.colWidths = t.calculateColumnWidths(width, numCols)
+
+	// Wrap header cells.
+	t.wrappedHeader = make([][]textRun, numCols)
+	t.headerHeight = 1
+	for i, h := range t.header {
+		t.wrappedHeader[i] = wrapTextRun(h, t.colWidths[i])
+		// wrapTextRun returns nil for empty runs; normalise to one
+		// empty line so every cell has at least one entry, matching
+		// countWrappedLines which returns 1 for the same input.
+		if len(t.wrappedHeader[i]) == 0 {
+			t.wrappedHeader[i] = []textRun{nil}
+		}
+		if len(t.wrappedHeader[i]) > t.headerHeight {
+			t.headerHeight = len(t.wrappedHeader[i])
+		}
+	}
+
+	// Wrap data row cells.
+	t.wrappedRows = make([][][]textRun, len(t.rows))
+	t.rowHeights = make([]int, len(t.rows))
+	for r, row := range t.rows {
+		t.wrappedRows[r] = make([][]textRun, numCols)
+		t.rowHeights[r] = 1
+		for i := range numCols {
+			var cell textRun
+			if i < len(row) {
+				cell = row[i]
+			}
+			t.wrappedRows[r][i] = wrapTextRun(cell, t.colWidths[i])
+			// See header normalisation comment above.
+			if len(t.wrappedRows[r][i]) == 0 {
+				t.wrappedRows[r][i] = []textRun{nil}
+			}
+			if len(t.wrappedRows[r][i]) > t.rowHeights[r] {
+				t.rowHeights[r] = len(t.wrappedRows[r][i])
+			}
+		}
+	}
+}
+
+func (t *tableBlock) cachedHeight() int {
+	total := 0
+	for _, rh := range t.rowHeights {
+		total += rh
+	}
+	// top border + header + separator + data rows + bottom border + spacing
+	return 1 + t.headerHeight + 1 + total + 1 + 1
 }
 
 func (t *tableBlock) Draw(w term.Writer) {
@@ -68,7 +154,7 @@ func (t *tableBlock) Draw(w term.Writer) {
 		return
 	}
 
-	contentHeight := t.Height(t.w)
+	contentHeight := t.cachedHeight()
 	if t.cfg.Paragraph.Bg != tcell.ColorDefault && contentHeight > 1 {
 		bgAttr := term.Attributes{Bg: t.cfg.Paragraph.Bg}
 		for y := range contentHeight - 1 {
@@ -78,18 +164,16 @@ func (t *tableBlock) Draw(w term.Writer) {
 		}
 	}
 
-	numCols := len(t.header)
-	colWidths := t.calculateColumnWidths(t.w, numCols)
 	cs := t.cfg.TableCharSet
 
 	y := 0
-	y = t.renderTopBorder(w, y, colWidths, cs)
-	y = t.renderHeaderRow(w, y, colWidths, cs)
-	y = t.renderSeparator(w, y, colWidths, cs)
-	for _, row := range t.rows {
-		y = t.renderDataRow(w, y, row, colWidths, cs)
+	y = t.renderHorizontalBorder(w, y, cs.TopLeft, cs.HorizontalTop, cs.TopJoin, cs.TopRight)
+	y = t.renderRow(w, y, t.wrappedHeader, t.headerHeight, cs, true)
+	y = t.renderHorizontalBorder(w, y, cs.Left, cs.HeaderSeparator, cs.CrossJoin, cs.Right)
+	for r := range t.rows {
+		y = t.renderRow(w, y, t.wrappedRows[r], t.rowHeights[r], cs, false)
 	}
-	t.renderBottomBorder(w, y, colWidths, cs)
+	t.renderHorizontalBorder(w, y, cs.BottomLeft, cs.HorizontalBottom, cs.BottomJoin, cs.BottomRight)
 }
 
 func (t *tableBlock) Dimensions() (width, height int) {
@@ -124,38 +208,52 @@ func (t *tableBlock) Dimensions() (width, height int) {
 	return totalWidth, totalHeight
 }
 
-// SpanAt returns the text and URL at the given position.
-// y=0: top border, y=1: header, y=2: separator, y=3+: data rows
 func (t *tableBlock) SpanAt(x, y int) (text, url string, ok bool) {
 	if t.w <= 0 || len(t.header) == 0 {
 		return
 	}
 
-	numCols := len(t.header)
-	colWidths := t.calculateColumnWidths(t.w, numCols)
-
-	if y == 0 || y == 2 {
+	// Top border.
+	if y == 0 {
 		return
 	}
 
-	var row []textRun
-	if y == 1 {
-		row = t.header
-	} else if y >= 3 && y < 3+len(t.rows) {
-		row = t.rows[y-3]
-	} else {
+	// Header lines.
+	sepY := 1 + t.headerHeight
+	if y >= 1 && y < sepY {
+		return t.spanAtInWrappedRow(x, t.wrappedHeader, y-1)
+	}
+
+	// Separator.
+	if y == sepY {
 		return
 	}
 
-	colX := 1 // start after left border
-	for i, colWidth := range colWidths {
+	// Data rows. Bottom border and spacing fall through
+	// without matching any row, returning empty.
+	dataY := y - (sepY + 1)
+	cumY := 0
+	for r, rh := range t.rowHeights {
+		if dataY < cumY+rh {
+			return t.spanAtInWrappedRow(x, t.wrappedRows[r], dataY-cumY)
+		}
+		cumY += rh
+	}
+	return
+}
+
+func (t *tableBlock) spanAtInWrappedRow(
+	x int, wrappedCells [][]textRun, lineInRow int,
+) (text, url string, ok bool) {
+	colX := 1
+	for i, colWidth := range t.colWidths {
 		if x >= colX && x < colX+colWidth {
-			if i < len(row) {
-				return spanAtInLine(row[i], x-colX)
+			if i < len(wrappedCells) && lineInRow < len(wrappedCells[i]) {
+				return spanAtInLine(wrappedCells[i][lineInRow], x-colX)
 			}
 			return
 		}
-		colX += colWidth + 1 // +1 for column separator
+		colX += colWidth + 1
 	}
 	return
 }
@@ -165,79 +263,53 @@ func (t *tableBlock) CharAt(x, y int) (rune, bool) {
 		return 0, false
 	}
 
-	numCols := len(t.header)
-	colWidths := t.calculateColumnWidths(t.w, numCols)
 	cs := t.cfg.TableCharSet
+	sepY := 1 + t.headerHeight
+	totalDataHeight := 0
+	for _, rh := range t.rowHeights {
+		totalDataHeight += rh
+	}
+	bottomY := sepY + 1 + totalDataHeight
 
+	// Top border.
 	if y == 0 {
-		if x == 0 {
-			return cs.TopLeft, true
-		}
-		colX := 1
-		for i, colWidth := range colWidths {
-			if x >= colX && x < colX+colWidth {
-				return cs.HorizontalTop, true
-			}
-			colX += colWidth
-			if x == colX {
-				if i == len(colWidths)-1 {
-					return cs.TopRight, true
-				}
-				return cs.TopJoin, true
-			}
-			colX++
-		}
-		return 0, false
+		return t.charAtHorizontalBorder(
+			x, cs.TopLeft, cs.HorizontalTop, cs.TopJoin, cs.TopRight,
+		)
 	}
 
-	if y == 2 {
-		if x == 0 {
-			return cs.Left, true
-		}
-		colX := 1
-		for i, colWidth := range colWidths {
-			if x >= colX && x < colX+colWidth {
-				return cs.HeaderSeparator, true
-			}
-			colX += colWidth
-			if x == colX {
-				if i == len(colWidths)-1 {
-					return cs.Right, true
-				}
-				return cs.CrossJoin, true
-			}
-			colX++
-		}
-		return 0, false
+	// Separator.
+	if y == sepY {
+		return t.charAtHorizontalBorder(
+			x, cs.Left, cs.HeaderSeparator, cs.CrossJoin, cs.Right,
+		)
 	}
 
-	totalHeight := t.Height(t.w) - 1 // exclude spacing
-	if y == totalHeight-1 {
-		if x == 0 {
-			return cs.BottomLeft, true
-		}
-		colX := 1
-		for i, colWidth := range colWidths {
-			if x >= colX && x < colX+colWidth {
-				return cs.HorizontalBottom, true
-			}
-			colX += colWidth
-			if x == colX {
-				if i == len(colWidths)-1 {
-					return cs.BottomRight, true
-				}
-				return cs.BottomJoin, true
-			}
-			colX++
-		}
-		return 0, false
+	// Bottom border.
+	if y == bottomY {
+		return t.charAtHorizontalBorder(
+			x, cs.BottomLeft, cs.HorizontalBottom, cs.BottomJoin, cs.BottomRight,
+		)
 	}
 
-	var row []textRun
-	if y == 1 {
-		row = t.header
-	} else if y >= 3 && y < 3+len(t.rows) {
-		row = t.rows[y-3]
+	// Content rows.
+	var wrappedCells [][]textRun
+	var lineInRow int
+
+	if y >= 1 && y < sepY {
+		wrappedCells = t.wrappedHeader
+		lineInRow = y - 1
+	} else if y > sepY && y < bottomY {
+		dataY := y - (sepY + 1)
+		cumY := 0
+		for r, rh := range t.rowHeights {
+			if dataY < cumY+rh {
+				wrappedCells = t.wrappedRows[r]
+				lineInRow = dataY - cumY
+				break
+			}
+			cumY += rh
+		}
 	} else {
 		return 0, false
 	}
@@ -247,13 +319,12 @@ func (t *tableBlock) CharAt(x, y int) (rune, bool) {
 	}
 
 	colX := 1
-	for i, colWidth := range colWidths {
+	for i, colWidth := range t.colWidths {
 		if x >= colX && x < colX+colWidth {
-			if i < len(row) {
-				text := row[i].String()
-				cellX := x - colX
-				if cellX < len(text) {
-					return rune(text[cellX]), true
+			if i < len(wrappedCells) && lineInRow < len(wrappedCells[i]) {
+				ch, ok := charAtInLine(wrappedCells[i][lineInRow], x-colX)
+				if ok {
+					return ch, true
 				}
 			}
 			return ' ', true
@@ -261,6 +332,29 @@ func (t *tableBlock) CharAt(x, y int) (rune, bool) {
 		colX += colWidth
 		if x == colX {
 			return cs.ColumnSeparator, true
+		}
+		colX++
+	}
+	return 0, false
+}
+
+func (t *tableBlock) charAtHorizontalBorder(
+	x int, left, fill, join, right rune,
+) (rune, bool) {
+	if x == 0 {
+		return left, true
+	}
+	colX := 1
+	for i, colWidth := range t.colWidths {
+		if x >= colX && x < colX+colWidth {
+			return fill, true
+		}
+		colX += colWidth
+		if x == colX {
+			if i == len(t.colWidths)-1 {
+				return right, true
+			}
+			return join, true
 		}
 		colX++
 	}
@@ -290,30 +384,30 @@ func (t *tableBlock) calculateColumnWidths(
 	return widths
 }
 
-func (t *tableBlock) renderTopBorder(
-	w term.Writer, y int, colWidths []int, cs TableCharSet,
+func (t *tableBlock) renderHorizontalBorder(
+	w term.Writer, y int, left, fill, join, right rune,
 ) int {
 	x := 0
 	w.SetCell(term.Coordinates{X: x, Y: y}, term.Cell{
-		Ch:         cs.TopLeft,
+		Ch:         left,
 		Width:      1,
 		Attributes: t.cfg.Paragraph,
 	})
 	x++
 
-	for i, colWidth := range colWidths {
+	for i, colWidth := range t.colWidths {
 		for j := range colWidth {
 			w.SetCell(term.Coordinates{X: x + j, Y: y}, term.Cell{
-				Ch:         cs.HorizontalTop,
+				Ch:         fill,
 				Width:      1,
 				Attributes: t.cfg.Paragraph,
 			})
 		}
 		x += colWidth
 
-		ch := cs.TopJoin
-		if i == len(colWidths)-1 {
-			ch = cs.TopRight
+		ch := join
+		if i == len(t.colWidths)-1 {
+			ch = right
 		}
 		w.SetCell(term.Coordinates{X: x, Y: y}, term.Cell{
 			Ch:         ch,
@@ -325,134 +419,36 @@ func (t *tableBlock) renderTopBorder(
 	return y + 1
 }
 
-func (t *tableBlock) renderHeaderRow(
-	w term.Writer, y int, colWidths []int, cs TableCharSet,
+func (t *tableBlock) renderRow(
+	w term.Writer, y int, wrappedCells [][]textRun,
+	rowHeight int, cs TableCharSet, isHeader bool,
 ) int {
-	x := 0
-	w.SetCell(term.Coordinates{X: x, Y: y}, term.Cell{
-		Ch:         cs.ColumnSeparator,
-		Width:      1,
-		Attributes: t.cfg.Paragraph,
-	})
-	x++
-
-	for i, cell := range t.header {
-		if i >= len(colWidths) {
-			break
-		}
-		colWidth := colWidths[i]
-		t.renderCell(w, x, y, colWidth, cell, t.getAlignment(i), true)
-		x += colWidth
-
-		w.SetCell(term.Coordinates{X: x, Y: y}, term.Cell{
+	for line := range rowHeight {
+		x := 0
+		w.SetCell(term.Coordinates{X: x, Y: y + line}, term.Cell{
 			Ch:         cs.ColumnSeparator,
 			Width:      1,
 			Attributes: t.cfg.Paragraph,
 		})
 		x++
-	}
-	return y + 1
-}
 
-func (t *tableBlock) renderSeparator(
-	w term.Writer, y int, colWidths []int, cs TableCharSet,
-) int {
-	x := 0
+		for i, colWidth := range t.colWidths {
+			var lineRun textRun
+			if i < len(wrappedCells) && line < len(wrappedCells[i]) {
+				lineRun = wrappedCells[i][line]
+			}
+			t.renderCell(w, x, y+line, colWidth, lineRun, t.getAlignment(i), isHeader)
+			x += colWidth
 
-	w.SetCell(term.Coordinates{X: x, Y: y}, term.Cell{
-		Ch:         cs.Left,
-		Width:      1,
-		Attributes: t.cfg.Paragraph,
-	})
-	x++
-
-	for i, colWidth := range colWidths {
-		for j := range colWidth {
-			w.SetCell(term.Coordinates{X: x + j, Y: y}, term.Cell{
-				Ch:         cs.HeaderSeparator,
+			w.SetCell(term.Coordinates{X: x, Y: y + line}, term.Cell{
+				Ch:         cs.ColumnSeparator,
 				Width:      1,
 				Attributes: t.cfg.Paragraph,
 			})
+			x++
 		}
-		x += colWidth
-
-		ch := cs.CrossJoin
-		if i == len(colWidths)-1 {
-			ch = cs.Right
-		}
-		w.SetCell(term.Coordinates{X: x, Y: y}, term.Cell{
-			Ch:         ch,
-			Width:      1,
-			Attributes: t.cfg.Paragraph,
-		})
-		x++
 	}
-	return y + 1
-}
-
-func (t *tableBlock) renderBottomBorder(
-	w term.Writer, y int, colWidths []int, cs TableCharSet,
-) int {
-	x := 0
-	w.SetCell(term.Coordinates{X: x, Y: y}, term.Cell{
-		Ch:         cs.BottomLeft,
-		Width:      1,
-		Attributes: t.cfg.Paragraph,
-	})
-	x++
-
-	for i, colWidth := range colWidths {
-		for j := range colWidth {
-			w.SetCell(term.Coordinates{X: x + j, Y: y}, term.Cell{
-				Ch:         cs.HorizontalBottom,
-				Width:      1,
-				Attributes: t.cfg.Paragraph,
-			})
-		}
-		x += colWidth
-
-		ch := cs.BottomJoin
-		if i == len(colWidths)-1 {
-			ch = cs.BottomRight
-		}
-		w.SetCell(term.Coordinates{X: x, Y: y}, term.Cell{
-			Ch:         ch,
-			Width:      1,
-			Attributes: t.cfg.Paragraph,
-		})
-		x++
-	}
-	return y + 1
-}
-
-func (t *tableBlock) renderDataRow(
-	w term.Writer, y int, row []textRun,
-	colWidths []int, cs TableCharSet,
-) int {
-	x := 0
-	w.SetCell(term.Coordinates{X: x, Y: y}, term.Cell{
-		Ch:         cs.ColumnSeparator,
-		Width:      1,
-		Attributes: t.cfg.Paragraph,
-	})
-	x++
-
-	for i, colWidth := range colWidths {
-		var cell textRun
-		if i < len(row) {
-			cell = row[i]
-		}
-		t.renderCell(w, x, y, colWidth, cell, t.getAlignment(i), false)
-		x += colWidth
-
-		w.SetCell(term.Coordinates{X: x, Y: y}, term.Cell{
-			Ch:         cs.ColumnSeparator,
-			Width:      1,
-			Attributes: t.cfg.Paragraph,
-		})
-		x++
-	}
-	return y + 1
+	return y + rowHeight
 }
 
 func (t *tableBlock) renderCell(
