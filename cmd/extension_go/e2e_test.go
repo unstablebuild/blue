@@ -25,6 +25,7 @@ package main
 
 import (
 	"context"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -776,8 +777,24 @@ type Config struct {
 
 	t.Run("Vulncheck", func(t *testing.T) {
 		t.Parallel()
-		env := initGopls(t, goplsBin, []testFile{
-			{name: "main.go", content: "package main\n\nfunc main() {}\n"},
+
+		// golang.org/x/text v0.3.7 has GO-2022-1059 (CVE-2022-32149).
+		goModContent := "module example.com/test\n\ngo 1.22\n\nrequire golang.org/x/text v0.3.7\n"
+		mainContent := "package main\n\nimport _ \"golang.org/x/text/language\"\n\nfunc main() {}\n"
+
+		dir := setupWorkspace(t, "example.com/test", []testFile{
+			{name: "go.mod", content: goModContent},
+			{name: "main.go", content: mainContent},
+		})
+
+		// Resolve dependencies so gopls can load packages.
+		tidy := exec.Command("go", "mod", "tidy")
+		tidy.Dir = dir
+		out, err := tidy.CombinedOutput()
+		require.NoError(t, err, "go mod tidy: %s", out)
+
+		env := initGoplsFromDir(t, goplsBin, dir, []testFile{
+			{name: "main.go", content: mainContent},
 		})
 		handler, _, mn := newTestHandler(t, env)
 
@@ -785,12 +802,53 @@ type Config struct {
 		resource := &stubResource{uri: uri}
 		cmd := goCmd("vulncheck", uri, resource)
 
-		err := handler.HandleCommand(t.Context(), cmd)
-		// Vulncheck may fail if govulncheck is not installed.
-		if err != nil {
-			assert.NotContains(t, err.Error(), "unsupported command")
-		} else {
-			assert.True(t, mn.hasMessage("gopls.run_govulncheck"))
+		// Register a diagnostics hook BEFORE executing the command.
+		// Vulncheck runs asynchronously inside gopls: the RPC returns
+		// immediately but the scan continues in the background. When
+		// it finds vulnerabilities, gopls publishes diagnostics on
+		// the go.mod file.
+		goModURI := "file://" + filepath.Join(env.dir, "go.mod")
+		diagsCh := make(chan []semanticapi.Diagnostic, 1)
+		env.cb.mu.Lock()
+		prev := env.cb.onDiagnostics
+		env.cb.onDiagnostics = func(p semanticapi.PublishDiagnosticsParams) {
+			if prev != nil {
+				prev(p)
+			}
+			if p.URI == goModURI && len(p.Diagnostics) > 0 {
+				select {
+				case diagsCh <- p.Diagnostics:
+				default:
+				}
+			}
+		}
+		env.cb.mu.Unlock()
+
+		err = handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+		assert.True(t, mn.hasMessage("gopls.run_govulncheck"))
+
+		// Wait for gopls to publish vulnerability diagnostics on
+		// go.mod, confirming the scan found the known vulnerability.
+		select {
+		case diags := <-diagsCh:
+			var msgs []string
+			for _, d := range diags {
+				msgs = append(msgs, d.Message)
+			}
+			t.Logf("vulncheck diagnostics: %v", msgs)
+			found := false
+			for _, msg := range msgs {
+				if strings.Contains(msg, "GO-2022-1059") ||
+					strings.Contains(msg, "golang.org/x/text") {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found,
+				"expected vulnerability diagnostic for golang.org/x/text, got: %v", msgs)
+		case <-time.After(30 * time.Second):
+			t.Fatal("timed out waiting for vulncheck diagnostics on go.mod")
 		}
 	})
 
