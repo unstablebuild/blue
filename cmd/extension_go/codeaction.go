@@ -136,7 +136,6 @@ func (h *codeActionCmd) applyAction(ctx context.Context, action semanticapi.Code
 		if err != nil {
 			return err
 		}
-		lspcmd.NotifyDidChange(ctx, h.lsp, action.Edit)
 	}
 	if action.Command != nil {
 		_, err := h.lsp.ExecuteCommand(ctx, semanticapi.ExecuteCommandParams{

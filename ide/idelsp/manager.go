@@ -407,7 +407,7 @@ func (m *Manager) ensureFile(
 }
 
 func (m *Manager) ensureServer(
-	ctx context.Context, filename workspaceapi.URI,
+	_ context.Context, filename workspaceapi.URI,
 ) (*langServer, error) {
 	lang, err := languageForFile(filename)
 	if err != nil {
@@ -425,6 +425,8 @@ func (m *Manager) ensureServer(
 		return nil, fmt.Errorf("server not initialized and auto-initialize config is false")
 	}
 
+	ctx, cancel := context.WithTimeout(m.ctx, m.cfg.InitializeTimeout)
+	defer cancel()
 	return m.initializeServer(ctx, lang, autoInitParams(m.rootURI))
 }
 
@@ -454,9 +456,6 @@ func (m *Manager) initializeServer(
 		newCallbackAdapter(m.callback, lang.id),
 		params,
 	)
-
-	ctx, cancel := context.WithTimeout(ctx, m.cfg.InitializeTimeout)
-	defer cancel()
 
 	if err := srv.start(ctx); err != nil {
 		return nil, err

@@ -33,6 +33,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
@@ -369,10 +370,10 @@ func (s *localScheme) Close() error {
 }
 
 // readyOnProgress returns an onProgress callback that
-// signals wg.Done via the given sync.Once when a progress
+// closes ready via the given sync.Once when a progress
 // sequence completes (end event received).
 func readyOnProgress(
-	once *sync.Once, wg *sync.WaitGroup,
+	once *sync.Once, ready chan struct{},
 ) func(semanticapi.ProgressParams) {
 	return func(p semanticapi.ProgressParams) {
 		var v struct {
@@ -382,7 +383,18 @@ func readyOnProgress(
 			return
 		}
 		if v.Kind == "end" {
-			once.Do(wg.Done)
+			once.Do(func() { close(ready) })
 		}
+	}
+}
+
+// waitReady waits for ready to be closed or fails the test
+// after 30 seconds.
+func waitReady(t *testing.T, ready <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-ready:
+	case <-time.After(30 * time.Second):
+		t.Fatal("gopls did not become ready within 30s")
 	}
 }

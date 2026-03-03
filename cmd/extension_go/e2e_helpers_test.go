@@ -474,6 +474,7 @@ type testCallback struct {
 	onShowMessage func(params semanticapi.ShowMessageParams)
 	onProgress    func(semanticapi.ProgressParams)
 	onApplyEdit   func(semanticapi.ApplyWorkspaceEditParams)
+	onDiagnostics func(semanticapi.PublishDiagnosticsParams)
 	appliedEdits  []semanticapi.ApplyWorkspaceEditParams
 	diagnostics   []semanticapi.PublishDiagnosticsParams
 }
@@ -501,7 +502,11 @@ func (c *testCallback) PublishDiagnostics(
 ) error {
 	c.mu.Lock()
 	c.diagnostics = append(c.diagnostics, params)
+	cb := c.onDiagnostics
 	c.mu.Unlock()
+	if cb != nil {
+		cb(params)
+	}
 	return nil
 }
 
@@ -807,6 +812,34 @@ func newTestHandler(
 	return handler, me, mn
 }
 
+// newTestHandlerWithEditorEvents is like newTestHandler but wires the
+// mockEditor so that every CellEditor.Edit call fires EventTypeEdit on
+// the Manager, simulating the real Rune editor where buffer modifications
+// trigger edit events that the Manager converts to textDocument/didChange.
+func newTestHandlerWithEditorEvents(
+	t *testing.T, env *testEnv,
+) (textapi.CommandHandler, *mockEditor, *mockNotifications) {
+	t.Helper()
+	me := newMockEditor()
+	me.onCellEdit = func(
+		uri workspaceapi.URI,
+		start, end term.Coordinates,
+		text string,
+	) {
+		env.mgr.Handle(context.Background(), textapi.Event{
+			Type:    textapi.EventTypeEdit,
+			URI:     uri,
+			Content: text,
+			Start:   start,
+			End:     end,
+		})
+	}
+	mn := &mockNotifications{}
+	_, handler, err := newGoHandler(env.mgr, me, nil, mn)
+	require.NoError(t, err)
+	return handler, me, mn
+}
+
 // goCmd creates a textapi.Command for the "go" command with the given
 // subcommand, URI, and resource.
 func goCmd(
@@ -903,8 +936,9 @@ type mockEdit struct {
 
 // mockCellEditor implements textapi.CellEditor for tests.
 type mockCellEditor struct {
-	mu    sync.Mutex
-	edits []mockEdit
+	mu     sync.Mutex
+	edits  []mockEdit
+	onEdit func(start, end term.Coordinates, text string)
 }
 
 var _ textapi.CellEditor = (*mockCellEditor)(nil)
@@ -913,8 +947,12 @@ func (e *mockCellEditor) Edit(
 	_ context.Context, start, end term.Coordinates, str string,
 ) (term.Coordinates, term.Coordinates, string, error) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	e.edits = append(e.edits, mockEdit{Start: start, End: end, NewText: str})
+	cb := e.onEdit
+	e.mu.Unlock()
+	if cb != nil {
+		cb(start, end, str)
+	}
 	return start, end, "", nil
 }
 
@@ -924,6 +962,9 @@ type mockEditor struct {
 	handlers    map[string]textapi.Handler // URI string -> handler
 	cellEditors map[textapi.Handler]*mockCellEditor
 	evHandlers  []textapi.EventHandler
+	// onCellEdit is called for every CellEditor.Edit call with the
+	// handler's URI. Used to simulate the real editor firing EventTypeEdit.
+	onCellEdit func(uri workspaceapi.URI, start, end term.Coordinates, text string)
 }
 
 var _ textapi.Editor = (*mockEditor)(nil)
@@ -1003,6 +1044,13 @@ func (e *mockEditor) CellEditor(h textapi.Handler) textapi.CellEditor {
 		return ce
 	}
 	ce := &mockCellEditor{}
+	if e.onCellEdit != nil {
+		uri := h.Resource()
+		parent := e.onCellEdit
+		ce.onEdit = func(start, end term.Coordinates, text string) {
+			parent(uri, start, end, text)
+		}
+	}
 	e.cellEditors[h] = ce
 	return ce
 }
@@ -1087,4 +1135,36 @@ func (b *bufferCellEditor) Edit(
 
 func (b *bufferCellEditor) String() string {
 	return strings.Join(b.lines, "\n")
+}
+
+// waitForDiagnostics subscribes to publishDiagnostics via the onDiagnostics
+// hook and blocks until a notification for the given file URI arrives (or
+// the timeout expires). This replaces time.Sleep-based waits for gopls to
+// finish processing edits.
+func waitForDiagnostics(
+	t *testing.T, cb *testCallback, fileURI string, timeout time.Duration,
+) []semanticapi.Diagnostic {
+	t.Helper()
+	ch := make(chan []semanticapi.Diagnostic, 1)
+	cb.mu.Lock()
+	prev := cb.onDiagnostics
+	cb.onDiagnostics = func(p semanticapi.PublishDiagnosticsParams) {
+		if prev != nil {
+			prev(p)
+		}
+		if p.URI == fileURI {
+			select {
+			case ch <- p.Diagnostics:
+			default:
+			}
+		}
+	}
+	cb.mu.Unlock()
+	select {
+	case diags := <-ch:
+		return diags
+	case <-time.After(timeout):
+		t.Fatalf("timed out waiting for publishDiagnostics on %s", fileURI)
+		return nil
+	}
 }

@@ -609,15 +609,15 @@ func TestE2ERename(t *testing.T) {
 
 	scheme := newTestScheme()
 
-	var wg sync.WaitGroup
+	readyCh := make(chan struct{})
 	var ready sync.Once
 	callback := &e2eCallback{
 		onShowMessage: func(params semanticapi.ShowMessageParams) {
 			if strings.Contains(params.Message, "Finished loading packages") {
-				ready.Do(wg.Done)
+				ready.Do(func() { close(readyCh) })
 			}
 		},
-		onProgress: readyOnProgress(&ready, &wg),
+		onProgress: readyOnProgress(&ready, readyCh),
 	}
 
 	mgr := idelsp.New(
@@ -626,7 +626,6 @@ func TestE2ERename(t *testing.T) {
 	)
 	ctx := context.Background()
 
-	wg.Add(1)
 	mgr.Handle(ctx, textapi.Event{
 		Type: textapi.EventTypeOpen, URI: mainWSURI,
 		Content: string(mainContent),
@@ -639,7 +638,7 @@ func TestE2ERename(t *testing.T) {
 		Type: textapi.EventTypeOpen, URI: testWSURI,
 		Content: string(testContent),
 	})
-	wg.Wait()
+	waitReady(t, readyCh)
 	t.Cleanup(func() { _ = mgr.Close() })
 
 	// Track every CellEditor.Edit call across all files.
@@ -667,6 +666,14 @@ func TestE2ERename(t *testing.T) {
 						text: text,
 					})
 					mu.Unlock()
+					// Simulate Rune firing EventTypeEdit back to Manager.
+					mgr.Handle(context.Background(), textapi.Event{
+						Type:    textapi.EventTypeEdit,
+						URI:     rh.uri,
+						Content: text,
+						Start:   s,
+						End:     e,
+					})
 					return s, e, text, nil
 				},
 			}
