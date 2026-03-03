@@ -54,6 +54,7 @@ const (
 func (m *Manager) Initialize(ctx context.Context, params semanticapi.InitializeParams) (
 	ret semanticapi.InitializeResult, err error,
 ) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	if params.RootURI != m.rootURI {
 		err = errors.New("initializing LSP server for the wrong workspace: " +
 			"uris don't match")
@@ -237,6 +238,7 @@ func (m *Manager) Completion(
 	ctx context.Context,
 	params semanticapi.CompletionParams,
 ) (semanticapi.CompletionResult, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return semanticapi.CompletionResult{}, err
@@ -263,6 +265,7 @@ func (m *Manager) Hover(
 	ctx context.Context,
 	params semanticapi.HoverParams,
 ) (*semanticapi.Hover, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -287,6 +290,7 @@ func (m *Manager) SignatureHelp(
 	ctx context.Context,
 	params semanticapi.SignatureHelpParams,
 ) (*semanticapi.SignatureHelp, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -311,6 +315,7 @@ func (m *Manager) Definition(
 	ctx context.Context,
 	params semanticapi.DefinitionParams,
 ) (semanticapi.LocationResult, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	return m.locationRequest(
 		ctx, params.TextDocument.URI,
 		"textDocument/definition", params,
@@ -322,6 +327,7 @@ func (m *Manager) Declaration(
 	ctx context.Context,
 	params semanticapi.DeclarationParams,
 ) (semanticapi.LocationResult, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	return m.locationRequest(
 		ctx, params.TextDocument.URI,
 		"textDocument/declaration", params,
@@ -333,6 +339,7 @@ func (m *Manager) TypeDefinition(
 	ctx context.Context,
 	params semanticapi.TypeDefinitionParams,
 ) (semanticapi.LocationResult, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	return m.locationRequest(
 		ctx, params.TextDocument.URI,
 		"textDocument/typeDefinition", params,
@@ -344,6 +351,7 @@ func (m *Manager) Implementation(
 	ctx context.Context,
 	params semanticapi.ImplementationParams,
 ) (semanticapi.LocationResult, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	return m.locationRequest(
 		ctx, params.TextDocument.URI,
 		"textDocument/implementation", params,
@@ -355,6 +363,7 @@ func (m *Manager) References(
 	ctx context.Context,
 	params semanticapi.ReferenceParams,
 ) ([]semanticapi.Location, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -372,6 +381,7 @@ func (m *Manager) DocumentHighlight(
 	ctx context.Context,
 	params semanticapi.DocumentHighlightParams,
 ) ([]semanticapi.DocumentHighlight, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -389,6 +399,7 @@ func (m *Manager) DocumentSymbol(
 	ctx context.Context,
 	params semanticapi.DocumentSymbolParams,
 ) (semanticapi.DocumentSymbolResult, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return semanticapi.DocumentSymbolResult{}, err
@@ -422,6 +433,7 @@ func (m *Manager) CodeAction(
 	ctx context.Context,
 	params semanticapi.CodeActionParams,
 ) ([]semanticapi.CodeActionResult, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -461,6 +473,7 @@ func (m *Manager) CodeLens(
 	ctx context.Context,
 	params semanticapi.CodeLensParams,
 ) ([]semanticapi.CodeLens, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -485,6 +498,7 @@ func (m *Manager) Formatting(
 	ctx context.Context,
 	params semanticapi.DocumentFormattingParams,
 ) ([]semanticapi.TextEdit, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -509,6 +523,7 @@ func (m *Manager) RangeFormatting(
 	ctx context.Context,
 	params semanticapi.DocumentRangeFormattingParams,
 ) ([]semanticapi.TextEdit, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -533,6 +548,7 @@ func (m *Manager) Rename(
 	ctx context.Context,
 	params semanticapi.RenameParams,
 ) (*semanticapi.WorkspaceEdit, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -557,6 +573,7 @@ func (m *Manager) PrepareRename(
 	ctx context.Context,
 	params semanticapi.PrepareRenameParams,
 ) (*semanticapi.PrepareRenameResult, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -581,6 +598,7 @@ func (m *Manager) FoldingRange(
 	ctx context.Context,
 	params semanticapi.FoldingRangeParams,
 ) ([]semanticapi.FoldingRange, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -598,6 +616,7 @@ func (m *Manager) SelectionRange(
 	ctx context.Context,
 	params semanticapi.SelectionRangeParams,
 ) ([]semanticapi.SelectionRange, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -615,6 +634,7 @@ func (m *Manager) SemanticTokensFull(
 	ctx context.Context,
 	params semanticapi.SemanticTokensParams,
 ) (*semanticapi.SemanticTokens, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -639,6 +659,7 @@ func (m *Manager) SemanticTokensRange(
 	ctx context.Context,
 	params semanticapi.SemanticTokensRangeParams,
 ) (*semanticapi.SemanticTokens, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -663,6 +684,7 @@ func (m *Manager) SemanticTokensFullDelta(
 	ctx context.Context,
 	params semanticapi.SemanticTokensDeltaParams,
 ) (*semanticapi.SemanticTokensDelta, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -687,6 +709,7 @@ func (m *Manager) Diagnostic(
 	ctx context.Context,
 	params semanticapi.DocumentDiagnosticParams,
 ) (semanticapi.DocumentDiagnosticReport, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return semanticapi.DocumentDiagnosticReport{
@@ -708,6 +731,7 @@ func (m *Manager) PrepareCallHierarchy(
 	ctx context.Context,
 	params semanticapi.CallHierarchyPrepareParams,
 ) ([]semanticapi.CallHierarchyItem, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, err
@@ -725,6 +749,7 @@ func (m *Manager) CallHierarchyIncomingCalls(
 	ctx context.Context,
 	params semanticapi.CallHierarchyIncomingCallsParams,
 ) ([]semanticapi.CallHierarchyIncomingCall, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.Item.URI)
 	if err != nil {
 		return nil, err
@@ -742,6 +767,7 @@ func (m *Manager) CallHierarchyOutgoingCalls(
 	ctx context.Context,
 	params semanticapi.CallHierarchyOutgoingCallsParams,
 ) ([]semanticapi.CallHierarchyOutgoingCall, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.Item.URI)
 	if err != nil {
 		return nil, err
@@ -775,6 +801,7 @@ func (m *Manager) DocumentColor(
 	ctx context.Context,
 	params semanticapi.DocumentColorParams,
 ) ([]semanticapi.ColorInformation, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, nil
@@ -792,6 +819,7 @@ func (m *Manager) ColorPresentation(
 	ctx context.Context,
 	params semanticapi.ColorPresentationParams,
 ) ([]semanticapi.ColorPresentation, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, nil
@@ -809,6 +837,7 @@ func (m *Manager) DocumentLink(
 	ctx context.Context,
 	params semanticapi.DocumentLinkParams,
 ) ([]semanticapi.DocumentLink, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, nil
@@ -858,6 +887,7 @@ func (m *Manager) LinkedEditingRange(
 	ctx context.Context,
 	params semanticapi.LinkedEditingRangeParams,
 ) (*semanticapi.LinkedEditingRanges, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, nil
@@ -882,6 +912,7 @@ func (m *Manager) Moniker(
 	ctx context.Context,
 	params semanticapi.MonikerParams,
 ) ([]semanticapi.Moniker, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(
 		params.TextDocument.URI,
 	)
@@ -918,6 +949,7 @@ func (m *Manager) PrepareTypeHierarchy(
 	ctx context.Context,
 	params semanticapi.TypeHierarchyPrepareParams,
 ) ([]semanticapi.TypeHierarchyItem, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, nil
@@ -935,6 +967,7 @@ func (m *Manager) TypeHierarchySupertypes(
 	ctx context.Context,
 	params semanticapi.TypeHierarchySupertypesParams,
 ) ([]semanticapi.TypeHierarchyItem, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.Item.URI)
 	if err != nil {
 		return nil, nil
@@ -952,6 +985,7 @@ func (m *Manager) TypeHierarchySubtypes(
 	ctx context.Context,
 	params semanticapi.TypeHierarchySubtypesParams,
 ) ([]semanticapi.TypeHierarchyItem, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.Item.URI)
 	if err != nil {
 		return nil, nil
@@ -969,6 +1003,7 @@ func (m *Manager) InlayHint(
 	ctx context.Context,
 	params semanticapi.InlayHintParams,
 ) ([]semanticapi.InlayHint, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, nil
@@ -1001,6 +1036,7 @@ func (m *Manager) InlineValue(
 	ctx context.Context,
 	params semanticapi.InlineValueParams,
 ) ([]semanticapi.InlineValue, error) {
+	params.WorkDoneToken = m.tokenFor(params.WorkDoneToken)
 	srv, err := m.serverForURI(params.TextDocument.URI)
 	if err != nil {
 		return nil, nil
@@ -1045,7 +1081,7 @@ func (m *Manager) WorkspaceDiagnostic(
 					"error", err,
 				)
 			}
-			p.WorkDoneToken = token.StringValue
+			p.WorkDoneToken = token
 			var report semanticapi.WorkspaceDiagnosticReport
 			err := srv.call(
 				ctx, "workspace/diagnostic",
@@ -1086,10 +1122,12 @@ func (m *Manager) WorkspaceSymbol(
 	for i, srv := range servers {
 		go func(i int, srv *langServer) {
 			defer wg.Done()
+			p := params
+			p.WorkDoneToken = m.tokenFor(p.WorkDoneToken)
 			var syms []semanticapi.SymbolInformation
 			err := srv.call(
 				ctx, "workspace/symbol",
-				params, &syms,
+				p, &syms,
 			)
 			results[i] = result{syms: syms, err: err}
 		}(i, srv)
@@ -1117,8 +1155,10 @@ func (m *Manager) ExecuteCommand(
 	servers := m.allServers()
 	var errs []error
 	for _, srv := range servers {
+		p := params
+		p.WorkDoneToken = m.tokenFor(p.WorkDoneToken)
 		var raw json.RawMessage
-		err := srv.call(ctx, "workspace/executeCommand", params, &raw)
+		err := srv.call(ctx, "workspace/executeCommand", p, &raw)
 		if err != nil {
 			errs = append(errs, err)
 			continue

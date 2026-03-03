@@ -15,7 +15,6 @@ require (
 	github.com/ernestrc/sensible v0.3.1
 	github.com/go-delve/delve v1.9.1
 	github.com/go-jose/go-jose/v4 v4.1.3
-	github.com/gobwas/glob v0.2.3
 	github.com/google/go-dap v0.12.0
 	github.com/google/uuid v1.6.0
 	github.com/olekukonko/tablewriter v1.1.3

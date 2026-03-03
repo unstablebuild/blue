@@ -32,6 +32,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -1648,6 +1649,142 @@ func TestE2ECallbackProgress(t *testing.T) {
 	defer progressMu.Unlock()
 	assert.True(t, sawBegin, "expected begin progress")
 	assert.True(t, sawEnd, "expected end progress")
+	require.NoError(t, mgr.Close())
+}
+
+func TestE2EWorkDoneProgress(t *testing.T) {
+	t.Parallel()
+	goplsBin := findGopls(t)
+	tmpDir := setupTestWorkspace(t, "testdata")
+
+	mainPath := filepath.Join(tmpDir, "main.go")
+	mainContent, err := os.ReadFile(mainPath)
+	require.NoError(t, err)
+
+	goModURI := "file://" + filepath.Join(tmpDir, "go.mod")
+	mainURI := "file://" + mainPath
+	uri := makeURI(t, "file://"+tmpDir)
+	scheme := newTestScheme()
+
+	ctx, cancel := context.WithTimeout(
+		context.Background(), 30*time.Second,
+	)
+	defer cancel()
+
+	// Track progress events: loading uses server-initiated string
+	// tokens; ExecuteCommand uses our injected integer token.
+	var (
+		progressMu    sync.Mutex
+		integerTokens []semanticapi.ProgressToken
+	)
+	loaded := make(chan struct{})
+	cmdDone := make(chan struct{})
+
+	callback := &testCallback{
+		onProgress: func(p semanticapi.ProgressParams) {
+			var kind struct {
+				Kind string `json:"kind"`
+			}
+			if json.Unmarshal(p.Value, &kind) != nil {
+				return
+			}
+			progressMu.Lock()
+			defer progressMu.Unlock()
+
+			if p.Token.IsInteger {
+				integerTokens = append(integerTokens, p.Token)
+				if kind.Kind == "end" {
+					select {
+					case <-cmdDone:
+					default:
+						close(cmdDone)
+					}
+				}
+				return
+			}
+			// Server-initiated string tokens signal loading.
+			if kind.Kind == "end" {
+				select {
+				case <-loaded:
+				default:
+					close(loaded)
+				}
+			}
+		},
+	}
+
+	params := autoInitParams(uri.String())
+	initOpts, err := json.Marshal(map[string]any{
+		"langID":  "go",
+		"command": "gopls serve",
+	})
+	require.NoError(t, err)
+	params.InitializeOptions = initOpts
+
+	mgr := New(
+		uri, scheme, scheme,
+		&stubPkgManager{bin: goplsBin},
+		nil, nil,
+		Config{
+			Callback:         callback,
+			MaxRetries:       1,
+			WorkDoneProgress: true,
+		},
+	)
+
+	_, err = mgr.Initialize(ctx, params)
+	require.NoError(t, err)
+	require.NoError(t, mgr.DidOpen(ctx,
+		semanticapi.DidOpenTextDocumentParams{
+			TextDocument: semanticapi.TextDocumentItem{
+				URI:        mainURI,
+				LanguageID: "go",
+				Version:    0,
+				Text:       string(mainContent),
+			},
+		},
+	))
+
+	// Wait for gopls to finish loading before issuing a command.
+	select {
+	case <-loaded:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for gopls to load")
+	}
+
+	// Record the token sequence before the command; the next
+	// tokenFor call will produce seqBefore+1.
+	seqBefore := atomic.LoadInt64(&mgr.tokenSeq)
+
+	// gopls.tidy honors client-provided workDoneToken: its
+	// run() method passes params.WorkDoneToken to progress.Start.
+	arg, err := json.Marshal(map[string]any{
+		"URIs": []string{goModURI},
+	})
+	require.NoError(t, err)
+
+	_, err = mgr.ExecuteCommand(ctx, semanticapi.ExecuteCommandParams{
+		Command:   "gopls.tidy",
+		Arguments: []json.RawMessage{arg},
+	})
+	require.NoError(t, err)
+
+	// Wait for progress reported with our integer token.
+	select {
+	case <-cmdDone:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for progress with integer token")
+	}
+
+	progressMu.Lock()
+	defer progressMu.Unlock()
+	require.NotEmpty(t, integerTokens,
+		"expected $/progress events with our integer token",
+	)
+	wantToken := int(seqBefore + 1)
+	assert.Equal(t, wantToken, integerTokens[0].IntegerValue)
+	assert.True(t, integerTokens[0].IsInteger)
+
 	require.NoError(t, mgr.Close())
 }
 

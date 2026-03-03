@@ -33,6 +33,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
@@ -57,6 +58,7 @@ type Config struct {
 	CloseTimeout       time.Duration
 	EventHandleTimeout time.Duration
 	NoInitializeServer bool
+	WorkDoneProgress   bool
 }
 
 // Manager is a multi-language LSP server manager.
@@ -65,6 +67,7 @@ type Manager struct {
 	cfg           Config
 	evs           chan textapi.Event
 	mu            sync.Mutex
+	tokenSeq      int64
 	rootURI       string
 	fileSystem    schemeapi.FileSystem
 	executor      schemeapi.Executor
@@ -78,6 +81,20 @@ type Manager struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	log           *slog.Logger
+}
+
+// tokenFor returns existing if non-nil, or generates a new
+// integer ProgressToken when WorkDoneProgress is enabled.
+func (m *Manager) tokenFor(
+	existing *semanticapi.ProgressToken,
+) *semanticapi.ProgressToken {
+	if existing != nil || !m.cfg.WorkDoneProgress {
+		return existing
+	}
+	id := int(atomic.AddInt64(&m.tokenSeq, 1))
+	return &semanticapi.ProgressToken{
+		IntegerValue: id, IsInteger: true,
+	}
 }
 
 var (
