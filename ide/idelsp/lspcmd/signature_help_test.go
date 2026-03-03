@@ -26,6 +26,7 @@ package lspcmd
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -441,6 +442,8 @@ func TestSignatureHelpAutoTriggerNilResult(t *testing.T) {
 			return nil, nil
 		},
 	}
+	var mu sync.Mutex
+	var gotList textapi.LocationList
 	var setLocationCalled bool
 	var capturedHandler textapi.EventHandler
 	editor := &mockEditor{
@@ -453,8 +456,11 @@ func TestSignatureHelpAutoTriggerNilResult(t *testing.T) {
 		editorFn: func(uri workspaceapi.URI) (textapi.Handler, error) {
 			return &mockHandler{uri: uri}, nil
 		},
-		setLocationListFn: func(_ textapi.Handler, _ textapi.LocationPriority, _ string, _ textapi.LocationList) error {
+		setLocationListFn: func(_ textapi.Handler, _ textapi.LocationPriority, _ string, list textapi.LocationList) error {
+			mu.Lock()
+			gotList = list
 			setLocationCalled = true
+			mu.Unlock()
 			return nil
 		},
 	}
@@ -470,10 +476,17 @@ func TestSignatureHelpAutoTriggerNilResult(t *testing.T) {
 	})
 	assert.False(t, done)
 
-	// The fetch runs asynchronously via time.AfterFunc(0, ...).
-	// Give it a moment to complete.
-	time.Sleep(50 * time.Millisecond)
-	assert.False(t, setLocationCalled, "SetLocationList should not be called when LSP returns nil")
+	// The fetch runs asynchronously. When LSP returns nil the
+	// location should be cleared (nil list).
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return setLocationCalled
+	}, time.Second, 10*time.Millisecond, "SetLocationList should be called to clear")
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Nil(t, gotList, "location list should be nil when LSP returns nil")
 }
 
 func TestSignatureHelpAutoTriggerSetsLocation(t *testing.T) {
@@ -615,7 +628,15 @@ func TestSignatureHelpCursorClearsLocation(t *testing.T) {
 		return len(calls) > 0 && calls[len(calls)-1] != nil
 	}, time.Second, 10*time.Millisecond, "location should be set first")
 
-	// Now fire a cursor event to clear it.
+	// The cursor event that immediately follows the edit is
+	// suppressed (the edit flag absorbs it). Fire it first.
+	capturedHandler.Handle(context.Background(), textapi.Event{
+		Type: textapi.EventTypeCursor,
+		URI:  wsURI,
+		From: term.Coordinates{X: 4, Y: 10},
+	})
+
+	// A second cursor event (pure navigation) should clear.
 	capturedHandler.Handle(context.Background(), textapi.Event{
 		Type: textapi.EventTypeCursor,
 		URI:  wsURI,
@@ -625,7 +646,278 @@ func TestSignatureHelpCursorClearsLocation(t *testing.T) {
 	mu.Lock()
 	lastCall := calls[len(calls)-1]
 	mu.Unlock()
-	assert.Nil(t, lastCall, "cursor event should clear the location list")
+	assert.Nil(t, lastCall, "navigation cursor should clear the location list")
+}
+
+func TestSignatureHelpNonTriggerEditKeepsLocation(t *testing.T) {
+	t.Parallel()
+	sig := semanticapi.SignatureInformation{
+		Label: "foo(a int, b string)",
+		Parameters: []semanticapi.ParameterInformation{
+			{Label: "a int"},
+			{Label: "b string"},
+		},
+	}
+	lsp := &mockLSP{
+		signatureHelpFn: func(
+			_ context.Context, _ semanticapi.SignatureHelpParams,
+		) (*semanticapi.SignatureHelp, error) {
+			return testSignatureHelp([]semanticapi.SignatureInformation{sig}, 0, 1), nil
+		},
+	}
+
+	var mu sync.Mutex
+	var calls []textapi.LocationList
+	var capturedHandler textapi.EventHandler
+	editor := &mockEditor{
+		subscribeEventsFn: func(
+			_ []textapi.EventType, h textapi.EventHandler,
+		) error {
+			capturedHandler = h
+			return nil
+		},
+		editorFn: func(uri workspaceapi.URI) (textapi.Handler, error) {
+			return &mockHandler{uri: uri}, nil
+		},
+		setLocationListFn: func(_ textapi.Handler, _ textapi.LocationPriority, _ string, list textapi.LocationList) error {
+			mu.Lock()
+			calls = append(calls, list)
+			mu.Unlock()
+			return nil
+		},
+	}
+
+	cfg := DefaultSignatureHelpConfig()
+	cfg.TriggerCharacters = []string{"(", ","}
+	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg)
+	require.NotNil(t, capturedHandler, "handler should be subscribed")
+
+	wsURI, err := workspaceapi.ParseURI("file:///test.go")
+	require.NoError(t, err)
+
+	// Type "," — a trigger character — to set the signature help location.
+	capturedHandler.Handle(context.Background(), textapi.Event{
+		Type:    textapi.EventTypeEdit,
+		URI:     wsURI,
+		Content: ",",
+		From:    term.Coordinates{X: 10, Y: 5},
+		To:      term.Coordinates{X: 11, Y: 5},
+	})
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(calls) > 0 && calls[len(calls)-1] != nil
+	}, time.Second, 10*time.Millisecond, "location should be set after trigger")
+
+	// Record the call count before the space edit.
+	mu.Lock()
+	callsBefore := len(calls)
+	mu.Unlock()
+
+	// Type " " (space) to format the next argument. This is a
+	// non-trigger edit that should re-fetch and keep the location.
+	capturedHandler.Handle(context.Background(), textapi.Event{
+		Type:    textapi.EventTypeEdit,
+		URI:     wsURI,
+		Content: " ",
+		From:    term.Coordinates{X: 11, Y: 5},
+		To:      term.Coordinates{X: 12, Y: 5},
+	})
+
+	// The cursor event that follows the space edit.
+	capturedHandler.Handle(context.Background(), textapi.Event{
+		Type: textapi.EventTypeCursor,
+		URI:  wsURI,
+		From: term.Coordinates{X: 12, Y: 5},
+	})
+
+	// Wait for the re-fetch to complete.
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(calls) > callsBefore
+	}, time.Second, 10*time.Millisecond, "re-fetch should update location")
+
+	mu.Lock()
+	lastCall := calls[len(calls)-1]
+	mu.Unlock()
+	assert.NotNil(t, lastCall, "space edit should re-fetch and keep the location")
+}
+
+func TestSignatureHelpNonTriggerEditClearsWhenLSPReturnsNil(t *testing.T) {
+	t.Parallel()
+	sig := semanticapi.SignatureInformation{
+		Label: "foo(a int, b string)",
+		Parameters: []semanticapi.ParameterInformation{
+			{Label: "a int"},
+			{Label: "b string"},
+		},
+	}
+	var fetchCount int32
+	lsp := &mockLSP{
+		signatureHelpFn: func(
+			_ context.Context, _ semanticapi.SignatureHelpParams,
+		) (*semanticapi.SignatureHelp, error) {
+			n := atomic.AddInt32(&fetchCount, 1)
+			if n == 1 {
+				// First call (trigger char): return signature.
+				return testSignatureHelp([]semanticapi.SignatureInformation{sig}, 0, 0), nil
+			}
+			// Subsequent calls (non-trigger): cursor left the call.
+			return nil, nil
+		},
+	}
+
+	var mu sync.Mutex
+	var calls []textapi.LocationList
+	var capturedHandler textapi.EventHandler
+	editor := &mockEditor{
+		subscribeEventsFn: func(
+			_ []textapi.EventType, h textapi.EventHandler,
+		) error {
+			capturedHandler = h
+			return nil
+		},
+		editorFn: func(uri workspaceapi.URI) (textapi.Handler, error) {
+			return &mockHandler{uri: uri}, nil
+		},
+		setLocationListFn: func(_ textapi.Handler, _ textapi.LocationPriority, _ string, list textapi.LocationList) error {
+			mu.Lock()
+			calls = append(calls, list)
+			mu.Unlock()
+			return nil
+		},
+	}
+
+	cfg := DefaultSignatureHelpConfig()
+	cfg.TriggerCharacters = []string{"(", ","}
+	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg)
+	require.NotNil(t, capturedHandler, "handler should be subscribed")
+
+	wsURI, err := workspaceapi.ParseURI("file:///test.go")
+	require.NoError(t, err)
+
+	// Type "(" to activate signature help.
+	capturedHandler.Handle(context.Background(), textapi.Event{
+		Type:    textapi.EventTypeEdit,
+		URI:     wsURI,
+		Content: "(",
+		From:    term.Coordinates{X: 3, Y: 10},
+		To:      term.Coordinates{X: 4, Y: 10},
+	})
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(calls) > 0 && calls[len(calls)-1] != nil
+	}, time.Second, 10*time.Millisecond, "location should be set")
+
+	mu.Lock()
+	callsBefore := len(calls)
+	mu.Unlock()
+
+	// Type ")" — non-trigger, but signature help is active, so a
+	// re-fetch fires. The LSP returns nil → location should clear.
+	capturedHandler.Handle(context.Background(), textapi.Event{
+		Type:    textapi.EventTypeEdit,
+		URI:     wsURI,
+		Content: ")",
+		From:    term.Coordinates{X: 4, Y: 10},
+		To:      term.Coordinates{X: 5, Y: 10},
+	})
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(calls) > callsBefore
+	}, time.Second, 10*time.Millisecond, "re-fetch should update location")
+
+	mu.Lock()
+	lastCall := calls[len(calls)-1]
+	mu.Unlock()
+	assert.Nil(t, lastCall, "LSP returning nil should clear the location")
+}
+
+func TestSignatureHelpNavigationCursorClearsLocation(t *testing.T) {
+	t.Parallel()
+	sig := semanticapi.SignatureInformation{
+		Label: "foo(a int, b string)",
+		Parameters: []semanticapi.ParameterInformation{
+			{Label: "a int"},
+			{Label: "b string"},
+		},
+	}
+	lsp := &mockLSP{
+		signatureHelpFn: func(
+			_ context.Context, _ semanticapi.SignatureHelpParams,
+		) (*semanticapi.SignatureHelp, error) {
+			return testSignatureHelp([]semanticapi.SignatureInformation{sig}, 0, 0), nil
+		},
+	}
+
+	var mu sync.Mutex
+	var calls []textapi.LocationList
+	var capturedHandler textapi.EventHandler
+	editor := &mockEditor{
+		subscribeEventsFn: func(
+			_ []textapi.EventType, h textapi.EventHandler,
+		) error {
+			capturedHandler = h
+			return nil
+		},
+		editorFn: func(uri workspaceapi.URI) (textapi.Handler, error) {
+			return &mockHandler{uri: uri}, nil
+		},
+		setLocationListFn: func(_ textapi.Handler, _ textapi.LocationPriority, _ string, list textapi.LocationList) error {
+			mu.Lock()
+			calls = append(calls, list)
+			mu.Unlock()
+			return nil
+		},
+	}
+
+	cfg := DefaultSignatureHelpConfig()
+	cfg.TriggerCharacters = []string{"(", ","}
+	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg)
+	require.NotNil(t, capturedHandler, "handler should be subscribed")
+
+	wsURI, err := workspaceapi.ParseURI("file:///test.go")
+	require.NoError(t, err)
+
+	// Trigger signature help with "(".
+	capturedHandler.Handle(context.Background(), textapi.Event{
+		Type:    textapi.EventTypeEdit,
+		URI:     wsURI,
+		Content: "(",
+		From:    term.Coordinates{X: 3, Y: 10},
+		To:      term.Coordinates{X: 4, Y: 10},
+	})
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(calls) > 0 && calls[len(calls)-1] != nil
+	}, time.Second, 10*time.Millisecond, "location should be set first")
+
+	// Cursor event from the edit itself — should NOT clear.
+	capturedHandler.Handle(context.Background(), textapi.Event{
+		Type: textapi.EventTypeCursor,
+		URI:  wsURI,
+		From: term.Coordinates{X: 4, Y: 10},
+	})
+	mu.Lock()
+	afterEditCursor := calls[len(calls)-1]
+	mu.Unlock()
+	assert.NotNil(t, afterEditCursor, "cursor from edit should not clear")
+
+	// Pure navigation cursor (arrow key) — should clear.
+	capturedHandler.Handle(context.Background(), textapi.Event{
+		Type: textapi.EventTypeCursor,
+		URI:  wsURI,
+		From: term.Coordinates{X: 5, Y: 10},
+	})
+	mu.Lock()
+	afterNavCursor := calls[len(calls)-1]
+	mu.Unlock()
+	assert.Nil(t, afterNavCursor, "navigation cursor should clear the location list")
 }
 
 func TestFormatSignatureMessage(t *testing.T) {
