@@ -219,11 +219,20 @@ func (m *Manager) handle(ev textapi.Event) error {
 			}
 			return err
 		}
+		// ensureServer may have consumed most of the
+		// EventHandleTimeout while starting the server (it
+		// uses its own InitializeTimeout internally). Reset
+		// the deadline so the didOpen notify gets a fresh
+		// timeout.
+		cancel()
+		openCtx, openCancel := context.WithTimeout(
+			context.Background(), m.cfg.EventHandleTimeout)
+		defer openCancel()
 		f, err := m.ensureFile(ev.URI, ev.Content, srv.cfg.id)
 		if err != nil {
 			return err
 		}
-		return srv.notify(ctx, "textDocument/didOpen",
+		return srv.notify(openCtx, "textDocument/didOpen",
 			semanticapi.DidOpenTextDocumentParams{
 				TextDocument: semanticapi.TextDocumentItem{
 					URI:        uri,
