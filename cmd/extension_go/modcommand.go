@@ -38,14 +38,34 @@ import (
 )
 
 // modCommandHandler creates a handler for module management commands
-// (tidy, vendor, vulncheck) that execute gopls workspace commands
-// against the go.mod file.
+// (tidy, vendor) that execute gopls workspace commands against the
+// go.mod file. These commands expect {"URIs": [goModURI]} as arguments.
 func modCommandHandler(
 	lsp semanticapi.LSP,
 	notify browserapi.Notifications,
 	goplsCommand string,
 ) textapi.CommandHandler {
-	return &modCmd{lsp: lsp, notify: notify, goplsCommand: goplsCommand}
+	return &modCmd{
+		lsp: lsp, notify: notify, goplsCommand: goplsCommand,
+		buildArgs: func(goModURI string) any {
+			return map[string]any{"URIs": []string{goModURI}}
+		},
+	}
+}
+
+// vulncheckHandler creates a handler for gopls.run_govulncheck which
+// expects VulncheckArgs {"URI": goModURI} rather than the {"URIs": [...]}
+// format used by tidy/vendor.
+func vulncheckHandler(
+	lsp semanticapi.LSP,
+	notify browserapi.Notifications,
+) textapi.CommandHandler {
+	return &modCmd{
+		lsp: lsp, notify: notify, goplsCommand: "gopls.run_govulncheck",
+		buildArgs: func(goModURI string) any {
+			return map[string]any{"URI": goModURI}
+		},
+	}
 }
 
 var _ textapi.CommandHandler = (*modCmd)(nil)
@@ -54,6 +74,7 @@ type modCmd struct {
 	lsp          semanticapi.LSP
 	notify       browserapi.Notifications
 	goplsCommand string
+	buildArgs    func(goModURI string) any
 }
 
 func (h *modCmd) HandleCommand(
@@ -66,8 +87,7 @@ func (h *modCmd) HandleCommand(
 	fileURI := lspcmd.URIToLSP(cmd.URI)
 	goModURI := findGoModURI(fileURI)
 
-	args := map[string]any{"URIs": []string{goModURI}}
-	argsData, err := json.Marshal(args)
+	argsData, err := json.Marshal(h.buildArgs(goModURI))
 	if err != nil {
 		return fmt.Errorf("marshal args: %w", err)
 	}

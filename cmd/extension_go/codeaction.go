@@ -26,6 +26,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"unicode/utf8"
 
@@ -70,11 +71,13 @@ func (h *codeActionCmd) HandleCommand(
 	}
 
 	rng, ok := h.sel.Get(cmd.URI)
+	slog.Debug("handle code action command", "uri", cmd.URI, "selection-range", rng, "selection", ok)
 	if !ok {
 		cursorPos := lspcmd.CoordToPos(cmd.Cursor.Content)
 		rng = semanticapi.Range{Start: cursorPos, End: cursorPos}
 	} else {
 		rng = lspcmd.ClampRange(rng, h.editor, cmd.Resource)
+		slog.Debug("clamped selection range", "uri", cmd.URI, "selection-range", rng)
 	}
 
 	params := semanticapi.CodeActionParams{

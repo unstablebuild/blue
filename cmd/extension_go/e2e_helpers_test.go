@@ -111,8 +111,20 @@ type testEnv struct {
 // Handle(EventTypeOpen), and waits for gopls to finish loading.
 func initGopls(t *testing.T, goplsBin string, files []testFile) *testEnv {
 	t.Helper()
-
 	dir := setupWorkspace(t, "example.com/test", files)
+	return initGoplsFromDir(t, goplsBin, dir, files)
+}
+
+// initGoplsFromDir initializes gopls for a pre-existing workspace
+// directory. Use this when the workspace requires custom setup (e.g.
+// go mod tidy) between directory creation and gopls initialization.
+// The files parameter controls which files are opened via
+// Handle(EventTypeOpen); they must already exist on disk.
+func initGoplsFromDir(
+	t *testing.T, goplsBin string, dir string, files []testFile,
+) *testEnv {
+	t.Helper()
+
 	rootURI := "file://" + dir
 
 	uri, err := workspaceapi.ParseURI(rootURI)
