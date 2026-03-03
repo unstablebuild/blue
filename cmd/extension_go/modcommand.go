@@ -34,6 +34,7 @@ import (
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
+	"github.com/unstablebuild/rune-go-sdk/debug"
 	"github.com/unstablebuild/rune-go-sdk/iterator"
 )
 
@@ -92,19 +93,22 @@ func (h *modCmd) HandleCommand(
 		return fmt.Errorf("marshal args: %w", err)
 	}
 
-	result, err := h.lsp.ExecuteCommand(ctx, semanticapi.ExecuteCommandParams{
-		Command:   h.goplsCommand,
-		Arguments: []json.RawMessage{argsData},
-	})
-	if err != nil {
-		return fmt.Errorf("execute %s: %w", h.goplsCommand, err)
-	}
+	go debug.CapturePanicReport(func() {
+		result, err := h.lsp.ExecuteCommand(ctx, semanticapi.ExecuteCommandParams{
+			Command:   h.goplsCommand,
+			Arguments: []json.RawMessage{argsData},
+		})
+		if err != nil {
+			_, _ = h.notify.Notify(browserapi.LevelError, "execute %s: %s", h.goplsCommand, err)
+			return
+		}
 
-	if result != "" {
-		_, _ = h.notify.Notify(browserapi.LevelInfo, "%s: %s", h.goplsCommand, result)
-	} else {
-		_, _ = h.notify.Notify(browserapi.LevelInfo, "%s completed", h.goplsCommand)
-	}
+		if result != "" {
+			_, _ = h.notify.Notify(browserapi.LevelInfo, "%s: %s", h.goplsCommand, result)
+		} else {
+			_, _ = h.notify.Notify(browserapi.LevelInfo, "%s completed", h.goplsCommand)
+		}
+	})
 	return nil
 }
 

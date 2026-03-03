@@ -32,6 +32,7 @@ import (
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
+	"github.com/unstablebuild/rune-go-sdk/debug"
 	"github.com/unstablebuild/rune-go-sdk/iterator"
 )
 
@@ -86,19 +87,23 @@ func (h *codeLensCmd) HandleCommand(
 		return nil
 	}
 
-	result, err := h.lsp.ExecuteCommand(ctx, semanticapi.ExecuteCommandParams{
-		Command:   nearest.Command.Command,
-		Arguments: nearest.Command.Arguments,
-	})
-	if err != nil {
-		return fmt.Errorf("execute %s: %w", h.commandName, err)
-	}
+	command := *nearest.Command
+	go debug.CapturePanicReport(func() {
+		result, err := h.lsp.ExecuteCommand(ctx, semanticapi.ExecuteCommandParams{
+			Command:   command.Command,
+			Arguments: command.Arguments,
+		})
+		if err != nil {
+			_, _ = h.notify.Notify(browserapi.LevelError, "execute %s: %s", h.commandName, err)
+			return
+		}
 
-	if result != "" {
-		_, _ = h.notify.Notify(browserapi.LevelInfo, "%s", result)
-	} else {
-		_, _ = h.notify.Notify(browserapi.LevelInfo, "Executed: %s", nearest.Command.Title)
-	}
+		if result != "" {
+			_, _ = h.notify.Notify(browserapi.LevelInfo, "%s", result)
+		} else {
+			_, _ = h.notify.Notify(browserapi.LevelInfo, "Executed: %s", command.Title)
+		}
+	})
 	return nil
 }
 

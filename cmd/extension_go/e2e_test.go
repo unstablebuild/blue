@@ -710,10 +710,11 @@ type Config struct {
 
 		err := handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
+		require.Eventually(t, func() bool {
+			return mn.hasMessage("Executed: run test")
+		}, 30*time.Second, 100*time.Millisecond)
 		assert.Len(t, mn.getMessages(), 1)
-		assert.Equal(t, mockNotification{
-			Level: browserapi.LevelInfo, Message: "Executed: run test",
-		}, mn.getMessages()[0])
+		assert.Equal(t, browserapi.LevelInfo, mn.getMessages()[0].Level)
 	})
 
 	t.Run("CodeLens/Generate", func(t *testing.T) {
@@ -729,12 +730,10 @@ type Config struct {
 		cmd := goCmdAt("generate", uri, resource, 2, 0)
 
 		err := handler.HandleCommand(t.Context(), cmd)
-		if err != nil {
-			assert.NotContains(t, err.Error(), "unsupported command")
-		} else {
-			msgs := mn.getMessages()
-			assert.NotEmpty(t, msgs, "expected a notification from generate")
-		}
+		require.NoError(t, err)
+		require.Eventually(t, func() bool {
+			return len(mn.getMessages()) > 0
+		}, 30*time.Second, 100*time.Millisecond)
 	})
 
 	t.Run("Tidy", func(t *testing.T) {
@@ -749,11 +748,10 @@ type Config struct {
 		cmd := goCmd("tidy", uri, resource)
 
 		err := handler.HandleCommand(t.Context(), cmd)
-		if err != nil {
-			assert.NotContains(t, err.Error(), "unsupported command")
-		} else {
-			assert.True(t, mn.hasMessage("gopls.tidy"))
-		}
+		require.NoError(t, err)
+		require.Eventually(t, func() bool {
+			return mn.hasMessage("gopls.tidy")
+		}, 30*time.Second, 100*time.Millisecond)
 	})
 
 	t.Run("Vendor", func(t *testing.T) {
@@ -768,11 +766,10 @@ type Config struct {
 		cmd := goCmd("vendor", uri, resource)
 
 		err := handler.HandleCommand(t.Context(), cmd)
-		if err != nil {
-			assert.NotContains(t, err.Error(), "unsupported command")
-		} else {
-			assert.True(t, mn.hasMessage("gopls.vendor"))
-		}
+		require.NoError(t, err)
+		require.Eventually(t, func() bool {
+			return mn.hasMessage("gopls.vendor")
+		}, 30*time.Second, 100*time.Millisecond)
 	})
 
 	t.Run("Vulncheck", func(t *testing.T) {
@@ -826,7 +823,9 @@ type Config struct {
 
 		err = handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
-		assert.True(t, mn.hasMessage("gopls.run_govulncheck"))
+		require.Eventually(t, func() bool {
+			return mn.hasMessage("gopls.run_govulncheck")
+		}, 30*time.Second, 100*time.Millisecond)
 
 		// Wait for gopls to publish vulnerability diagnostics on
 		// go.mod, confirming the scan found the known vulnerability.

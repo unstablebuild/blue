@@ -22,6 +22,7 @@ import (
 type MockProgressReader struct {
 	ctrl     *gomock.Controller
 	recorder *MockProgressReaderMockRecorder
+	isgomock struct{}
 }
 
 // MockProgressReaderMockRecorder is the mock recorder for MockProgressReader.
@@ -72,6 +73,7 @@ func (mr *MockProgressReaderMockRecorder) Read(p any) *gomock.Call {
 type MockProgressWriter struct {
 	ctrl     *gomock.Controller
 	recorder *MockProgressWriterMockRecorder
+	isgomock struct{}
 }
 
 // MockProgressWriterMockRecorder is the mock recorder for MockProgressWriter.
@@ -122,6 +124,7 @@ func (mr *MockProgressWriterMockRecorder) Write(p any) *gomock.Call {
 type MockManager struct {
 	ctrl     *gomock.Controller
 	recorder *MockManagerMockRecorder
+	isgomock struct{}
 }
 
 // MockManagerMockRecorder is the mock recorder for MockManager.
