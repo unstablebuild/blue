@@ -198,6 +198,234 @@ func TestComponentDraw(t *testing.T) {
 				"          \n" +
 				"          ",
 		},
+		{
+			name:    "table wraps long cell text",
+			content: "| LongHeader | B |\n|---|---|\n| LongContent | 2 |",
+			width:   10,
+			height:  10,
+			// col widths: avail = 10-3 = 7, cols = 4,3.
+			// "LongHeader" (10 chars) wraps to "Long", "Head", "er".
+			// "LongContent" (11 chars) wraps to "Long", "Cont", "ent".
+			expected: "┌────┬───┐\n" +
+				"│Long│B  │\n" +
+				"│Head│   │\n" +
+				"│er  │   │\n" +
+				"├────┼───┤\n" +
+				"│Long│2  │\n" +
+				"│Cont│   │\n" +
+				"│ent │   │\n" +
+				"└────┴───┘\n" +
+				"          ",
+		},
+		{
+			name:    "table wraps with mixed row heights",
+			content: "| A | BB CC DD |\n|---|---|\n| E | F |",
+			width:   15,
+			height:  7,
+			// col widths: avail = 15-3 = 12, cols = 6,6.
+			// Header: "A" (1 line), "BB CC DD" wraps to "BB CC","DD" (2 lines).
+			// Data: "E" (1 line), "F" (1 line).
+			expected: "┌──────┬──────┐\n" +
+				"│A     │BB CC │\n" +
+				"│      │DD    │\n" +
+				"├──────┼──────┤\n" +
+				"│E     │F     │\n" +
+				"└──────┴──────┘\n" +
+				"               ",
+		},
+		{
+			name:    "table single column wraps",
+			content: "| Head |\n|---|\n| AB CD |",
+			width:   6,
+			height:  7,
+			// col width: 6-2 = 4.
+			// "AB CD" wraps to "AB", "CD" (2 lines).
+			expected: "┌────┐\n" +
+				"│Head│\n" +
+				"├────┤\n" +
+				"│AB  │\n" +
+				"│CD  │\n" +
+				"└────┘\n" +
+				"      ",
+		},
+		{
+			name:    "table three columns middle wraps",
+			content: "| A | BBBB CCCC | D |\n|---|---|---|\n| 1 | 2 | 3 |",
+			width:   16,
+			height:  7,
+			// avail = 16-4 = 12, 3 cols each width 4.
+			// "BBBB CCCC" wraps to "BBBB", "CCCC" (2 lines).
+			expected: "┌────┬────┬────┐\n" +
+				"│A   │BBBB│D   │\n" +
+				"│    │CCCC│    │\n" +
+				"├────┼────┼────┤\n" +
+				"│1   │2   │3   │\n" +
+				"└────┴────┴────┘\n" +
+				"                ",
+		},
+		{
+			name:    "table multiple rows different wrap heights",
+			content: "| H |\n|---|\n| AB CD EF |\n| GHIJ |\n| KL MN OP QR |",
+			width:   6,
+			height:  13,
+			// col width: 4.
+			// Row 0 "AB CD EF" wraps to "AB","CD","EF" (3 lines).
+			// Row 1 "GHIJ" fits (1 line).
+			// Row 2 "KL MN OP QR" wraps to "KL","MN","OP","QR" (4 lines).
+			expected: "┌────┐\n" +
+				"│H   │\n" +
+				"├────┤\n" +
+				"│AB  │\n" +
+				"│CD  │\n" +
+				"│EF  │\n" +
+				"│GHIJ│\n" +
+				"│KL  │\n" +
+				"│MN  │\n" +
+				"│OP  │\n" +
+				"│QR  │\n" +
+				"└────┘\n" +
+				"      ",
+		},
+		{
+			name:    "table right-aligned wraps",
+			content: "| H |\n|---:|\n| ABCDE |",
+			width:   6,
+			height:  7,
+			// col width: 4, right-aligned.
+			// "ABCDE" (5 chars) wraps to "ABCD","E".
+			expected: "┌────┐\n" +
+				"│   H│\n" +
+				"├────┤\n" +
+				"│ABCD│\n" +
+				"│   E│\n" +
+				"└────┘\n" +
+				"      ",
+		},
+		{
+			name:    "table center-aligned wraps",
+			content: "| H |\n|:---:|\n| ABCDE |",
+			width:   6,
+			height:  7,
+			// col width: 4, center-aligned.
+			// "ABCDE" wraps to "ABCD" (fills column), "E" (padding=1).
+			expected: "┌────┐\n" +
+				"│ H  │\n" +
+				"├────┤\n" +
+				"│ABCD│\n" +
+				"│ E  │\n" +
+				"└────┘\n" +
+				"      ",
+		},
+		{
+			name:    "table ragged row",
+			content: "| A | B | C |\n|---|---|---|\n| 1 |",
+			width:   13,
+			height:  7,
+			// avail = 13-4 = 9, 3 cols each width 3.
+			// Data row has 1 cell; cols 1,2 are empty.
+			expected: "┌───┬───┬───┐\n" +
+				"│A  │B  │C  │\n" +
+				"├───┼───┼───┤\n" +
+				"│1  │   │   │\n" +
+				"└───┴───┴───┘\n" +
+				"             \n" +
+				"             ",
+		},
+		{
+			name:    "table empty cell beside wrapping cell",
+			content: "| H1 | H2 |\n|---|---|\n| AABBCC | |",
+			width:   10,
+			height:  7,
+			// avail = 7, col 0 = 4, col 1 = 3.
+			// "AABBCC" (6 chars) wraps at 4: "AABB","CC" (2 lines).
+			// Second cell empty. Row height = 2.
+			expected: "┌────┬───┐\n" +
+				"│H1  │H2 │\n" +
+				"├────┼───┤\n" +
+				"│AABB│   │\n" +
+				"│CC  │   │\n" +
+				"└────┴───┘\n" +
+				"          ",
+		},
+		{
+			name:    "table header and data wrap different heights",
+			content: "| AABBCC | D |\n|---|---|\n| E | FFGGHH |",
+			width:   10,
+			height:  8,
+			// avail = 7, col 0 = 4, col 1 = 3.
+			// Header: "AABBCC"→"AABB","CC" (2 lines). "D"→1 line. headerHeight = 2.
+			// Data: "E"→1 line. "FFGGHH"→"FFG","GHH" (2 lines). rowHeight = 2.
+			expected: "┌────┬───┐\n" +
+				"│AABB│D  │\n" +
+				"│CC  │   │\n" +
+				"├────┼───┤\n" +
+				"│E   │FFG│\n" +
+				"│    │GHH│\n" +
+				"└────┴───┘\n" +
+				"          ",
+		},
+		{
+			name:    "table minimum column width wraps",
+			content: "| HI |\n|---|\n| ABCD |",
+			width:   4,
+			height:  7,
+			// col width: 4-2 = 2.
+			// "ABCD" wraps at 2: "AB","CD" (2 lines).
+			expected: "┌──┐\n" +
+				"│HI│\n" +
+				"├──┤\n" +
+				"│AB│\n" +
+				"│CD│\n" +
+				"└──┘\n" +
+				"    ",
+		},
+		{
+			name:    "table deep header wrapping",
+			content: "| VeryLongHeader | B |\n|---|---|\n| X | Y |",
+			width:   10,
+			height:  9,
+			// avail = 7, col 0 = 4, col 1 = 3.
+			// "VeryLongHeader" (14 chars) wraps at 4: "Very","Long","Head","er" (4 lines).
+			// headerHeight = 4.
+			expected: "┌────┬───┐\n" +
+				"│Very│B  │\n" +
+				"│Long│   │\n" +
+				"│Head│   │\n" +
+				"│er  │   │\n" +
+				"├────┼───┤\n" +
+				"│X   │Y  │\n" +
+				"└────┴───┘\n" +
+				"          ",
+		},
+		{
+			name:    "table wraps on word boundaries",
+			content: "| Title |\n|---|\n| one two three |",
+			width:   8,
+			height:  8,
+			// col width: 8-2 = 6.
+			// "one two three" wraps to "one","two","three" (3 lines).
+			expected: "┌──────┐\n" +
+				"│Title │\n" +
+				"├──────┤\n" +
+				"│one   │\n" +
+				"│two   │\n" +
+				"│three │\n" +
+				"└──────┘\n" +
+				"        ",
+		},
+		{
+			name:    "table wraps clipped by viewport",
+			content: "| AABBCCDD |\n|---|\n| E |",
+			width:   6,
+			height:  5,
+			// col width: 4. "AABBCCDD" (8 chars) wraps to "AABB","CCDD" (2 lines).
+			// Total height = 1+2+1+1+1+1 = 7. Viewport clips to 5.
+			expected: "┌────┐\n" +
+				"│AABB│\n" +
+				"│CCDD│\n" +
+				"├────┤\n" +
+				"│E   │",
+		},
 	}
 
 	for _, tt := range tests {
@@ -513,6 +741,35 @@ func TestTableLinkAt(t *testing.T) {
 	// Click on the header row should NOT find a link.
 	link = md.LinkAt(22, 1)
 	assert.Nil(t, link, "no link in header row")
+}
+
+func TestTableWrappedCellLinkAt(t *testing.T) {
+	// Table with a link that wraps to a second line within its cell.
+	content := "| H |\n|---|\n| aa [link](http://x.co) |"
+	md, err := New(content)
+	require.NoError(t, err)
+	md.Resize(8, 10)
+
+	// Single column width = 8 - 2 borders = 6.
+	// Cell "aa link" wraps to:
+	//   line 0: "aa "
+	//   line 1: "link"
+	// Table layout:
+	//   y=0: top border
+	//   y=1: header
+	//   y=2: separator
+	//   y=3: data line 0 ("aa ")
+	//   y=4: data line 1 ("link")
+	//   y=5: bottom border
+
+	// The link "link" is at y=4, starting at x=1 (after left border).
+	link := md.LinkAt(1, 4)
+	require.NotNil(t, link, "should find link in wrapped table cell")
+	assert.Equal(t, "http://x.co", link.URL)
+
+	// Non-link line should not find a link.
+	link = md.LinkAt(1, 3)
+	assert.Nil(t, link, "no link in non-link wrapped line")
 }
 
 func TestComponentHeight(t *testing.T) {
