@@ -22,7 +22,7 @@ require (
 	github.com/sirupsen/logrus v1.6.0
 	github.com/slack-go/slack v0.13.0
 	github.com/stretchr/testify v1.11.1
-	github.com/unstablebuild/rune-go-sdk v0.0.37
+	github.com/unstablebuild/rune-go-sdk v0.0.38
 	github.com/unstablebuild/tcell/v3 v3.6.3
 	github.com/willf/pad v0.0.0-20200313202418-172aa767f2a4
 	github.com/yuin/goldmark v1.7.1
