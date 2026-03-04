@@ -1168,35 +1168,3 @@ func (b *bufferCellEditor) Edit(
 func (b *bufferCellEditor) String() string {
 	return strings.Join(b.lines, "\n")
 }
-
-// waitForDiagnostics subscribes to publishDiagnostics via the onDiagnostics
-// hook and blocks until a notification for the given file URI arrives (or
-// the timeout expires). This replaces time.Sleep-based waits for gopls to
-// finish processing edits.
-func waitForDiagnostics(
-	t *testing.T, cb *testCallback, fileURI string, timeout time.Duration,
-) []semanticapi.Diagnostic {
-	t.Helper()
-	ch := make(chan []semanticapi.Diagnostic, 1)
-	cb.mu.Lock()
-	prev := cb.onDiagnostics
-	cb.onDiagnostics = func(p semanticapi.PublishDiagnosticsParams) {
-		if prev != nil {
-			prev(p)
-		}
-		if p.URI == fileURI {
-			select {
-			case ch <- p.Diagnostics:
-			default:
-			}
-		}
-	}
-	cb.mu.Unlock()
-	select {
-	case diags := <-ch:
-		return diags
-	case <-time.After(timeout):
-		t.Fatalf("timed out waiting for publishDiagnostics on %s", fileURI)
-		return nil
-	}
-}
