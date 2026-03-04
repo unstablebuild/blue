@@ -44,6 +44,7 @@ import (
 	"github.com/unstablebuild/rune-go-sdk/api/schemeapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
 	"github.com/unstablebuild/rune-go-sdk/term"
+	"gopkg.in/yaml.v3"
 )
 
 func TestLibDir(t *testing.T) {
@@ -938,11 +939,12 @@ func newTestManager(
 	t.Cleanup(func() {
 		_ = os.RemoveAll(temp)
 	})
+	configPath := filepath.Join(temp, "config.yaml")
 	n := idepkgtest.NewNotifications(t)
 	m := idepkgtest.NewReleaseManager(packages, versions)
 	fileScheme := newLocalScheme(temp)
 	manager := NewManager(n, m, document.NewInMemoryService(),
-		fileScheme, temp, term.NopInterrupter())
+		fileScheme, temp, configPath, term.NopInterrupter())
 	return manager, n, m, temp
 }
 
@@ -1058,4 +1060,128 @@ func (s *localScheme) NewPty(_ context.Context) (workspaceapi.Pty, error) {
 
 func (s *localScheme) SetPtySize(_ workspaceapi.Pty, _, _ int) error {
 	panic("not implemented")
+}
+
+func readUserConfig(t *testing.T, datadir string) *yaml.Node {
+	t.Helper()
+	configPath := filepath.Join(datadir, "config.yaml")
+	data, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	var doc yaml.Node
+	require.NoError(t, yaml.Unmarshal(data, &doc))
+	require.Equal(t, yaml.DocumentNode, doc.Kind)
+	return &doc
+}
+
+func assertYAMLKey(t *testing.T, mapping *yaml.Node, key, expected string) {
+	t.Helper()
+	idx := findMappingKey(mapping, key)
+	require.GreaterOrEqual(t, idx, 0, "key %q not found", key)
+	assert.Equal(t, expected, mapping.Content[idx+1].Value)
+}
+
+func assertNestedYAMLKey(t *testing.T, mapping *yaml.Node, outerKey, innerKey, expected string) {
+	t.Helper()
+	idx := findMappingKey(mapping, outerKey)
+	require.GreaterOrEqual(t, idx, 0, "outer key %q not found", outerKey)
+	inner := mapping.Content[idx+1]
+	require.Equal(t, yaml.MappingNode, inner.Kind, "outer key %q is not a mapping", outerKey)
+	assertYAMLKey(t, inner, innerKey, expected)
+}
+
+func TestInstallPackageVersionConfig(t *testing.T) {
+	t.Parallel()
+	t.Run("config.yaml is merged into user config after install", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "configpkg", Version: "1"}})
+		m, n, _, datadir := newTestManager(t, pkgs, versions)
+
+		n.Wg = new(sync.WaitGroup)
+		n.Wg.Add(1)
+		err := m.InstallPackageVersion(context.Background(), "configpkg", "1")
+		require.NoError(t, err)
+		n.Wg.Wait()
+		n.RequireNoErrorNotification()
+
+		doc := readUserConfig(t, datadir)
+		root := doc.Content[0]
+		assertNestedYAMLKey(t, root, "env", "GOROOT",
+			datadir+"/pkg/configpkg/1/go")
+		assertNestedYAMLKey(t, root, "settings", "theme", "dark")
+		assertNestedYAMLKey(t, root, "settings", "indent", "4")
+	})
+}
+
+func TestUsePackageVersionConfig(t *testing.T) {
+	t.Parallel()
+	t.Run("switching version updates user config", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{
+			{Package: "configpkg", Version: "1"},
+			{Package: "configpkg", Version: "2"},
+		})
+		m, n, _, datadir := newTestManager(t, pkgs, versions)
+
+		n.Wg = new(sync.WaitGroup)
+		n.Wg.Add(1)
+		err := m.InstallPackageVersion(context.Background(), "configpkg", "1")
+		require.NoError(t, err)
+		n.Wg.Wait()
+		n.RequireNoErrorNotification()
+
+		n.Wg = new(sync.WaitGroup)
+		n.Wg.Add(1)
+		err = m.InstallPackageVersion(context.Background(), "configpkg", "2")
+		require.NoError(t, err)
+		n.Wg.Wait()
+		n.RequireNoErrorNotification()
+
+		// Switch to version 1
+		require.NoError(t, os.RemoveAll(filepath.Join(datadir, "lib", "configpkg")))
+		err = m.UsePackageVersion(context.Background(), "configpkg", "1")
+		require.NoError(t, err)
+
+		doc := readUserConfig(t, datadir)
+		root := doc.Content[0]
+		assertNestedYAMLKey(t, root, "env", "GOROOT",
+			datadir+"/pkg/configpkg/1/go")
+		assertNestedYAMLKey(t, root, "settings", "theme", "dark")
+		assertNestedYAMLKey(t, root, "settings", "indent", "4")
+
+		// Backup should exist since the config was created by first install
+		_, err = os.Stat(filepath.Join(datadir, "config.yaml.backup"))
+		require.NoError(t, err)
+	})
+}
+
+func TestProcessInstalledSettingsConfig(t *testing.T) {
+	t.Parallel()
+	t.Run("merges config.yaml from installed packages into user config", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "configpkg", Version: "1"}})
+		m, n, _, datadir := newTestManager(t, pkgs, versions)
+
+		n.Wg = new(sync.WaitGroup)
+		n.Wg.Add(1)
+		err := m.InstallPackageVersion(context.Background(), "configpkg", "1")
+		require.NoError(t, err)
+		n.Wg.Wait()
+		n.RequireNoErrorNotification()
+
+		// Remove the user config to simulate fresh start
+		_ = os.Remove(filepath.Join(datadir, "config.yaml"))
+		_ = os.Remove(filepath.Join(datadir, "config.yaml.backup"))
+
+		err = m.ProcessInstalledSettings(context.Background())
+		require.NoError(t, err)
+
+		doc := readUserConfig(t, datadir)
+		root := doc.Content[0]
+		assertNestedYAMLKey(t, root, "env", "GOROOT",
+			datadir+"/pkg/configpkg/1/go")
+		assertNestedYAMLKey(t, root, "settings", "theme", "dark")
+	})
 }

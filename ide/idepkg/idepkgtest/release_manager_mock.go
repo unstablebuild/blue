@@ -177,6 +177,12 @@ func (t *ReleaseManager) Get(
 			_, err = writer.Write(testPkgTar)
 		case "six":
 			_, err = writer.Write(testPkgTar)
+		case "configpkg":
+			if version == "2" {
+				_, err = writer.Write(configPkgV2Tar)
+			} else {
+				_, err = writer.Write(configPkgTar)
+			}
 		}
 	}()
 
