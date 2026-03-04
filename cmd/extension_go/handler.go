@@ -61,6 +61,8 @@ func newGoHandler(
 			"No documentation available for this package"),
 		"free-symbols": codeActionHandler(lsp, editor, notify, wm, sel, "source.freesymbols",
 			"Select a block of code to analyze its free symbols"),
+		"toggle-compiler-opt": codeActionHandler(lsp, editor, notify, wm, sel, "source.toggleCompilerOptDetails",
+			"Place cursor in a Go file to toggle compiler optimization diagnostics"),
 
 		// Refactoring actions.
 		"fill-struct": codeActionHandler(lsp, editor, notify, wm, sel, "refactor.rewrite.fillStruct",
@@ -108,11 +110,13 @@ func newGoHandler(
 
 		// Code lens commands.
 		"test":     codeLensHandler(lsp, notify, "gopls.run_tests"),
-		"generate": codeLensHandler(lsp, notify, "gopls.generate"),
+		"generate":       codeLensHandler(lsp, notify, "gopls.generate"),
+		"regenerate-cgo": codeLensHandler(lsp, notify, "gopls.regenerate_cgo"),
 
 		// Module management.
 		"tidy":      modCommandHandler(lsp, notify, "gopls.tidy"),
-		"vendor":    modCommandHandler(lsp, notify, "gopls.vendor"),
+		"vendor":             modCommandHandler(lsp, notify, "gopls.vendor"),
+		"upgrade-dependency": modCommandHandler(lsp, notify, "gopls.check_upgrades"),
 		"vulncheck": vulncheckHandler(lsp, notify),
 
 		// Imports.
@@ -130,6 +134,7 @@ func newGoHandler(
 			{Name: "assembly", Summary: "Show the assembly produced by the compiler for the function at the cursor"},
 			{Name: "doc", Summary: "Browse documentation for the current Go package"},
 			{Name: "free-symbols", Summary: "Analyze the selected code and report symbols referenced within it but defined outside it"},
+			{Name: "toggle-compiler-opt", Summary: "Toggle compiler optimization details (inlining, escape analysis) in diagnostics"},
 			{Name: "fill-struct", Summary: "Fill each missing field in a struct literal with a zero value or matching variable"},
 			{Name: "fill-switch", Summary: "Add missing cases to a type switch or enum switch statement"},
 			{Name: "add-tags", Summary: "Add json struct tags to the fields of the struct enclosing the cursor"},
@@ -153,8 +158,10 @@ func newGoHandler(
 			{Name: "eliminate-dot-import", Summary: "Remove a dot import and qualify all references with the package name"},
 			{Name: "test", Summary: "Run the Test or Benchmark function nearest to the cursor"},
 			{Name: "generate", Summary: "Run go generate for the //go:generate directive nearest to the cursor"},
+			{Name: "regenerate-cgo", Summary: "Re-run cgo to regenerate Go declarations after editing C code"},
 			{Name: "tidy", Summary: "Run go mod tidy to ensure the go.mod file matches the source code in the module"},
 			{Name: "vendor", Summary: "Run go mod vendor to create or update the vendor directory with all necessary dependencies"},
+			{Name: "upgrade-dependency", Summary: "Check for available upgrades of direct dependencies in go.mod"},
 			{Name: "vulncheck", Summary: "Run govulncheck to find known vulnerabilities in functions reachable by the application"},
 			{Name: "add-import", Summary: "Add a package import to the current file"},
 		},
