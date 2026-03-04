@@ -32,3 +32,9 @@ var goTar []byte
 
 //go:embed testdata/testpkg.tar.gz
 var testPkgTar []byte
+
+//go:embed testdata/configpkg.tar.gz
+var configPkgTar []byte
+
+//go:embed testdata/configpkg_v2.tar.gz
+var configPkgV2Tar []byte
