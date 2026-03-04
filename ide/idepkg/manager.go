@@ -53,13 +53,30 @@ import (
 	"github.com/unstablebuild/rune-go-sdk/term"
 )
 
+// Option configures a Manager.
+type Option func(*Manager)
+
+// WithCrashReportPackage sets the package name used in crash reports.
+func WithCrashReportPackage(pkg string) Option {
+	return func(m *Manager) {
+		m.crashReportPkg = pkg
+	}
+}
+
+// WithCrashReportVersion sets the version string used in crash reports.
+func WithCrashReportVersion(version string) Option {
+	return func(m *Manager) {
+		m.crashReportVersion = version
+	}
+}
+
 // NewManager allocates storage for a new Manager and initializes it.
 // The dataDir argument will be used to store downloaded bundles
 // and manage executables.
 func NewManager(
 	n browserapi.Notifications, m release.Manager,
 	storage document.Service, scheme schemeapi.Scheme, dataDir string,
-	interrupter term.Interrupter,
+	interrupter term.Interrupter, opts ...Option,
 ) *Manager {
 	if dataDir == "" {
 		panic("data directory must not be empty")
@@ -77,6 +94,9 @@ func NewManager(
 		storage:     storage,
 	}
 	ret.iterators.m = make(map[string]*sync.Mutex)
+	for _, opt := range opts {
+		opt(ret)
+	}
 	return ret
 }
 
@@ -95,10 +115,17 @@ type Manager struct {
 	schemeURI   workspaceapi.URI
 	binDir      string
 
+	crashReportPkg     string
+	crashReportVersion string
+
 	iterators struct {
 		sync.Mutex
 		m map[string]*sync.Mutex
 	}
+}
+
+func (m *Manager) capturePanicReport(f func()) {
+	debug.CapturePanic(log.StandardLogger(), m.crashReportPkg, m.crashReportVersion, f)
 }
 
 // LibDir returns an iterator to the lib directory of the given package.
@@ -211,7 +238,7 @@ func (m *Manager) InstallPackageVersion(
 	m.iterators.m[pkgID] = mu
 
 	mu.Lock() // block calls to iterator
-	go debug.CapturePanicReport(func() {
+	go m.capturePanicReport(func() {
 		m.download(pkgID, version, tarfile, notificationID, key)
 	})
 
@@ -304,7 +331,7 @@ func (m *Manager) DeletePackage(
 	wg.Add(len(versions))
 	for i := 0; i < len(versions); i++ {
 		i := i
-		go debug.CapturePanicReport(func() {
+		go m.capturePanicReport(func() {
 			version := versions[i]
 			defer wg.Done()
 			errs[i] = m.DeletePackageVersion(ctx, pkgID, version, true)
@@ -466,7 +493,7 @@ func (m *Manager) PackageVersionInUse(
 	wg.Add(len(versions))
 	for i := 0; i < len(versions); i++ {
 		version := versions[i]
-		go debug.CapturePanicReport(func() {
+		go m.capturePanicReport(func() {
 			defer wg.Done()
 			var isInUse bool
 			_, _, isInUse, errs[i] = m.isPackageVersionInUse(pkgID, version)
@@ -750,7 +777,7 @@ func (m *Manager) untar(tarfile *os.File, dirname string) (string, []*tar.Header
 		err = fmt.Errorf("new gzip reader: %w", err)
 		return "", nil, err
 	}
-	defer gzr.Close()
+	defer func() { _ = gzr.Close() }()
 
 	executables, err := untar(dirname, gzr)
 	if err != nil {
@@ -883,7 +910,7 @@ func copyExecutables(files []*tar.Header, dirname, targetdirname string) error {
 			ret = multierror.Append(ret, fmt.Errorf("open executable: %w", err))
 			continue
 		}
-		defer origfile.Close()
+		defer func() { _ = origfile.Close() }()
 		target := filepath.Join(targetdirname, filepath.Base(name))
 		targetfile, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_RDWR,
 			executable.FileInfo().Mode())
@@ -891,7 +918,7 @@ func copyExecutables(files []*tar.Header, dirname, targetdirname string) error {
 			ret = multierror.Append(ret, fmt.Errorf("create executable %s: %w", target, err))
 			continue
 		}
-		defer targetfile.Close()
+		defer func() { _ = targetfile.Close() }()
 		if _, err := io.Copy(targetfile, origfile); err != nil {
 			ret = multierror.Append(ret, fmt.Errorf("copy executable %s: %w", target, err))
 			continue

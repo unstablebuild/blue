@@ -27,22 +27,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/ide/idepkg/idepkgtest"
 	"github.com/unstablebuild/blue/iterator"
 	"github.com/unstablebuild/blue/release"
-	"github.com/unstablebuild/rune-go-sdk/api/config"
+	"github.com/unstablebuild/blue/walkdir"
+	"github.com/unstablebuild/rune-go-sdk/api/schemeapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
 	"github.com/unstablebuild/rune-go-sdk/term"
-	"github.com/unstablebuild/blue/ide/idepkg/idepkgtest"
-	"unstable.build/go-tui/workspace"
-	"github.com/unstablebuild/blue/walkdir"
 )
 
 func TestLibDir(t *testing.T) {
@@ -891,10 +892,10 @@ func assertDataDirNotExists(t *testing.T, datadir string, pkgs ...string) {
 	require.True(t, info.IsDir())
 
 	for _, pkg := range pkgs {
-		info, err = os.Stat(filepath.Join(datadir, "lib", pkg))
+		_, err = os.Stat(filepath.Join(datadir, "lib", pkg))
 		require.Error(t, err)
 
-		info, err = os.Stat(filepath.Join(datadir, "pkg", pkg))
+		_, err = os.Stat(filepath.Join(datadir, "pkg", pkg))
 		require.Error(t, err)
 	}
 }
@@ -919,10 +920,7 @@ func assertExecutables(t *testing.T, datadir string, expected ...string) {
 }
 
 func listFiles(t *testing.T, bindir string) []string {
-	uri, err := workspaceapi.ParseURI("file:///" + bindir)
-	require.NoError(t, err)
-	scheme, err := workspace.NewFileScheme(context.Background(), config.NopConfig(), uri)
-	require.NoError(t, err)
+	scheme := newLocalScheme(bindir)
 	it, err := walkdir.ListFiles(context.Background(), scheme, ".")
 	require.NoError(t, err)
 	files, err := iterator.ToSlice(context.Background(), it)
@@ -935,7 +933,6 @@ func newTestManager(
 	packages map[string]release.Package,
 	versions map[string][]release.Bundle,
 ) (*Manager, *idepkgtest.Notifications, *idepkgtest.ReleaseManager, string) {
-	ctx := context.Background()
 	temp, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -943,11 +940,122 @@ func newTestManager(
 	})
 	n := idepkgtest.NewNotifications(t)
 	m := idepkgtest.NewReleaseManager(packages, versions)
-	tempURI, err := workspaceapi.ParseURI("file://" + temp)
-	require.NoError(t, err)
-	fileScheme, err := workspace.NewFileScheme(ctx, config.NopConfig(), tempURI)
-	require.NoError(t, err)
+	fileScheme := newLocalScheme(temp)
 	manager := NewManager(n, m, document.NewInMemoryService(),
 		fileScheme, temp, term.NopInterrupter())
 	return manager, n, m, temp
+}
+
+// localScheme implements schemeapi.Scheme using os package functions for testing.
+type localScheme struct {
+	root string
+}
+
+func newLocalScheme(root string) *localScheme {
+	return &localScheme{root: root}
+}
+
+func (s *localScheme) resolve(path string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(s.root, path)
+}
+
+func (s *localScheme) URI(path string) (workspaceapi.URI, error) {
+	return workspaceapi.ParseURI("file://" + s.resolve(path))
+}
+
+func (s *localScheme) Root() string { return s.root }
+
+func (s *localScheme) NewFile(_ uintptr, _ string) workspaceapi.File {
+	panic("not implemented")
+}
+
+func (s *localScheme) Chroot(path string) (schemeapi.Scheme, error) {
+	return newLocalScheme(s.resolve(path)), nil
+}
+
+func (s *localScheme) Watch(_ string, _ chan<- schemeapi.EventInfo, _ ...schemeapi.Event) (int, error) {
+	panic("not implemented")
+}
+
+func (s *localScheme) StopWatch(_ int) error {
+	panic("not implemented")
+}
+
+// schemeapi.FileSystem
+
+func (s *localScheme) Create(filename string) (workspaceapi.File, error) {
+	return os.Create(s.resolve(filename))
+}
+
+func (s *localScheme) Open(filename string) (workspaceapi.File, error) {
+	return os.Open(s.resolve(filename))
+}
+
+func (s *localScheme) OpenFile(filename string, flag int, perm fs.FileMode) (workspaceapi.File, error) {
+	return os.OpenFile(s.resolve(filename), flag, perm)
+}
+
+func (s *localScheme) Stat(filename string) (fs.FileInfo, error) {
+	return os.Stat(s.resolve(filename))
+}
+
+func (s *localScheme) Rename(oldpath, newpath string) error {
+	return os.Rename(s.resolve(oldpath), s.resolve(newpath))
+}
+
+func (s *localScheme) Remove(filename string) error {
+	return os.Remove(s.resolve(filename))
+}
+
+func (s *localScheme) Join(elem ...string) string {
+	return filepath.Join(elem...)
+}
+
+func (s *localScheme) TempFile(dir, prefix string) (workspaceapi.File, error) {
+	return os.CreateTemp(s.resolve(dir), prefix)
+}
+
+func (s *localScheme) Lstat(filename string) (fs.FileInfo, error) {
+	return os.Lstat(s.resolve(filename))
+}
+
+func (s *localScheme) Symlink(oldname, newname string) error {
+	return os.Symlink(oldname, s.resolve(newname))
+}
+
+func (s *localScheme) Readlink(link string) (string, error) {
+	return os.Readlink(s.resolve(link))
+}
+
+func (s *localScheme) ReadDir(path string) ([]fs.DirEntry, error) {
+	return os.ReadDir(s.resolve(path))
+}
+
+func (s *localScheme) MkdirAll(filename string, perm fs.FileMode) error {
+	return os.MkdirAll(s.resolve(filename), perm)
+}
+
+// schemeapi.Executor
+
+func (s *localScheme) StartCommand(_ context.Context, _ workspaceapi.Cmd) (workspaceapi.Pid, error) {
+	panic("not implemented")
+}
+
+func (s *localScheme) Signal(_ workspaceapi.Pid, _ syscall.Signal) error {
+	panic("not implemented")
+}
+
+func (s *localScheme) Close() error { return nil }
+
+// schemeapi.Terminal
+
+func (s *localScheme) NewPty(_ context.Context) (workspaceapi.Pty, error) {
+	panic("not implemented")
+}
+
+func (s *localScheme) SetPtySize(_ workspaceapi.Pty, _, _ int) error {
+	panic("not implemented")
 }
