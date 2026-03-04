@@ -187,6 +187,71 @@ func useDouble() int {
 }
 `
 
+	// extractMethodSrc has a struct with a method containing multiple statements.
+	extractMethodSrc = `package main
+
+import "fmt"
+
+type Counter struct {
+	total int
+}
+
+func (c *Counter) Process(a, b int) {
+	sum := a + b
+	c.total += sum
+	fmt.Println(c.total)
+}
+`
+
+	// extractConstantSrc has a function with a repeated constant literal.
+	extractConstantSrc = `package main
+
+func magicNumbers() (int, int) {
+	x := 42
+	y := 42
+	return x, y
+}
+`
+
+	// extractVarAllSrc has a function with a duplicated expression
+	// suitable for extract-variable-all.
+	extractVarAllSrc = `package main
+
+import "fmt"
+
+func compute() {
+	a := 1
+	b := 2
+	fmt.Println(a + b)
+	fmt.Println(a + b)
+}
+`
+
+	// inlineVariableSrc has a function with a local variable to inline.
+	inlineVariableSrc = `package main
+
+import "fmt"
+
+func f(x int) {
+	s := fmt.Sprintf("+%d", x)
+	println(s)
+}
+`
+
+	// extractToNewFileSrc has two top-level functions (one to move).
+	extractToNewFileSrc = `package main
+
+import "fmt"
+
+func Stay() {
+	fmt.Println("stay")
+}
+
+func MoveMe() {
+	fmt.Println("move")
+}
+`
+
 	// generateSrc has a go:generate directive.
 	generateSrc = `package main
 
@@ -612,6 +677,208 @@ func TestE2E(t *testing.T) {
 			msgs := mn.getMessages()
 			assert.NotEmpty(t, msgs)
 		}
+	})
+
+	t.Run("ExtractMethod", func(t *testing.T) {
+		t.Parallel()
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
+			{name: "main.go", content: extractMethodSrc},
+		})
+		handler, me, mn := newTestHandler(t, env.testEnv)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+
+		// Fire a selection event covering the statements inside Process()
+		// (lines 9-11: "sum := a + b" through "fmt.Println(c.total)").
+		me.fireEvent(t.Context(), textapi.Event{
+			Type:  textapi.EventTypeSelection,
+			URI:   uri,
+			Start: term.Coordinates{X: 1, Y: 9},
+			End:   term.Coordinates{X: 21, Y: 11},
+		})
+
+		cmd := goCmdAt("extract-method", uri, resource, 9, 1)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// gopls applies extract-method via workspace/applyEdit command.
+		// The extracted method should be on the same receiver (*Counter).
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		editText := capturedEditText(captured)
+		assert.Contains(t, editText, "Counter")
+		assert.Contains(t, editText, "newMethod")
+		assert.Equal(t, 1, len(mn.getMessages()))
+		assert.True(t, mn.hasMessage("Executed: Extract method"))
+	})
+
+	t.Run("ExtractVariableAll", func(t *testing.T) {
+		t.Parallel()
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
+			{name: "main.go", content: extractVarAllSrc},
+		})
+		handler, me, mn := newTestHandler(t, env.testEnv)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+
+		// Select the expression "a + b" (line 7, chars 13-18) which
+		// appears twice in extractVarAllSrc.
+		me.fireEvent(t.Context(), textapi.Event{
+			Type:  textapi.EventTypeSelection,
+			URI:   uri,
+			Start: term.Coordinates{X: 13, Y: 7},
+			End:   term.Coordinates{X: 18, Y: 7},
+		})
+
+		cmd := goCmdAt("extract-variable-all", uri, resource, 7, 13)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// gopls applies extract-variable-all via workspace/applyEdit
+		// command, replacing both occurrences of "a + b" with a new variable.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		editText := capturedEditText(captured)
+		assert.Contains(t, editText, "a + b")
+		assert.Equal(t, 1, len(mn.getMessages()))
+		assert.True(t, mn.hasMessage("Executed: Extract 2 occurrences of a + b"))
+	})
+
+	t.Run("ExtractConstant", func(t *testing.T) {
+		t.Parallel()
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
+			{name: "main.go", content: extractConstantSrc},
+		})
+		handler, me, mn := newTestHandler(t, env.testEnv)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+
+		// Select the literal "42" on line 4 (x := 42), chars 6-8.
+		me.fireEvent(t.Context(), textapi.Event{
+			Type:  textapi.EventTypeSelection,
+			URI:   uri,
+			Start: term.Coordinates{X: 6, Y: 4},
+			End:   term.Coordinates{X: 8, Y: 4},
+		})
+
+		cmd := goCmdAt("extract-constant", uri, resource, 4, 6)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// gopls applies extract-constant via workspace/applyEdit command.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		assert.Equal(t, 1, len(mn.getMessages()))
+		assert.True(t, mn.hasMessage("Executed: Extract constant"))
+	})
+
+	t.Run("ExtractConstantAll", func(t *testing.T) {
+		t.Parallel()
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
+			{name: "main.go", content: extractConstantSrc},
+		})
+		handler, me, mn := newTestHandler(t, env.testEnv)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+
+		// Select the literal "42" on line 4 (x := 42), chars 6-8.
+		me.fireEvent(t.Context(), textapi.Event{
+			Type:  textapi.EventTypeSelection,
+			URI:   uri,
+			Start: term.Coordinates{X: 6, Y: 4},
+			End:   term.Coordinates{X: 8, Y: 4},
+		})
+
+		cmd := goCmdAt("extract-constant-all", uri, resource, 4, 6)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// gopls applies extract-constant-all via workspace/applyEdit command,
+		// replacing both occurrences of the literal 42.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		assert.Equal(t, 1, len(mn.getMessages()))
+		assert.True(t, mn.hasMessage("Executed: Extract 2 occurrences of const expression: 42"))
+	})
+
+	t.Run("ExtractToNewFile", func(t *testing.T) {
+		t.Parallel()
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
+			{name: "main.go", content: extractToNewFileSrc},
+		})
+		handler, me, mn := newTestHandler(t, env.testEnv)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+
+		// Select the MoveMe function (lines 8-10).
+		me.fireEvent(t.Context(), textapi.Event{
+			Type:  textapi.EventTypeSelection,
+			URI:   uri,
+			Start: term.Coordinates{X: 0, Y: 8},
+			End:   term.Coordinates{X: 1, Y: 10},
+		})
+
+		cmd := goCmdAt("extract-to-new-file", uri, resource, 8, 0)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// gopls applies extract-to-new-file via workspace/applyEdit command.
+		// The edit creates a new file with MoveMe and its import.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		editText := capturedEditText(captured)
+		assert.Contains(t, editText, "MoveMe")
+		assert.Equal(t, 1, len(mn.getMessages()))
+		assert.True(t, mn.hasMessage("Executed: Extract declarations to new file"))
+	})
+
+	t.Run("InlineVariable", func(t *testing.T) {
+		t.Parallel()
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
+			{name: "main.go", content: inlineVariableSrc},
+		})
+		handler, me, mn := newTestHandler(t, env.testEnv)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor on the *use* of variable "s" in println(s) (line 6, char 9).
+		// refactor.inline.variable requires the cursor on a reference, not
+		// the declaration.
+		cmd := goCmdAt("inline-variable", uri, resource, 6, 9)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// gopls applies inline-variable via workspace/applyEdit command,
+		// replacing the reference to "s" with its initializer expression.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		editText := capturedEditText(captured)
+		assert.Contains(t, editText, "fmt.Sprintf")
+		assert.Equal(t, 1, len(mn.getMessages()))
+		assert.True(t, mn.hasMessage(`Executed: Inline variable "s"`))
 	})
 
 	t.Run("RemoveUnusedParam", func(t *testing.T) {
