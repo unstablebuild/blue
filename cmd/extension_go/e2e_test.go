@@ -194,6 +194,75 @@ func useDouble() int {
 
 func generated() {}
 `
+
+	// removeUnusedParamSrc has a function with an unused parameter.
+	removeUnusedParamSrc = `package main
+
+func add(a, b, unused int) int {
+	return a + b
+}
+
+func main() {
+	_ = add(1, 2, 0)
+}
+`
+
+	// moveParamSrc has a function with two params suitable for move-param-left/right.
+	moveParamSrc = `package main
+
+func greet(greeting, name string) string {
+	return greeting + " " + name
+}
+
+func main() {
+	_ = greet("hello", "world")
+}
+`
+
+	// changeQuoteSrc has a raw string literal suitable for change-quote.
+	changeQuoteSrc = `package main
+
+import "fmt"
+
+func main() {
+	s := ` + "`hello world`" + `
+	fmt.Println(s)
+}
+`
+
+	// splitLinesSrc has a multi-arg call on a single line suitable for split-lines.
+	splitLinesSrc = `package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("a", "b", "c")
+}
+`
+
+	// joinLinesSrc has a multi-line call suitable for join-lines.
+	joinLinesSrc = `package main
+
+import "fmt"
+
+func main() {
+	fmt.Println(
+		"a",
+		"b",
+		"c",
+	)
+}
+`
+
+	// eliminateDotImportSrc has a dot import suitable for eliminate-dot-import.
+	eliminateDotImportSrc = `package main
+
+import . "fmt"
+
+func main() {
+	Println("hello")
+}
+`
 )
 
 // stubResource implements textapi.Handler for tests.
@@ -543,6 +612,193 @@ func TestE2E(t *testing.T) {
 			msgs := mn.getMessages()
 			assert.NotEmpty(t, msgs)
 		}
+	})
+
+	t.Run("RemoveUnusedParam", func(t *testing.T) {
+		t.Parallel()
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
+			{name: "main.go", content: removeUnusedParamSrc},
+		})
+		handler, me, mn := newTestHandler(t, env.testEnv)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor on "unused" param (line 2, char 15).
+		cmd := goCmdAt("remove-unused-param", uri, resource, 2, 15)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// gopls applies remove-unused-param via workspace/applyEdit command.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		// The edit removes the "unused" param from the signature and its
+		// corresponding argument from the call site.
+		editText := capturedEditText(captured)
+		assert.NotContains(t, editText, "unused")
+		assert.Equal(t, 1, len(mn.getMessages()))
+		assert.True(t, mn.hasMessage("Executed: Remove unused parameter"))
+	})
+
+	t.Run("MoveParamLeft", func(t *testing.T) {
+		t.Parallel()
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
+			{name: "main.go", content: moveParamSrc},
+		})
+		handler, me, mn := newTestHandler(t, env.testEnv)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor on "name" param (line 2, char 21).
+		cmd := goCmdAt("move-param-left", uri, resource, 2, 21)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// gopls applies move-param-left via workspace/applyEdit command.
+		// The edit rewrites the param list with "name" before "greeting",
+		// and reorders call-site arguments to match.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		editText := capturedEditText(captured)
+		assert.Contains(t, editText, "name")
+		assert.Equal(t, 1, len(mn.getMessages()))
+		assert.True(t, mn.hasMessage("Executed: Move parameter left"))
+	})
+
+	t.Run("MoveParamRight", func(t *testing.T) {
+		t.Parallel()
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
+			{name: "main.go", content: moveParamSrc},
+		})
+		handler, me, mn := newTestHandler(t, env.testEnv)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor on "greeting" param (line 2, char 11).
+		cmd := goCmdAt("move-param-right", uri, resource, 2, 11)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// gopls applies move-param-right via workspace/applyEdit command.
+		// The edit rewrites the param list with "name" before "greeting",
+		// and reorders call-site arguments to match.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		editText := capturedEditText(captured)
+		assert.Contains(t, editText, "name")
+		assert.Equal(t, 1, len(mn.getMessages()))
+		assert.True(t, mn.hasMessage("Executed: Move parameter right"))
+	})
+
+	t.Run("ChangeQuote", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: changeQuoteSrc},
+		})
+		handler, me, mn := newTestHandlerWithEditorEvents(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor inside the raw string literal (line 5, char 6).
+		cmd := goCmdAt("change-quote", uri, resource, 5, 6)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// gopls applies change-quote as a direct edit (raw → interpreted),
+		// not via workspace/applyEdit command.
+		edits := me.editsFor(resource)
+		assert.Equal(t, 1, len(edits))
+		assert.Contains(t, collectEditText(edits), `"hello world"`)
+		assert.Equal(t, 0, len(env.cb.appliedEdits))
+		assert.Equal(t, 0, len(mn.getMessages()))
+	})
+
+	t.Run("SplitLines", func(t *testing.T) {
+		t.Parallel()
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
+			{name: "main.go", content: splitLinesSrc},
+		})
+		handler, me, mn := newTestHandler(t, env.testEnv)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor inside the Println call args (line 5, char 15).
+		cmd := goCmdAt("split-lines", uri, resource, 5, 15)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// gopls applies split-lines via a command (workspace/applyEdit).
+		// The edit inserts newlines between arguments.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		assert.Contains(t, capturedEditText(captured), "\n")
+		assert.Equal(t, 1, len(mn.getMessages()))
+		assert.True(t, mn.hasMessage("Executed: Split arguments into separate lines"))
+	})
+
+	t.Run("JoinLines", func(t *testing.T) {
+		t.Parallel()
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
+			{name: "main.go", content: joinLinesSrc},
+		})
+		handler, me, mn := newTestHandler(t, env.testEnv)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor inside the multi-line Println call (line 6, char 2).
+		cmd := goCmdAt("join-lines", uri, resource, 6, 2)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// gopls applies join-lines via a command (workspace/applyEdit).
+		// The edit collapses multi-line arguments into one line.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		assert.NotEmpty(t, capturedEditText(captured))
+		assert.Equal(t, 1, len(mn.getMessages()))
+		assert.True(t, mn.hasMessage("Executed: Join arguments into one line"))
+	})
+
+	t.Run("EliminateDotImport", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: eliminateDotImportSrc},
+		})
+		handler, me, mn := newTestHandlerWithEditorEvents(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor on the dot import (line 2, char 7).
+		cmd := goCmdAt("eliminate-dot-import", uri, resource, 2, 7)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// gopls applies eliminate-dot-import as direct edits (not via
+		// workspace/applyEdit): one to replace the dot import with a
+		// named import, one to qualify the Println reference with "fmt.".
+		edits := me.editsFor(resource)
+		assert.Equal(t, 2, len(edits))
+		assert.Contains(t, collectEditText(edits), "fmt.")
+		assert.Equal(t, 0, len(env.cb.appliedEdits))
+		assert.Equal(t, 0, len(mn.getMessages()))
 	})
 
 	t.Run("AddTags", func(t *testing.T) {

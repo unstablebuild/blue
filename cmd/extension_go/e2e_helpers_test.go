@@ -884,6 +884,26 @@ func collectEditText(edits []mockEdit) string {
 	return b.String()
 }
 
+// capturedEditText concatenates the NewText from all workspace/applyEdit params.
+func capturedEditText(captured []semanticapi.ApplyWorkspaceEditParams) string {
+	var b strings.Builder
+	for _, ae := range captured {
+		for _, edits := range ae.Edit.Changes {
+			for _, e := range edits {
+				b.WriteString(e.NewText)
+			}
+		}
+		for _, dc := range ae.Edit.DocumentChanges {
+			if dc.TextDocumentEdit != nil {
+				for _, e := range dc.TextDocumentEdit.Edits {
+					b.WriteString(e.NewText)
+				}
+			}
+		}
+	}
+	return b.String()
+}
+
 // mockNotification records a single notification.
 type mockNotification struct {
 	Level   browserapi.NotificationLevel
