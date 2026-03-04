@@ -130,19 +130,16 @@ func expandNodeValues(n *yaml.Node, mapping func(string) string) {
 
 // backupUserConfig copies path to path+".backup" before any write.
 // It is a no-op if the source file does not exist.
-func backupUserConfig(path string) error {
+func backupUserConfig(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("read for backup: %w", err)
+		return "", fmt.Errorf("read for backup: %w", err)
 	}
 	backupPath := path + ".backup"
 	if err := os.WriteFile(backupPath, data, 0644); err != nil {
-		return fmt.Errorf("write backup: %w", err)
+		return "", fmt.Errorf("write backup: %w", err)
 	}
-	return nil
+	return backupPath, nil
 }
 
 // writeYAMLAtomic writes doc to path atomically. It creates a temp file in
