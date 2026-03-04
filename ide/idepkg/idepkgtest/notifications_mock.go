@@ -39,16 +39,45 @@ var _ browserapi.Notifications = (*Notifications)(nil)
 
 // Notifications is a version of browserapi.Notifications for testing.
 type Notifications struct {
-	Wg *sync.WaitGroup
-
 	ExpectErrorNotification bool
 
 	t  *testing.T
 	mu sync.Mutex
+	wg *sync.WaitGroup
 
 	i      int
 	active map[string]Noti
 	err    error
+}
+
+// SetWg creates a new sync.WaitGroup with the given count and sets it
+// as the active wait group. Notify will call Done on it for every
+// LevelError or LevelSuccess notification. Use Wait to block until
+// the expected notifications have fired.
+func (n *Notifications) SetWg(count int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	wg := new(sync.WaitGroup)
+	wg.Add(count)
+	n.wg = wg
+}
+
+// ClearWg removes the active wait group so that subsequent
+// notifications do not call Done.
+func (n *Notifications) ClearWg() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.wg = nil
+}
+
+// Wait blocks until the active wait group counter reaches zero.
+func (n *Notifications) Wait() {
+	n.mu.Lock()
+	wg := n.wg
+	n.mu.Unlock()
+	if wg != nil {
+		wg.Wait()
+	}
 }
 
 // NewNotifications returns an instance of Notifications.
@@ -75,8 +104,8 @@ func (n *Notifications) Notify(
 	defer n.mu.Unlock()
 	if !n.ExpectErrorNotification && level == browserapi.LevelError {
 		n.t.Logf("no error notification was expected: %s", fmt.Sprintf(msg, args...))
-		if n.Wg != nil {
-			n.Wg.Done()
+		if n.wg != nil {
+			n.wg.Done()
 		}
 		n.t.FailNow()
 	}
@@ -85,8 +114,8 @@ func (n *Notifications) Notify(
 	n.active[id] = Noti{Level: level, Msg: fmt.Sprintf(msg, args...)}
 	switch level {
 	case browserapi.LevelError, browserapi.LevelSuccess:
-		if n.Wg != nil {
-			n.Wg.Done()
+		if n.wg != nil {
+			n.wg.Done()
 		}
 	}
 	return id, n.err
