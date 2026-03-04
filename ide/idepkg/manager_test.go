@@ -30,7 +30,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sync"
 	"syscall"
 	"testing"
 
@@ -60,11 +59,10 @@ func TestLibDir(t *testing.T) {
 		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
 		m, n, _, _ := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		it, err := m.LibDir(context.Background(), "go")
 		require.NoError(t, err)
@@ -352,11 +350,10 @@ func TestInstallPackageVersion(t *testing.T) {
 		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
 		m, n, _, datadir := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 		n.RequireNoErrorNotification()
 
 		assertDataDirExists(t, datadir, "go")
@@ -369,11 +366,10 @@ func TestInstallPackageVersion(t *testing.T) {
 		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
 		m, n, _, _ := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 		n.RequireNoErrorNotification()
 
 		err = m.InstallPackageVersion(context.Background(), "go", "1")
@@ -386,11 +382,10 @@ func TestInstallPackageVersion(t *testing.T) {
 		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "testpkg", Version: "1"}})
 		m, n, _, datadir := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "testpkg", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 		n.RequireNoErrorNotification()
 
 		assertDataDirExists(t, datadir, "testpkg")
@@ -405,19 +400,18 @@ func TestInstallPackageVersion(t *testing.T) {
 
 		r.ExpectReturnErr(errors.New("boom"))
 		n.ExpectErrorNotification = true
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 		n.RequireErrorNotification()
 
 		r.ExpectReturnErr(nil)
 		n.Reset()
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err = m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 		n.RequireNoErrorNotification()
 
 		assertDataDirExists(t, datadir, "go")
@@ -430,11 +424,10 @@ func TestInstallPackageVersion(t *testing.T) {
 		m, n, r, datadir := newTestManager(t, pkgs, versions)
 		r.SetMissProgressComplete(true)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 		n.RequireNoErrorNotification()
 		assert.Len(t, n.Active(), 1)
 
@@ -451,11 +444,10 @@ func TestListInstalledPackageVersions(t *testing.T) {
 		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
 		m, n, _, _ := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		it, err := m.ListInstalledPackages(context.Background())
 		require.NoError(t, err)
@@ -488,11 +480,10 @@ func TestListInstalledPackages(t *testing.T) {
 		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
 		m, n, _, _ := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		it, err := m.ListInstalledPackageVersions(context.Background(), "go")
 		require.NoError(t, err)
@@ -525,11 +516,10 @@ func TestPackageVersionInUse(t *testing.T) {
 		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
 		m, n, _, _ := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		actual, err := m.PackageVersionInUse(context.Background(), "go")
 		require.NoError(t, err)
@@ -546,17 +536,15 @@ func TestPackageVersionInUse(t *testing.T) {
 		})
 		m, n, _, _ := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err = m.InstallPackageVersion(context.Background(), "go", "2")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		actual, err := m.PackageVersionInUse(context.Background(), "go")
 		require.NoError(t, err)
@@ -573,17 +561,15 @@ func TestPackageVersionInUse(t *testing.T) {
 		})
 		m, n, _, _ := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err = m.InstallPackageVersion(context.Background(), "go", "2")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		err = m.UsePackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
@@ -629,11 +615,10 @@ func TestUsePackageVersion(t *testing.T) {
 		})
 		m, n, _, _ := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		err = m.UsePackageVersion(context.Background(), "go", "2")
 		require.Error(t, err)
@@ -648,17 +633,15 @@ func TestUsePackageVersion(t *testing.T) {
 		})
 		m, n, _, datadir := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err = m.InstallPackageVersion(context.Background(), "go", "2")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		require.NoError(t, os.RemoveAll(filepath.Join(datadir, "bin", "go")))
 		require.NoError(t, os.RemoveAll(filepath.Join(datadir, "lib", "go")))
@@ -678,17 +661,15 @@ func TestUsePackageVersion(t *testing.T) {
 		})
 		m, n, _, _ := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err = m.InstallPackageVersion(context.Background(), "go", "2")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		err = m.UsePackageVersion(context.Background(), "go", "2")
 		require.Equal(t, err, ErrVersionInUse)
@@ -706,17 +687,15 @@ func TestDeletePackage(t *testing.T) {
 		})
 		m, n, _, datadir := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err = m.InstallPackageVersion(context.Background(), "go", "2")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		err = m.DeletePackage(context.Background(), "go")
 		require.NoError(t, err)
@@ -734,11 +713,10 @@ func TestDeletePackage(t *testing.T) {
 		})
 		m, n, _, _ := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		err = m.DeletePackage(context.Background(), "testpkg")
 		require.Equal(t, ErrNotInstalled, err)
@@ -756,17 +734,15 @@ func TestDeletePackageVersion(t *testing.T) {
 		})
 		m, n, _, datadir := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err = m.InstallPackageVersion(context.Background(), "go", "2")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		err = m.DeletePackageVersion(context.Background(), "go", "1", false)
 		require.NoError(t, err)
@@ -783,11 +759,10 @@ func TestDeletePackageVersion(t *testing.T) {
 		})
 		m, n, _, datadir := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		err = m.DeletePackageVersion(context.Background(), "go", "3", false)
 		require.Equal(t, ErrNotInstalled, err)
@@ -804,17 +779,15 @@ func TestDeletePackageVersion(t *testing.T) {
 		})
 		m, n, _, datadir := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err = m.InstallPackageVersion(context.Background(), "go", "2")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		err = m.DeletePackageVersion(context.Background(), "go", "2", false)
 		require.Equal(t, err, ErrVersionInUse)
@@ -831,17 +804,15 @@ func TestDeletePackageVersion(t *testing.T) {
 		})
 		m, n, _, datadir := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "go", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err = m.InstallPackageVersion(context.Background(), "go", "2")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		err = m.DeletePackageVersion(context.Background(), "go", "2", true)
 		require.NoError(t, err)
@@ -1143,11 +1114,10 @@ func TestInstallPackageVersionConfig(t *testing.T) {
 		configPath := filepath.Join(datadir, "config.yaml")
 		require.NoError(t, os.WriteFile(configPath, []byte("{}\n"), 0644))
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(2) // apply success + download success
 		err := m.InstallPackageVersion(context.Background(), "configpkg", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 		n.RequireNoErrorNotification()
 
 		doc := readUserConfig(t, datadir)
@@ -1163,11 +1133,10 @@ func TestInstallPackageVersionConfig(t *testing.T) {
 		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "configpkg", Version: "1"}})
 		m, n, _, datadir := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "configpkg", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 		n.RequireNoErrorNotification()
 
 		// Config should not have been created
@@ -1191,19 +1160,21 @@ func TestUsePackageVersionConfig(t *testing.T) {
 		configPath := filepath.Join(datadir, "config.yaml")
 		require.NoError(t, os.WriteFile(configPath, []byte("{}\n"), 0644))
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(2) // apply success + download success
 		err := m.InstallPackageVersion(context.Background(), "configpkg", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 		n.RequireNoErrorNotification()
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(2) // apply success + download success
 		err = m.InstallPackageVersion(context.Background(), "configpkg", "2")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 		n.RequireNoErrorNotification()
+
+		// Prevent UsePackageVersion's synchronous prompt notification
+		// from calling Done on a completed WaitGroup.
+		n.ClearWg()
 
 		// Switch to version 1
 		require.NoError(t, os.RemoveAll(filepath.Join(datadir, "lib", "configpkg")))
@@ -1235,16 +1206,19 @@ func TestProcessInstalledSettingsConfig(t *testing.T) {
 		configPath := filepath.Join(datadir, "config.yaml")
 		require.NoError(t, os.WriteFile(configPath, []byte("{}\n"), 0644))
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(2) // apply success + download success
 		err := m.InstallPackageVersion(context.Background(), "configpkg", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 		n.RequireNoErrorNotification()
 
 		// Reset the user config to an empty mapping to force re-merge
 		require.NoError(t, os.WriteFile(configPath, []byte("{}\n"), 0644))
 		_ = os.Remove(filepath.Join(datadir, "config.yaml.backup"))
+
+		// Prevent ProcessInstalledSettings' synchronous prompt notification
+		// from calling Done on a completed WaitGroup.
+		n.ClearWg()
 
 		err = m.ProcessInstalledSettings(context.Background())
 		require.NoError(t, err)
@@ -1261,11 +1235,10 @@ func TestProcessInstalledSettingsConfig(t *testing.T) {
 		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "configpkg", Version: "1"}})
 		m, n, _, datadir := newTestManager(t, pkgs, versions)
 
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err := m.InstallPackageVersion(context.Background(), "configpkg", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 
 		err = m.ProcessInstalledSettings(context.Background())
 		require.NoError(t, err)
@@ -1376,11 +1349,10 @@ func TestInstallConfigPromptDeny(t *testing.T) {
 		require.NoError(t, os.WriteFile(configPath, []byte("existing: true\n"), 0644))
 
 		// First install merges into existing config (auto-accepted by default mock)
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(2) // apply success + download success
 		err := m.InstallPackageVersion(context.Background(), "configpkg", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 		n.RequireNoErrorNotification()
 
 		// Capture config state after first install
@@ -1399,11 +1371,10 @@ func TestInstallConfigPromptDeny(t *testing.T) {
 		}
 
 		// Second install (v2 has different config values) — deny the prompt
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(1)
 		err = m.InstallPackageVersion(context.Background(), "configpkg", "2")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 		n.RequireNoErrorNotification()
 
 		// Config should remain unchanged after deny
@@ -1422,16 +1393,11 @@ func TestProcessConfigSkipsPromptWhenAlreadyMerged(t *testing.T) {
 		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "configpkg", Version: "1"}})
 		m, n, _, datadir := newTestManager(t, pkgs, versions)
 
-		// Create an existing user config so processConfig merges into it
-		configPath := filepath.Join(datadir, "config.yaml")
-		require.NoError(t, os.WriteFile(configPath, []byte("{}\n"), 0644))
-
 		// First install: prompt is shown and accepted (default mock auto-accepts)
-		n.Wg = new(sync.WaitGroup)
-		n.Wg.Add(1)
+		n.SetWg(2) // apply success + download success
 		err := m.InstallPackageVersion(context.Background(), "configpkg", "1")
 		require.NoError(t, err)
-		n.Wg.Wait()
+		n.Wait()
 		n.RequireNoErrorNotification()
 
 		// Verify config was written
