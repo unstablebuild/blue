@@ -328,6 +328,15 @@ func main() {
 	Println("hello")
 }
 `
+
+	// cgoSrc is a minimal Go file with import "C" for regenerate-cgo test.
+	cgoSrc = `package main
+
+// #include <stdlib.h>
+import "C"
+
+func main() {}
+`
 )
 
 // stubResource implements textapi.Handler for tests.
@@ -1395,6 +1404,167 @@ type Config struct {
 		case <-time.After(30 * time.Second):
 			t.Fatal("timed out waiting for vulncheck diagnostics on go.mod")
 		}
+	})
+
+	t.Run("ToggleCompilerOpt", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: mainSrc},
+		})
+		handler, me, mn := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		me.Register(resource)
+		// Cursor on the Add function (line 17, char 5).
+		cmd := goCmdAt("toggle-compiler-opt", uri, resource, 17, 5)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// source.toggleCompilerOptDetails returns a Command (not an Edit).
+		// applyAction calls ExecuteCommand synchronously to toggle gc_details
+		// diagnostics; no edits are produced.
+		assert.Empty(t, me.editsFor(resource))
+		require.Len(t, mn.getMessages(), 1)
+		assert.True(t, mn.hasMessage("Executed:"))
+
+		// After toggling gc_details ON, gopls publishes diagnostics with
+		// compiler optimization details (inlining decisions, escape analysis).
+		// mainSrc's Add function is trivially inlinable → "can inline Add".
+		fileURI := env.fileURIs["main.go"]
+		require.Eventually(t, func() bool {
+			env.cb.mu.Lock()
+			defer env.cb.mu.Unlock()
+			for _, dp := range env.cb.diagnostics {
+				if dp.URI != fileURI {
+					continue
+				}
+				for _, d := range dp.Diagnostics {
+					if strings.Contains(d.Message, "can inline") ||
+						strings.Contains(d.Message, "escape") {
+						return true
+					}
+				}
+			}
+			return false
+		}, 10*time.Second, 100*time.Millisecond,
+			"expected gc_details diagnostics (e.g. \"can inline Add\") after toggle")
+	})
+
+	t.Run("UpgradeDependency", func(t *testing.T) {
+		t.Parallel()
+
+		// gopls panics with a nil *Snapshot when handling
+		// gopls.check_upgrades. This is the same upstream gopls bug
+		// as gopls.vendor (confirmed in v0.21.1). Remove SkipNow
+		// once fixed upstream.
+		t.SkipNow()
+
+		// Use a real module with an outdated dependency so
+		// check_upgrades has something to report.
+		goModContent := "module example.com/test\n\ngo 1.22\n\nrequire golang.org/x/text v0.3.7\n"
+		mainContent := "package main\n\nimport _ \"golang.org/x/text/language\"\n\nfunc main() {}\n"
+
+		dir := setupWorkspace(t, "example.com/test", []testFile{
+			{name: "go.mod", content: goModContent},
+			{name: "main.go", content: mainContent},
+		})
+
+		// Resolve dependencies so gopls can load packages.
+		tidy := exec.Command("go", "mod", "tidy")
+		tidy.Dir = dir
+		out, err := tidy.CombinedOutput()
+		require.NoError(t, err, "go mod tidy: %s", out)
+
+		env := initGoplsFromDir(t, goplsBin, dir, []testFile{
+			{name: "main.go", content: mainContent},
+		})
+		handler, _, mn := newTestHandler(t, env)
+
+		// Register diagnostics hook BEFORE executing the command.
+		// check_upgrades annotates go.mod with diagnostics showing
+		// available upgrades for outdated dependencies.
+		goModURI := "file://" + filepath.Join(env.dir, "go.mod")
+		diagsCh := make(chan []semanticapi.Diagnostic, 1)
+		env.cb.mu.Lock()
+		prev := env.cb.onDiagnostics
+		env.cb.onDiagnostics = func(p semanticapi.PublishDiagnosticsParams) {
+			if prev != nil {
+				prev(p)
+			}
+			if p.URI == goModURI && len(p.Diagnostics) > 0 {
+				select {
+				case diagsCh <- p.Diagnostics:
+				default:
+				}
+			}
+		}
+		env.cb.mu.Unlock()
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		cmd := goCmd("upgrade-dependency", uri, resource)
+
+		err = handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// modCommandHandler fires ExecuteCommand in a goroutine.
+		require.Eventually(t, func() bool {
+			return mn.hasMessage("gopls.check_upgrades")
+		}, 30*time.Second, 100*time.Millisecond)
+		assert.Len(t, mn.getMessages(), 1)
+		assert.Equal(t, browserapi.LevelInfo, mn.getMessages()[0].Level)
+
+		// Wait for gopls to publish upgrade diagnostics on go.mod.
+		// golang.org/x/text v0.3.7 is outdated; check_upgrades should
+		// annotate the require line with the available newer version.
+		select {
+		case diags := <-diagsCh:
+			var msgs []string
+			for _, d := range diags {
+				msgs = append(msgs, d.Message)
+			}
+			t.Logf("check_upgrades diagnostics: %v", msgs)
+			found := false
+			for _, msg := range msgs {
+				if strings.Contains(msg, "golang.org/x/text") {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found,
+				"expected upgrade diagnostic for golang.org/x/text, got: %v", msgs)
+		case <-time.After(30 * time.Second):
+			t.Fatal("timed out waiting for check_upgrades diagnostics on go.mod")
+		}
+	})
+
+	t.Run("CodeLens/RegenerateCgo", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: cgoSrc},
+		})
+		handler, _, mn := newTestHandler(t, env)
+
+		uri := parseTestURI(t, env.fileURIs["main.go"])
+		resource := &stubResource{uri: uri}
+		// Cursor on the `import "C"` line (line 3).
+		cmd := goCmdAt("regenerate-cgo", uri, resource, 3, 0)
+
+		err := handler.HandleCommand(t.Context(), cmd)
+		require.NoError(t, err)
+
+		// codeLensHandler fires asynchronously — wait for the notification.
+		require.Eventually(t, func() bool {
+			return len(mn.getMessages()) > 0
+		}, 30*time.Second, 100*time.Millisecond)
+
+		// Verify the lens was found and executed, not the "no lens found" path.
+		msgs := mn.getMessages()
+		require.Len(t, msgs, 1)
+		assert.True(t, mn.hasMessage("Executed:"),
+			"expected 'Executed:' notification proving the lens was found, got: %q", msgs[0].Message)
 	})
 
 	t.Run("AddImport", func(t *testing.T) {
