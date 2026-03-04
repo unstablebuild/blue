@@ -783,14 +783,6 @@ func (m *Manager) processConfig(
 		return nil
 	}
 
-	allowed, err := m.promptConfigChange(pkgID, pkgVersion, data)
-	if err != nil {
-		return fmt.Errorf("prompt config change: %w", err)
-	}
-	if !allowed {
-		return nil
-	}
-
 	expandNodeValues(&pkgDoc, func(key string) string {
 		switch key {
 		case "RUNE_DATADIR":
@@ -806,6 +798,20 @@ func (m *Manager) processConfig(
 	userDoc, err := loadOrCreateUserConfig(m.configPath)
 	if err != nil {
 		return fmt.Errorf("load user config: %w", err)
+	}
+
+	// Skip prompt and merge if the package config is already present
+	// in the user config.
+	if verifyMerge(userDoc.Content[0], pkgDoc.Content[0]) == nil {
+		return nil
+	}
+
+	allowed, err := m.promptConfigChange(pkgID, pkgVersion, data)
+	if err != nil {
+		return fmt.Errorf("prompt config change: %w", err)
+	}
+	if !allowed {
+		return nil
 	}
 
 	mergeYAMLNodes(userDoc.Content[0], pkgDoc.Content[0])

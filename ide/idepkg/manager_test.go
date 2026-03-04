@@ -1343,3 +1343,37 @@ func TestInstallConfigPromptDeny(t *testing.T) {
 		assert.True(t, os.IsNotExist(err), "config.yaml should not exist when prompt is denied")
 	})
 }
+
+func TestProcessConfigSkipsPromptWhenAlreadyMerged(t *testing.T) {
+	t.Parallel()
+	t.Run("no prompt shown when config is already merged", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "configpkg", Version: "1"}})
+		m, n, _, datadir := newTestManager(t, pkgs, versions)
+
+		// First install: prompt is shown and accepted (default mock auto-accepts)
+		n.Wg = new(sync.WaitGroup)
+		n.Wg.Add(1)
+		err := m.InstallPackageVersion(context.Background(), "configpkg", "1")
+		require.NoError(t, err)
+		n.Wg.Wait()
+		n.RequireNoErrorNotification()
+
+		// Verify config was written
+		_ = readUserConfig(t, datadir)
+
+		// Override wm to panic if prompt is shown — it should NOT be called
+		// since the config is already merged.
+		m.wm = &mockWindowManager{
+			floatingFn: func(_ browserapi.Floating, _ browserapi.FloatingConfig) (browserapi.Window, error) {
+				t.Fatal("prompt should not be shown when config is already merged")
+				return nil, nil
+			},
+		}
+
+		// Re-process settings: should detect config is already merged and skip
+		err = m.ProcessInstalledSettings(context.Background())
+		require.NoError(t, err)
+	})
+}
