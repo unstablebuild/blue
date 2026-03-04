@@ -27,7 +27,6 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -48,6 +47,7 @@ import (
 	"github.com/unstablebuild/blue/release"
 	"github.com/unstablebuild/blue/walkdir"
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
+	"gopkg.in/yaml.v3"
 	"github.com/unstablebuild/rune-go-sdk/api/schemeapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
 	"github.com/unstablebuild/rune-go-sdk/term"
@@ -76,15 +76,19 @@ func WithCrashReportVersion(version string) Option {
 func NewManager(
 	n browserapi.Notifications, m release.Manager,
 	storage document.Service, scheme schemeapi.Scheme, dataDir string,
-	interrupter term.Interrupter, opts ...Option,
+	configPath string, interrupter term.Interrupter, opts ...Option,
 ) *Manager {
 	if dataDir == "" {
 		panic("data directory must not be empty")
+	}
+	if configPath == "" {
+		panic("config path must not be empty")
 	}
 	schemeURI, _ := scheme.URI(".")
 	binDir := makeBinDirname(dataDir)
 	ret := &Manager{
 		dataDir:     dataDir,
+		configPath:  configPath,
 		scheme:      scheme,
 		binDir:      binDir,
 		schemeURI:   schemeURI,
@@ -111,6 +115,7 @@ type Manager struct {
 	interrupter term.Interrupter
 	storage     document.Service
 	dataDir     string
+	configPath  string
 	scheme      schemeapi.Scheme
 	schemeURI   workspaceapi.URI
 	binDir      string
@@ -389,10 +394,10 @@ func (m *Manager) ProcessInstalledSettings(ctx context.Context) (ret error) {
 			continue
 		}
 		dir := makePackageVersionDirname(m.dataDir, pkv.Package, pkv.Version)
-		settings := filepath.Join(dir, "settings.json")
-		err = m.processSettings(pkv.Package, pkv.Version, settings)
+		configFile := filepath.Join(dir, "config.yaml")
+		err = m.processConfig(pkv.Package, pkv.Version, configFile)
 		if err != nil {
-			ret = errors.Join(ret, fmt.Errorf("process %s: %w", settings, err))
+			ret = errors.Join(ret, fmt.Errorf("process %s: %w", configFile, err))
 		}
 	}
 	return ret
@@ -450,8 +455,8 @@ func (m *Manager) UsePackageVersion(
 	pkgID = escapeString(pkgID)
 	pkgVersionDirname := makePackageVersionDirname(m.dataDir, pkgID, version)
 
-	settings := filepath.Join(pkgVersionDirname, "settings.json")
-	err = m.processSettings(pkgID, version, settings)
+	configFile := filepath.Join(pkgVersionDirname, "config.yaml")
+	err = m.processConfig(pkgID, version, configFile)
 	if err != nil {
 		return err
 	}
@@ -578,13 +583,13 @@ func (m *Manager) download(
 	m.log(log.TraceLevel, "extracting package %s version %s", pkgID, version)
 	// copy to pkg/<pkgID>/<version> for managing versions
 	pkgVersionDirname := makePackageVersionDirname(m.dataDir, pkgID, version)
-	settings, executables, err := m.untar(tarfile, pkgVersionDirname)
+	configFile, executables, err := m.untar(tarfile, pkgVersionDirname)
 	if err != nil {
 		m.abortDownload(err, pkgID, version, notificationID)
 		return
 	}
 
-	err = m.processSettings(pkgID, version, settings)
+	err = m.processConfig(pkgID, version, configFile)
 	if err != nil {
 		_ = os.RemoveAll(pkgVersionDirname)
 		m.abortDownload(err, pkgID, version, notificationID)
@@ -703,62 +708,57 @@ func (m *Manager) linkLibCopyBin(
 	return nil
 }
 
-type settings struct {
-	Env map[string]any `json:"env"`
-}
-
-func (m *Manager) processSettings(
-	pkgID string, pkgVersion release.Version, settingsFile string,
+func (m *Manager) processConfig(
+	pkgID string, pkgVersion release.Version, pkgConfigFile string,
 ) error {
-	_, err := os.Stat(settingsFile)
+	_, err := os.Stat(pkgConfigFile)
 	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("stat settings.json: %v", err)
+		return fmt.Errorf("stat config.yaml: %v", err)
 	}
 	if err != nil {
 		return nil
 	}
-	data, err := os.ReadFile(settingsFile)
+	data, err := os.ReadFile(pkgConfigFile)
 	if err != nil {
-		return fmt.Errorf("read settings: %w", err)
+		return fmt.Errorf("read config: %w", err)
 	}
 
-	var set settings
-	err = json.Unmarshal(data, &set)
+	var pkgDoc yaml.Node
+	if err := yaml.Unmarshal(data, &pkgDoc); err != nil {
+		return fmt.Errorf("unmarshal config: %w", err)
+	}
+	if pkgDoc.Kind != yaml.DocumentNode || len(pkgDoc.Content) == 0 {
+		return nil
+	}
+
+	expandNodeValues(&pkgDoc, func(key string) string {
+		switch key {
+		case "RUNE_DATADIR":
+			return m.dataDir
+		case "RUNE_PKG_ID":
+			return pkgID
+		case "RUNE_PKG_VERSION":
+			return string(pkgVersion)
+		}
+		return ""
+	})
+
+	userDoc, err := loadOrCreateUserConfig(m.configPath)
 	if err != nil {
-		return fmt.Errorf("unmarshal settings: %w", err)
+		return fmt.Errorf("load user config: %w", err)
 	}
 
-	var ret error
-	for k, v := range set.Env {
-		// refuse to set anything that's not on this whitelist
-		switch k {
-		case "GOROOT":
-		default:
-			continue
-		}
-		// expand env variables
-		str, ok := v.(string)
-		if !ok {
-			continue
-		}
-		str = os.Expand(str, func(key string) string {
-			switch key {
-			case "RUNE_DATADIR":
-				return m.dataDir
-			case "RUNE_PKG_ID":
-				return pkgID
-			case "RUNE_PKG_VERSION":
-				return string(pkgVersion)
-			}
-			return ""
-		})
-		log.Infof("package settings env: set %s to %v", k, str)
-		if err := os.Setenv(k, str); err != nil {
-			ret = errors.Join(ret, err)
-		}
+	mergeYAMLNodes(userDoc.Content[0], pkgDoc.Content[0])
+
+	if err := backupUserConfig(m.configPath); err != nil {
+		return fmt.Errorf("backup user config: %w", err)
 	}
 
-	return ret
+	if err := writeYAMLAtomic(m.configPath, userDoc, pkgDoc.Content[0]); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+
+	return nil
 }
 
 func (m *Manager) untar(tarfile *os.File, dirname string) (string, []*tar.Header, error) {
@@ -785,8 +785,8 @@ func (m *Manager) untar(tarfile *os.File, dirname string) (string, []*tar.Header
 		return "", nil, err
 	}
 
-	settings := filepath.Join(dirname, "settings.json")
-	return settings, executables, nil
+	configFile := filepath.Join(dirname, "config.yaml")
+	return configFile, executables, nil
 }
 
 func newReadyIterator(
