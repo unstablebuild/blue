@@ -427,10 +427,10 @@ func TestE2E(t *testing.T) {
 
 	t.Run("FillStruct", func(t *testing.T) {
 		t.Parallel()
-		env := initGopls(t, goplsBin, []testFile{
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: fillStructSrc},
 		})
-		handler, me, mn := newTestHandlerWithEditorEvents(t, env)
+		handler, me, mn := newTestHandler(t, env.testEnv)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -441,24 +441,16 @@ func TestE2E(t *testing.T) {
 		err := handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
 
-		edits := me.editsFor(resource)
-		if len(edits) > 0 {
-			combined := collectEditText(edits)
-			assert.Contains(t, strings.ToLower(combined), "method")
-
-			// Wait for gopls to publish diagnostics after processing the
-			// edit events, then verify the overlay is not corrupted.
-			fileURI := env.fileURIs["main.go"]
-			diags := waitForDiagnostics(t, env.cb, fileURI, 5*time.Second)
-			for _, d := range diags {
-				if d.Severity == 1 { // Error
-					t.Errorf("overlay corrupted after fill-struct: %s (line %d)",
-						d.Message, d.Range.Start.Line)
-				}
-			}
-		} else {
-			assert.True(t, mn.hasMessage("Place cursor on a struct literal") || len(edits) == 0)
-		}
+		// fill-struct returns a Command (not a direct Edit).
+		// ExecuteCommand triggers workspace/applyEdit to fill fields.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		editText := capturedEditText(captured)
+		assert.Contains(t, editText, "Method")
+		msgs := mn.getMessages()
+		require.Equal(t, 1, len(msgs))
+		assert.True(t, mn.hasMessage("Executed: Fill http.Request"))
 	})
 
 	t.Run("FillSwitch", func(t *testing.T) {
@@ -466,7 +458,7 @@ func TestE2E(t *testing.T) {
 		env := initGopls(t, goplsBin, []testFile{
 			{name: "main.go", content: typeSwitchSrc},
 		})
-		handler, me, _ := newTestHandlerWithEditorEvents(t, env)
+		handler, me, mn := newTestHandlerWithEditorEvents(t, env)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -477,23 +469,13 @@ func TestE2E(t *testing.T) {
 		err := handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
 
+		// fill-switch returns a direct Edit (not a Command).
 		edits := me.editsFor(resource)
-		if len(edits) > 0 {
-			combined := collectEditText(edits)
-			assert.Contains(t, combined, "Dog")
-			assert.Contains(t, combined, "Cat")
-
-			// Wait for gopls to publish diagnostics after processing the
-			// edit events, then verify the overlay is not corrupted.
-			fileURI := env.fileURIs["main.go"]
-			diags := waitForDiagnostics(t, env.cb, fileURI, 5*time.Second)
-			for _, d := range diags {
-				if d.Severity == 1 { // Error
-					t.Errorf("overlay corrupted after fill-switch: %s (line %d)",
-						d.Message, d.Range.Start.Line)
-				}
-			}
-		}
+		require.Equal(t, 1, len(edits))
+		combined := collectEditText(edits)
+		assert.Contains(t, combined, "Dog")
+		assert.Contains(t, combined, "Cat")
+		assert.Equal(t, 0, len(mn.getMessages()))
 	})
 
 	t.Run("ExtractFunction", func(t *testing.T) {
@@ -598,26 +580,46 @@ func TestE2E(t *testing.T) {
 
 	t.Run("ExtractVariable", func(t *testing.T) {
 		t.Parallel()
-		env := initGopls(t, goplsBin, []testFile{
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: extractFuncSrc},
 		})
-		handler, me, _ := newTestHandler(t, env)
+		handler, me, mn := newTestHandler(t, env.testEnv)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
 		me.Register(resource)
+
+		// Select the expression "a + b" on line 7 (sum := a + b).
+		me.fireEvent(t.Context(), textapi.Event{
+			Type:  textapi.EventTypeSelection,
+			URI:   uri,
+			Start: term.Coordinates{X: 8, Y: 7},
+			End:   term.Coordinates{X: 13, Y: 7},
+		})
+
 		cmd := goCmdAt("extract-variable", uri, resource, 7, 8)
 
 		err := handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
+
+		// extract-variable returns a Command (not a direct Edit).
+		// ExecuteCommand triggers workspace/applyEdit to extract the expression.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		editText := capturedEditText(captured)
+		assert.Contains(t, editText, "a + b")
+		msgs := mn.getMessages()
+		require.Equal(t, 1, len(msgs))
+		assert.True(t, mn.hasMessage("Executed: Extract variable"))
 	})
 
 	t.Run("InvertIf", func(t *testing.T) {
 		t.Parallel()
-		env := initGopls(t, goplsBin, []testFile{
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: invertIfSrc},
 		})
-		handler, me, mn := newTestHandlerWithEditorEvents(t, env)
+		handler, me, mn := newTestHandler(t, env.testEnv)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -628,35 +630,24 @@ func TestE2E(t *testing.T) {
 		err := handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
 
-		// gopls may apply the edit directly or via a command (workspace/applyEdit).
-		edits := me.editsFor(resource)
-		if len(edits) > 0 {
-			combined := collectEditText(edits)
-			assert.Contains(t, combined, "<=")
-
-			// Wait for gopls to publish diagnostics after processing the
-			// edit events, then verify the overlay is not corrupted.
-			fileURI := env.fileURIs["main.go"]
-			diags := waitForDiagnostics(t, env.cb, fileURI, 5*time.Second)
-			for _, d := range diags {
-				if d.Severity == 1 { // Error
-					t.Errorf("overlay corrupted after invert-if: %s (line %d)",
-						d.Message, d.Range.Start.Line)
-				}
-			}
-		} else {
-			// If gopls used a command, we should see a notification.
-			msgs := mn.getMessages()
-			assert.NotEmpty(t, msgs)
-		}
+		// invert-if returns a Command (not a direct Edit).
+		// ExecuteCommand triggers workspace/applyEdit to invert the condition.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		editText := capturedEditText(captured)
+		assert.Contains(t, editText, "<=")
+		msgs := mn.getMessages()
+		require.Equal(t, 1, len(msgs))
+		assert.True(t, mn.hasMessage("Executed: Invert 'if' condition"))
 	})
 
 	t.Run("InlineCall", func(t *testing.T) {
 		t.Parallel()
-		env := initGopls(t, goplsBin, []testFile{
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: inlineCallSrc},
 		})
-		handler, me, mn := newTestHandlerWithEditorEvents(t, env)
+		handler, me, mn := newTestHandler(t, env.testEnv)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -667,25 +658,18 @@ func TestE2E(t *testing.T) {
 		err := handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
 
-		edits := me.editsFor(resource)
-		if len(edits) > 0 {
-			combined := collectEditText(edits)
-			assert.Contains(t, combined, "5 * 2")
-
-			// Wait for gopls to publish diagnostics after processing the
-			// edit events, then verify the overlay is not corrupted.
-			fileURI := env.fileURIs["main.go"]
-			diags := waitForDiagnostics(t, env.cb, fileURI, 5*time.Second)
-			for _, d := range diags {
-				if d.Severity == 1 { // Error
-					t.Errorf("overlay corrupted after inline-call: %s (line %d)",
-						d.Message, d.Range.Start.Line)
-				}
-			}
-		} else {
-			msgs := mn.getMessages()
-			assert.NotEmpty(t, msgs)
-		}
+		// inline-call returns a Command (not a direct Edit).
+		// ExecuteCommand triggers workspace/applyEdit to inline the call.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		editText := capturedEditText(captured)
+		// gopls replaces `double(5)` with `5 * 2` across multiple edits;
+		// the literal "5" stays in place and "* 2" is the new text.
+		assert.Contains(t, editText, "* 2")
+		msgs := mn.getMessages()
+		require.Equal(t, 1, len(msgs))
+		assert.True(t, mn.hasMessage("Executed: Inline call to double"))
 	})
 
 	t.Run("ExtractMethod", func(t *testing.T) {
@@ -1079,10 +1063,10 @@ func TestE2E(t *testing.T) {
 
 	t.Run("AddTags", func(t *testing.T) {
 		t.Parallel()
-		env := initGopls(t, goplsBin, []testFile{
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: addTagsSrc},
 		})
-		handler, me, _ := newTestHandler(t, env)
+		handler, me, mn := newTestHandler(t, env.testEnv)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1092,6 +1076,17 @@ func TestE2E(t *testing.T) {
 
 		err := handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
+
+		// add-tags returns a Command (not a direct Edit).
+		// ExecuteCommand triggers workspace/applyEdit to add json tags.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		editText := capturedEditText(captured)
+		assert.Contains(t, editText, "json")
+		msgs := mn.getMessages()
+		require.Equal(t, 1, len(msgs))
+		assert.True(t, mn.hasMessage("Executed: Add struct tags"))
 	})
 
 	t.Run("RemoveTags", func(t *testing.T) {
@@ -1103,10 +1098,10 @@ type Config struct {
 	Port int    ` + "`json:\"port\"`" + `
 }
 `
-		env := initGopls(t, goplsBin, []testFile{
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: taggedSrc},
 		})
-		handler, me, _ := newTestHandler(t, env)
+		handler, me, mn := newTestHandler(t, env.testEnv)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1115,15 +1110,26 @@ type Config struct {
 
 		err := handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
+
+		// remove-tags returns a Command (not a direct Edit).
+		// ExecuteCommand triggers workspace/applyEdit to strip tags.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		editText := capturedEditText(captured)
+		assert.NotContains(t, editText, "json")
+		msgs := mn.getMessages()
+		require.Equal(t, 1, len(msgs))
+		assert.True(t, mn.hasMessage("Executed: Remove struct tags"))
 	})
 
 	t.Run("AddTest", func(t *testing.T) {
 		t.Parallel()
-		env := initGopls(t, goplsBin, []testFile{
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: mainSrc},
 			{name: "main_test.go", content: testFileSrc},
 		})
-		handler, me, _ := newTestHandler(t, env)
+		handler, me, mn := newTestHandler(t, env.testEnv)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1133,6 +1139,17 @@ type Config struct {
 
 		err := handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
+
+		// add-test returns a Command (not a direct Edit).
+		// ExecuteCommand triggers workspace/applyEdit with the test skeleton.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		captured := env.capturedEdits()
+		require.Equal(t, 1, len(captured))
+		editText := capturedEditText(captured)
+		assert.Contains(t, editText, "func Test")
+		msgs := mn.getMessages()
+		require.Equal(t, 1, len(msgs))
+		assert.True(t, mn.hasMessage("Executed: Add test for Add"))
 	})
 
 	// Regression: go add-test should produce a test file with
@@ -1197,10 +1214,10 @@ type Config struct {
 
 	t.Run("Assembly", func(t *testing.T) {
 		t.Parallel()
-		env := initGopls(t, goplsBin, []testFile{
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: mainSrc},
 		})
-		handler, me, _ := newTestHandler(t, env)
+		handler, me, mn := newTestHandler(t, env.testEnv)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1209,14 +1226,22 @@ type Config struct {
 
 		err := handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
+
+		// assembly returns a Command that opens a web view with assembly output.
+		// No edits are produced; the handler notifies after execution.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		assert.Equal(t, 0, len(env.capturedEdits()))
+		msgs := mn.getMessages()
+		require.Equal(t, 1, len(msgs))
+		assert.True(t, mn.hasMessage("Executed: Browse"))
 	})
 
 	t.Run("Doc", func(t *testing.T) {
 		t.Parallel()
-		env := initGopls(t, goplsBin, []testFile{
+		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: mainSrc},
 		})
-		handler, me, _ := newTestHandler(t, env)
+		handler, me, mn := newTestHandler(t, env.testEnv)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1225,6 +1250,14 @@ type Config struct {
 
 		err := handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
+
+		// doc returns a Command that opens a web view with package docs.
+		// No edits are produced; the handler notifies after execution.
+		assert.Equal(t, 0, len(me.editsFor(resource)))
+		assert.Equal(t, 0, len(env.capturedEdits()))
+		msgs := mn.getMessages()
+		require.Equal(t, 1, len(msgs))
+		assert.True(t, mn.hasMessage("Executed: Browse documentation"))
 	})
 
 	t.Run("CodeLens/Test", func(t *testing.T) {
@@ -1266,6 +1299,12 @@ type Config struct {
 		require.Eventually(t, func() bool {
 			return len(mn.getMessages()) > 0
 		}, 30*time.Second, 100*time.Millisecond)
+
+		// Verify the lens was found and executed, not the "no lens found" path.
+		msgs := mn.getMessages()
+		require.Equal(t, 1, len(msgs))
+		assert.True(t, mn.hasMessage("Executed:"),
+			"expected 'Executed:' notification proving the lens was found, got: %q", msgs[0].Message)
 	})
 
 	t.Run("Tidy", func(t *testing.T) {
