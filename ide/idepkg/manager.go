@@ -47,10 +47,12 @@ import (
 	"github.com/unstablebuild/blue/release"
 	"github.com/unstablebuild/blue/walkdir"
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
-	"gopkg.in/yaml.v3"
 	"github.com/unstablebuild/rune-go-sdk/api/schemeapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
+	"github.com/unstablebuild/rune-go-sdk/component"
+	"github.com/unstablebuild/rune-go-sdk/handler"
 	"github.com/unstablebuild/rune-go-sdk/term"
+	"gopkg.in/yaml.v3"
 )
 
 // Option configures a Manager.
@@ -76,7 +78,9 @@ func WithCrashReportVersion(version string) Option {
 func NewManager(
 	n browserapi.Notifications, m release.Manager,
 	storage document.Service, scheme schemeapi.Scheme, dataDir string,
-	configPath string, interrupter term.Interrupter, opts ...Option,
+	configPath string, wm browserapi.WindowManager,
+	scheduleNextTick func(func()) bool,
+	interrupter term.Interrupter, opts ...Option,
 ) *Manager {
 	if dataDir == "" {
 		panic("data directory must not be empty")
@@ -87,15 +91,17 @@ func NewManager(
 	schemeURI, _ := scheme.URI(".")
 	binDir := makeBinDirname(dataDir)
 	ret := &Manager{
-		dataDir:     dataDir,
-		configPath:  configPath,
-		scheme:      scheme,
-		binDir:      binDir,
-		schemeURI:   schemeURI,
-		interrupter: interrupter,
-		n:           n,
-		m:           m,
-		storage:     storage,
+		dataDir:          dataDir,
+		configPath:       configPath,
+		scheme:           scheme,
+		binDir:           binDir,
+		schemeURI:        schemeURI,
+		interrupter:      interrupter,
+		wm:               wm,
+		scheduleNextTick: scheduleNextTick,
+		n:                n,
+		m:                m,
+		storage:          storage,
 	}
 	ret.iterators.m = make(map[string]*sync.Mutex)
 	for _, opt := range opts {
@@ -110,15 +116,17 @@ func NewManager(
 // Note that OS/system is managed by having a separate Manager that points
 // to a different underlying release.Manager.
 type Manager struct {
-	n           browserapi.Notifications
-	m           release.Manager
-	interrupter term.Interrupter
-	storage     document.Service
-	dataDir     string
-	configPath  string
-	scheme      schemeapi.Scheme
-	schemeURI   workspaceapi.URI
-	binDir      string
+	n                browserapi.Notifications
+	m                release.Manager
+	interrupter      term.Interrupter
+	wm               browserapi.WindowManager
+	scheduleNextTick func(func()) bool
+	storage          document.Service
+	dataDir          string
+	configPath       string
+	scheme           schemeapi.Scheme
+	schemeURI        workspaceapi.URI
+	binDir           string
 
 	crashReportPkg     string
 	crashReportVersion string
@@ -708,6 +716,67 @@ func (m *Manager) linkLibCopyBin(
 	return nil
 }
 
+func (m *Manager) promptConfigChange(
+	pkgID string, pkgVersion release.Version, configYAML []byte,
+	userDoc, pkgDoc *yaml.Node,
+) error {
+	message := fmt.Sprintf(
+		"Extension %s (v%s) wants to update your configuration "+
+			"with the following settings:\n\n%s\n\nDo you want to allow this?",
+		pkgID, pkgVersion, string(configYAML))
+
+	apply := func() error {
+		mergeYAMLNodes(userDoc.Content[0], pkgDoc.Content[0])
+
+		backup, err := backupUserConfig(m.configPath)
+		if err != nil {
+			return fmt.Errorf("backup user config: %w", err)
+		}
+
+		m.log(log.InfoLevel, "created config backup "+
+			"before applying package updates: %s", backup)
+
+		if err := writeYAMLAtomic(m.configPath, userDoc, pkgDoc.Content[0]); err != nil {
+			return fmt.Errorf("write config: %w", err)
+		}
+
+		return nil
+	}
+
+	prompt := handler.NewPrompt(handler.PromptConfig{
+		PromptConfig: component.PromptConfig{
+			Message: message,
+			Options: []string{"Allow", "Deny"},
+		},
+		PromptHandler: handler.FuncPromptHandler(func(idx int, _ string) {
+			allowed := idx == 0
+			if allowed {
+				if err := apply(); err != nil {
+					_, _ = m.n.Notify(browserapi.LevelError, "apply configuration: %s", err)
+				}
+			}
+		}, func() error { return nil }),
+	})
+
+	ok := m.scheduleNextTick(func() {
+		_, err := m.wm.Floating(
+			browserapi.StaticFloating(prompt, 70, 20),
+			browserapi.FloatingConfig{
+				Alignment: component.AlignmentCentered,
+			},
+		)
+		if err != nil {
+			_, _ = m.n.Notify(browserapi.LevelError, "show config prompt: %s", err)
+		}
+	})
+	if !ok {
+		m.log(log.ErrorLevel, "idepkg config prompt: could not schedule")
+		return nil
+	}
+
+	return nil
+}
+
 func (m *Manager) processConfig(
 	pkgID string, pkgVersion release.Version, pkgConfigFile string,
 ) error {
@@ -743,21 +812,25 @@ func (m *Manager) processConfig(
 		return ""
 	})
 
+	if _, statErr := os.Stat(m.configPath); os.IsNotExist(statErr) {
+		return nil
+	}
+
 	userDoc, err := loadOrCreateUserConfig(m.configPath)
 	if err != nil {
 		return fmt.Errorf("load user config: %w", err)
 	}
 
-	mergeYAMLNodes(userDoc.Content[0], pkgDoc.Content[0])
-
-	if err := backupUserConfig(m.configPath); err != nil {
-		return fmt.Errorf("backup user config: %w", err)
+	// Skip prompt and merge if the package config is already present
+	// in the user config.
+	if verifyMerge(userDoc.Content[0], pkgDoc.Content[0]) == nil {
+		return nil
 	}
 
-	if err := writeYAMLAtomic(m.configPath, userDoc, pkgDoc.Content[0]); err != nil {
-		return fmt.Errorf("write config: %w", err)
+	err = m.promptConfigChange(pkgID, pkgVersion, data, userDoc, &pkgDoc)
+	if err != nil {
+		return fmt.Errorf("prompt config change: %w", err)
 	}
-
 	return nil
 }
 

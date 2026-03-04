@@ -431,7 +431,8 @@ func TestBackupUserConfig(t *testing.T) {
 		path := filepath.Join(dir, "config.yaml")
 		require.NoError(t, os.WriteFile(path, []byte("original: content\n"), 0644))
 
-		require.NoError(t, backupUserConfig(path))
+		_, err := backupUserConfig(path)
+		require.NoError(t, err)
 
 		data, err := os.ReadFile(path + ".backup")
 		require.NoError(t, err)
@@ -446,21 +447,20 @@ func TestBackupUserConfig(t *testing.T) {
 		require.NoError(t, os.WriteFile(backupPath, []byte("old backup\n"), 0644))
 		require.NoError(t, os.WriteFile(path, []byte("new content\n"), 0644))
 
-		require.NoError(t, backupUserConfig(path))
+		_, err := backupUserConfig(path)
+		require.NoError(t, err)
 
 		data, err := os.ReadFile(backupPath)
 		require.NoError(t, err)
 		assert.Equal(t, "new content\n", string(data))
 	})
 
-	t.Run("no-op if file does not exist", func(t *testing.T) {
+	t.Run("returns error if file does not exist", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		path := filepath.Join(dir, "nonexistent.yaml")
 
-		require.NoError(t, backupUserConfig(path))
-
-		_, err := os.Stat(path + ".backup")
-		assert.True(t, os.IsNotExist(err))
+		_, err := backupUserConfig(path)
+		require.Error(t, err)
 	})
 }
