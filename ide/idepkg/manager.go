@@ -47,10 +47,12 @@ import (
 	"github.com/unstablebuild/blue/release"
 	"github.com/unstablebuild/blue/walkdir"
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
-	"gopkg.in/yaml.v3"
 	"github.com/unstablebuild/rune-go-sdk/api/schemeapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
+	"github.com/unstablebuild/rune-go-sdk/component"
+	"github.com/unstablebuild/rune-go-sdk/handler"
 	"github.com/unstablebuild/rune-go-sdk/term"
+	"gopkg.in/yaml.v3"
 )
 
 // Option configures a Manager.
@@ -76,7 +78,9 @@ func WithCrashReportVersion(version string) Option {
 func NewManager(
 	n browserapi.Notifications, m release.Manager,
 	storage document.Service, scheme schemeapi.Scheme, dataDir string,
-	configPath string, interrupter term.Interrupter, opts ...Option,
+	configPath string, wm browserapi.WindowManager,
+	scheduleNextTick func(func()) bool,
+	interrupter term.Interrupter, opts ...Option,
 ) *Manager {
 	if dataDir == "" {
 		panic("data directory must not be empty")
@@ -87,15 +91,17 @@ func NewManager(
 	schemeURI, _ := scheme.URI(".")
 	binDir := makeBinDirname(dataDir)
 	ret := &Manager{
-		dataDir:     dataDir,
-		configPath:  configPath,
-		scheme:      scheme,
-		binDir:      binDir,
-		schemeURI:   schemeURI,
-		interrupter: interrupter,
-		n:           n,
-		m:           m,
-		storage:     storage,
+		dataDir:          dataDir,
+		configPath:       configPath,
+		scheme:           scheme,
+		binDir:           binDir,
+		schemeURI:        schemeURI,
+		interrupter:      interrupter,
+		wm:               wm,
+		scheduleNextTick: scheduleNextTick,
+		n:                n,
+		m:                m,
+		storage:          storage,
 	}
 	ret.iterators.m = make(map[string]*sync.Mutex)
 	for _, opt := range opts {
@@ -110,15 +116,17 @@ func NewManager(
 // Note that OS/system is managed by having a separate Manager that points
 // to a different underlying release.Manager.
 type Manager struct {
-	n           browserapi.Notifications
-	m           release.Manager
-	interrupter term.Interrupter
-	storage     document.Service
-	dataDir     string
-	configPath  string
-	scheme      schemeapi.Scheme
-	schemeURI   workspaceapi.URI
-	binDir      string
+	n                browserapi.Notifications
+	m                release.Manager
+	interrupter      term.Interrupter
+	wm               browserapi.WindowManager
+	scheduleNextTick func(func()) bool
+	storage          document.Service
+	dataDir          string
+	configPath       string
+	scheme           schemeapi.Scheme
+	schemeURI        workspaceapi.URI
+	binDir           string
 
 	crashReportPkg     string
 	crashReportVersion string
@@ -708,6 +716,50 @@ func (m *Manager) linkLibCopyBin(
 	return nil
 }
 
+func (m *Manager) promptConfigChange(
+	pkgID string, pkgVersion release.Version, configYAML []byte,
+) (bool, error) {
+	message := fmt.Sprintf(
+		"Extension %s (v%s) wants to update your configuration "+
+			"with the following settings:\n\n%s\n\nDo you want to allow this?",
+		pkgID, pkgVersion, string(configYAML))
+
+	ch := make(chan bool, 1)
+	prompt := handler.NewPrompt(handler.PromptConfig{
+		PromptConfig: component.PromptConfig{
+			Message: message,
+			Options: []string{"Allow", "Deny"},
+		},
+		PromptHandler: handler.FuncPromptHandler(
+			func(idx int, _ string) {
+				ch <- idx == 0
+			},
+			func() error {
+				ch <- false
+				return nil
+			},
+		),
+	})
+
+	ok := m.scheduleNextTick(func() {
+		_, err := m.wm.Floating(
+			browserapi.StaticFloating(prompt, 70, 20),
+			browserapi.FloatingConfig{
+				Alignment: component.AlignmentCentered,
+			},
+		)
+		if err != nil {
+			m.log(log.WarnLevel, "show config prompt: %v", err)
+			ch <- false
+		}
+	})
+	if !ok {
+		return false, nil
+	}
+
+	return <-ch, nil
+}
+
 func (m *Manager) processConfig(
 	pkgID string, pkgVersion release.Version, pkgConfigFile string,
 ) error {
@@ -728,6 +780,14 @@ func (m *Manager) processConfig(
 		return fmt.Errorf("unmarshal config: %w", err)
 	}
 	if pkgDoc.Kind != yaml.DocumentNode || len(pkgDoc.Content) == 0 {
+		return nil
+	}
+
+	allowed, err := m.promptConfigChange(pkgID, pkgVersion, data)
+	if err != nil {
+		return fmt.Errorf("prompt config change: %w", err)
+	}
+	if !allowed {
 		return nil
 	}
 

@@ -41,9 +41,14 @@ import (
 	"github.com/unstablebuild/blue/iterator"
 	"github.com/unstablebuild/blue/release"
 	"github.com/unstablebuild/blue/walkdir"
+	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/schemeapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
+	"github.com/unstablebuild/rune-go-sdk/component"
+	"github.com/unstablebuild/rune-go-sdk/handler"
+	"github.com/unstablebuild/rune-go-sdk/handler/handlertest"
 	"github.com/unstablebuild/rune-go-sdk/term"
+	"github.com/unstablebuild/rune-go-sdk/tui"
 	"gopkg.in/yaml.v3"
 )
 
@@ -929,6 +934,8 @@ func listFiles(t *testing.T, bindir string) []string {
 	return files
 }
 
+var syncTick = func(fn func()) bool { fn(); return true }
+
 func newTestManager(
 	t *testing.T,
 	packages map[string]release.Package,
@@ -943,10 +950,45 @@ func newTestManager(
 	n := idepkgtest.NewNotifications(t)
 	m := idepkgtest.NewReleaseManager(packages, versions)
 	fileScheme := newLocalScheme(temp)
+	wm := &mockWindowManager{
+		floatingFn: func(h browserapi.Floating, _ browserapi.FloatingConfig) (browserapi.Window, error) {
+			// Auto-accept: send Enter to select "Allow"
+			h.Resize(70, 20)
+			h.Handle(term.Event{Type: term.EventKey, Key: term.KeyEnter})
+			return &mockWindow{}, nil
+		},
+	}
 	manager := NewManager(n, m, document.NewInMemoryService(),
-		fileScheme, temp, configPath, term.NopInterrupter())
+		fileScheme, temp, configPath, wm, syncTick, term.NopInterrupter())
 	return manager, n, m, temp
 }
+
+type mockWindowManager struct {
+	floatingFn func(browserapi.Floating, browserapi.FloatingConfig) (browserapi.Window, error)
+}
+
+func (m *mockWindowManager) Focus() (browserapi.Window, error)        { return nil, nil }
+func (m *mockWindowManager) Split(_ browserapi.Orientation, _ browserapi.Window, _ browserapi.Handler) (browserapi.Window, error) {
+	return nil, nil
+}
+func (m *mockWindowManager) Floating(h browserapi.Floating, cfg browserapi.FloatingConfig) (browserapi.Window, error) {
+	if m.floatingFn != nil {
+		return m.floatingFn(h, cfg)
+	}
+	return &mockWindow{}, nil
+}
+func (m *mockWindowManager) Bar(_ browserapi.BarConfig, _ tui.Handler) error { return nil }
+func (m *mockWindowManager) Tab(_ workspaceapi.URI, _ rune, _ string, _ browserapi.Handler) (browserapi.Handler, error) {
+	return nil, nil
+}
+func (m *mockWindowManager) SetWindowContent(_ browserapi.Window, _ browserapi.Handler) error {
+	return nil
+}
+func (m *mockWindowManager) CloseWindow(_ browserapi.Window) error { return nil }
+
+type mockWindow struct{}
+
+func (m *mockWindow) WindowID() uint64 { return 0 }
 
 // localScheme implements schemeapi.Scheme using os package functions for testing.
 type localScheme struct {
@@ -1183,5 +1225,121 @@ func TestProcessInstalledSettingsConfig(t *testing.T) {
 		assertNestedYAMLKey(t, root, "env", "GOROOT",
 			datadir+"/pkg/configpkg/1/go")
 		assertNestedYAMLKey(t, root, "settings", "theme", "dark")
+	})
+}
+
+func TestPromptConfigChangeRender(t *testing.T) {
+	t.Parallel()
+	prompt := handler.NewPrompt(handler.PromptConfig{
+		PromptConfig: component.PromptConfig{
+			Message: "Extension testpkg (v1) wants to update your configuration " +
+				"with the following settings:\n\nenv:\n  GOROOT: /data/go\n\n" +
+				"Do you want to allow this?",
+			Options: []string{"Allow", "Deny"},
+		},
+		PromptHandler: handler.FuncPromptHandler(
+			func(_ int, _ string) {},
+			func() error { return nil },
+		),
+	})
+	prompt.Resize(40, 15)
+	rendered := handlertest.DrawHandler(prompt, 40, 15)
+	assert.Contains(t, rendered, "Extension testpkg")
+	assert.Contains(t, rendered, "Allow")
+	assert.Contains(t, rendered, "Deny")
+}
+
+func TestPromptConfigChangeAllow(t *testing.T) {
+	t.Parallel()
+	var selected = -1
+	prompt := handler.NewPrompt(handler.PromptConfig{
+		PromptConfig: component.PromptConfig{
+			Message: "Allow changes?",
+			Options: []string{"Allow", "Deny"},
+		},
+		PromptHandler: handler.FuncPromptHandler(
+			func(idx int, _ string) { selected = idx },
+			func() error { return nil },
+		),
+	})
+	prompt.Resize(40, 15)
+	exit, handled := prompt.Handle(term.Event{Type: term.EventKey, Key: term.KeyEnter})
+	assert.True(t, exit)
+	assert.True(t, handled)
+	assert.Equal(t, 0, selected)
+}
+
+func TestPromptConfigChangeDeny(t *testing.T) {
+	t.Parallel()
+	var selected = -1
+	prompt := handler.NewPrompt(handler.PromptConfig{
+		PromptConfig: component.PromptConfig{
+			Message: "Allow changes?",
+			Options: []string{"Allow", "Deny"},
+		},
+		PromptHandler: handler.FuncPromptHandler(
+			func(idx int, _ string) { selected = idx },
+			func() error { return nil },
+		),
+	})
+	prompt.Resize(40, 15)
+	// Move right to "Deny" then press Enter
+	prompt.Handle(term.Event{Type: term.EventKey, Key: term.KeyArrowRight})
+	exit, handled := prompt.Handle(term.Event{Type: term.EventKey, Key: term.KeyEnter})
+	assert.True(t, exit)
+	assert.True(t, handled)
+	assert.Equal(t, 1, selected)
+}
+
+func TestPromptConfigChangeEscape(t *testing.T) {
+	t.Parallel()
+	var selected = -1
+	prompt := handler.NewPrompt(handler.PromptConfig{
+		PromptConfig: component.PromptConfig{
+			Message: "Allow changes?",
+			Options: []string{"Allow", "Deny"},
+		},
+		PromptHandler: handler.FuncPromptHandler(
+			func(idx int, _ string) { selected = idx },
+			func() error { return nil },
+		),
+	})
+	prompt.Resize(40, 15)
+	exit, handled := prompt.Handle(term.Event{Type: term.EventKey, Key: term.KeyEsc})
+	assert.True(t, exit)
+	assert.True(t, handled)
+	// OnSelect should not have been called
+	assert.Equal(t, -1, selected)
+}
+
+func TestInstallConfigPromptDeny(t *testing.T) {
+	t.Parallel()
+	t.Run("prompt denies config merge, config not written", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "configpkg", Version: "1"}})
+		m, n, _, datadir := newTestManager(t, pkgs, versions)
+
+		// Override wm to simulate "Deny" (select index 1)
+		m.wm = &mockWindowManager{
+			floatingFn: func(h browserapi.Floating, _ browserapi.FloatingConfig) (browserapi.Window, error) {
+				h.Resize(70, 20)
+				// Move to "Deny" then press Enter
+				h.Handle(term.Event{Type: term.EventKey, Key: term.KeyArrowRight})
+				h.Handle(term.Event{Type: term.EventKey, Key: term.KeyEnter})
+				return &mockWindow{}, nil
+			},
+		}
+
+		n.Wg = new(sync.WaitGroup)
+		n.Wg.Add(1)
+		err := m.InstallPackageVersion(context.Background(), "configpkg", "1")
+		require.NoError(t, err)
+		n.Wg.Wait()
+		n.RequireNoErrorNotification()
+
+		// Config should NOT have been written
+		_, err = os.Stat(filepath.Join(datadir, "config.yaml"))
+		assert.True(t, os.IsNotExist(err), "config.yaml should not exist when prompt is denied")
 	})
 }
