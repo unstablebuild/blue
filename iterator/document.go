@@ -25,57 +25,23 @@ package iterator
 
 import (
 	"context"
-	"sync/atomic"
 
 	"github.com/unstablebuild/blue/document"
 )
 
 // FromDocumentIterator maps a document.Iterator to an Iterator of type T.
+// Items are pulled lazily — nothing is read from the underlying
+// document.Iterator until the consumer calls Next.
 func FromDocumentIterator[T any](it document.Iterator) Iterator[T] {
-	var closed atomic.Bool
-	type msg struct {
-		data T
-		err  error
-	}
-
-	ch := make(chan msg)
-	quitCh := make(chan struct{})
-	go func() {
-		defer close(ch) // signal ok = false below
-		var err error
-		var data T
-		for {
-			if !it.HasNext() {
-				return
-			}
-			err = it.NextTo(&data)
-			select {
-			case ch <- msg{data: data, err: err}:
-			case <-quitCh:
-				return
-			}
-		}
-	}()
-
-	return FromFunc(func(ctx context.Context) (ret T, ok bool, err error) {
-		var m msg
-		select {
-		case m, ok = <-ch:
-			ret = m.data
-			err = m.err
-			return
-		case <-ctx.Done():
-			err = ctx.Err()
+	return FromFunc(func(_ context.Context) (ret T, ok bool, err error) {
+		if !it.HasNext() {
 			return
 		}
-	}, func() error {
-		if !closed.CompareAndSwap(false, true) {
-			return nil
+		err = it.NextTo(&ret)
+		if err != nil {
+			return
 		}
-
-		close(quitCh)
-		err := it.Close()
-		<-ch // wait for goroutine to be done
-		return err
-	})
+		ok = true
+		return
+	}, it.Close)
 }

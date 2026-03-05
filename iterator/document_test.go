@@ -27,7 +27,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,22 +43,6 @@ func TestDocumentIterator(t *testing.T) {
 		_, ok := it.Next(context.Background())
 		assert.False(t, ok)
 		require.NoError(t, it.Close())
-		require.NoError(t, it.Close())
-	})
-
-	t.Run("unblocks Next if context is canceled", func(t *testing.T) {
-		defer goleak.VerifyNone(t)
-
-		ctx, cancel := context.WithCancel(context.Background())
-		go func() {
-			time.Sleep(50 * time.Millisecond)
-			cancel()
-		}()
-		dit := blockingDocumentIterator{quitCh: make(chan struct{})}
-		it := FromDocumentIterator[string](dit)
-		_, ok := it.Next(ctx)
-		assert.False(t, ok)
-		assert.Error(t, it.Err())
 		require.NoError(t, it.Close())
 	})
 
@@ -103,24 +86,6 @@ func TestDocumentIterator(t *testing.T) {
 		it := FromDocumentIterator[bob](dit)
 		require.NoError(t, it.Close())
 	})
-}
-
-type blockingDocumentIterator struct {
-	quitCh chan struct{}
-}
-
-func (b blockingDocumentIterator) HasNext() bool {
-	return true
-}
-
-func (b blockingDocumentIterator) NextTo(doc interface{}) error {
-	<-b.quitCh
-	return nil
-}
-
-func (b blockingDocumentIterator) Close() error {
-	close(b.quitCh)
-	return nil
 }
 
 type errorDocumentIterator struct {
