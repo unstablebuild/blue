@@ -37,6 +37,9 @@ import (
 //   - End/G:       Go to bottom
 //   - d:           Scroll down half page
 //   - u:           Scroll up half page
+//   - /:           Open search prompt
+//   - n:           Jump to next search result
+//   - N:           Jump to previous search result
 //   - q/Esc:       Exit (returns exit=true)
 //
 // It implements handler.ScrollableFloating and handler.Responsive.
@@ -109,33 +112,32 @@ func (h *Handler) Resize(width, height int) {
 func (h *Handler) Draw(w term.Writer) {
 	h.comp.Draw(w)
 
-	if !h.hasSelection {
-		return
-	}
+	if h.hasSelection {
+		start, end := term.CoordinatesSort(h.selStart, h.selEnd)
+		offset := h.comp.SeekOffset()
 
-	// Overlay selection highlighting
-	start, end := term.CoordinatesSort(h.selStart, h.selEnd)
-	offset := h.comp.SeekOffset()
+		for y := start.Y; y <= end.Y; y++ {
+			screenY := y - offset
+			if screenY < 0 || screenY >= h.height {
+				continue
+			}
 
-	for y := start.Y; y <= end.Y; y++ {
-		screenY := y - offset
-		if screenY < 0 || screenY >= h.height {
-			continue
-		}
+			lineStart := 0
+			lineEnd := h.width
+			if y == start.Y {
+				lineStart = start.X
+			}
+			if y == end.Y {
+				lineEnd = end.X
+			}
 
-		lineStart := 0
-		lineEnd := h.width
-		if y == start.Y {
-			lineStart = start.X
-		}
-		if y == end.Y {
-			lineEnd = end.X
-		}
-
-		for x := lineStart; x < lineEnd && x < h.width; x++ {
-			w.UnionAttributes(term.Coordinates{X: x, Y: screenY}, h.selectionAttrs)
+			for x := lineStart; x < lineEnd && x < h.width; x++ {
+				w.UnionAttributes(term.Coordinates{X: x, Y: screenY}, h.selectionAttrs)
+			}
 		}
 	}
+
+	h.comp.DrawSearchPrompt(w, h.height-1, h.width)
 }
 
 // Handle processes keyboard and mouse events.
@@ -148,6 +150,10 @@ func (h *Handler) Handle(ev term.Event) (exit, handled bool) {
 
 	if ev.Type != term.EventKey {
 		return false, false
+	}
+
+	if h.comp.HandleSearchKey(ev) {
+		return false, true
 	}
 
 	switch ev.Key {
@@ -187,6 +193,18 @@ func (h *Handler) Handle(ev term.Event) (exit, handled bool) {
 	case 'q':
 		return true, true
 
+	case '/':
+		h.comp.OpenSearchPrompt()
+		return false, true
+
+	case 'n':
+		h.comp.SeekToNextSearchResult()
+		return false, true
+
+	case 'N':
+		h.comp.SeekToPrevSearchResult()
+		return false, true
+
 	case 'k':
 		h.comp.SeekUp()
 		return false, true
@@ -224,8 +242,11 @@ func (h *Handler) Handle(ev term.Event) (exit, handled bool) {
 }
 
 // Cursor returns the cursor position, style, and visibility.
-// Markdown handler doesn't show a cursor.
+// Shows a cursor when the search prompt is active.
 func (h *Handler) Cursor() (term.Coordinates, term.CursorStyle, bool) {
+	if pos, style, show := h.comp.SearchPromptCursor(h.height - 1); show {
+		return pos, style, true
+	}
 	return term.Coordinates{}, term.CursorStyleDefault, false
 }
 
@@ -292,6 +313,24 @@ func (h *Handler) OnAction(ev term.Event, pos term.Coordinates, action mouse.Act
 	}
 
 	return false
+}
+
+// Search finds all case-insensitive occurrences of query in the rendered
+// text and highlights them. Delegates to the underlying component.
+func (h *Handler) Search(query string) {
+	h.comp.Search(query)
+}
+
+// SeekToNextSearchResult advances to the next search match and scrolls
+// the viewport to make it visible. Delegates to the underlying component.
+func (h *Handler) SeekToNextSearchResult() bool {
+	return h.comp.SeekToNextSearchResult()
+}
+
+// SeekToPrevSearchResult moves to the previous search match and scrolls
+// the viewport to make it visible. Delegates to the underlying component.
+func (h *Handler) SeekToPrevSearchResult() bool {
+	return h.comp.SeekToPrevSearchResult()
 }
 
 // ScrollUp scrolls the content up by n lines.

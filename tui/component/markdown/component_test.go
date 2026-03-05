@@ -860,3 +860,205 @@ func TestLinkAtOnSpacingRow(t *testing.T) {
 	link = md.LinkAt(0, 0)
 	assert.Nil(t, link, "no link on content row of first block")
 }
+
+func TestSearchFindsMatches(t *testing.T) {
+	md, err := New("hello world hello")
+	require.NoError(t, err)
+	md.Resize(20, 5)
+
+	md.Search("hello")
+
+	assert.Len(t, md.searchResults, 2)
+	assert.Equal(t, 0, md.searchResults[0].From.X)
+	assert.Equal(t, 5, md.searchResults[0].To.X)
+	assert.Equal(t, 12, md.searchResults[1].From.X)
+	assert.Equal(t, 17, md.searchResults[1].To.X)
+}
+
+func TestSearchCaseSensitive(t *testing.T) {
+	md, err := New("Hello HELLO hello")
+	require.NoError(t, err)
+	md.Resize(20, 5)
+
+	md.Search("hello")
+
+	assert.Len(t, md.searchResults, 1)
+	assert.Equal(t, 12, md.searchResults[0].From.X)
+}
+
+func TestSearchClearsOnEmpty(t *testing.T) {
+	md, err := New("hello world")
+	require.NoError(t, err)
+	md.Resize(20, 5)
+
+	md.Search("hello")
+	require.Len(t, md.searchResults, 1)
+
+	md.Search("")
+	assert.Empty(t, md.searchResults)
+	assert.Nil(t, md.searchList)
+}
+
+func TestSearchNoMatch(t *testing.T) {
+	md, err := New("hello world")
+	require.NoError(t, err)
+	md.Resize(20, 5)
+
+	md.Search("xyz")
+
+	assert.Empty(t, md.searchResults)
+	assert.Nil(t, md.searchList)
+}
+
+func TestSearchAcrossBlocks(t *testing.T) {
+	md, err := New("apple\n\nbanana\n\napple pie")
+	require.NoError(t, err)
+	md.Resize(20, 10)
+
+	md.Search("apple")
+
+	assert.Len(t, md.searchResults, 2)
+	// First "apple" is in block 0 at Y=0
+	assert.Equal(t, 0, md.searchResults[0].From.Y)
+	// Second "apple" is in block 2; block heights are 2 each
+	assert.Equal(t, 4, md.searchResults[1].From.Y)
+}
+
+func TestSeekToNextSearchResult(t *testing.T) {
+	// Create a long document with search targets spread out.
+	md, err := New("target\n\nfiller\n\nfiller\n\nfiller\n\nfiller\n\ntarget end")
+	require.NoError(t, err)
+	md.Resize(20, 3)
+
+	md.Search("target")
+	require.Len(t, md.searchResults, 2)
+
+	// LocationSlice starts at index 0 (first result). Current is the first.
+	loc, hasCurr := md.searchList.Current()
+	assert.True(t, hasCurr)
+	assert.Equal(t, md.searchResults[0].From, loc.From)
+
+	// First Next() moves to second result and scrolls.
+	ok := md.SeekToNextSearchResult()
+	assert.True(t, ok)
+	loc, _ = md.searchList.Current()
+	assert.Equal(t, md.searchResults[1].From, loc.From)
+
+	// Second Next() should return false (end of list).
+	ok = md.SeekToNextSearchResult()
+	assert.False(t, ok)
+}
+
+func TestSeekToPrevSearchResult(t *testing.T) {
+	md, err := New("target\n\nfiller\n\nfiller\n\nfiller\n\ntarget end")
+	require.NoError(t, err)
+	md.Resize(20, 3)
+
+	md.Search("target")
+	require.Len(t, md.searchResults, 2)
+
+	// Advance to second result.
+	md.SeekToNextSearchResult()
+
+	// Prev should go back to first.
+	ok := md.SeekToPrevSearchResult()
+	assert.True(t, ok)
+	loc, _ := md.searchList.Current()
+	assert.Equal(t, md.searchResults[0].From, loc.From)
+
+	// Prev at beginning should return false.
+	ok = md.SeekToPrevSearchResult()
+	assert.False(t, ok)
+}
+
+func TestSeekToSearchResultNoResults(t *testing.T) {
+	md, err := New("hello world")
+	require.NoError(t, err)
+	md.Resize(20, 5)
+
+	assert.False(t, md.SeekToNextSearchResult())
+	assert.False(t, md.SeekToPrevSearchResult())
+}
+
+func TestSeekToSearchResultScrollsViewport(t *testing.T) {
+	// First "target" is visible, second is far off-screen.
+	md, err := New("target\n\nfiller\n\nfiller\n\nfiller\n\nfiller\n\ntarget")
+	require.NoError(t, err)
+	md.Resize(20, 3)
+
+	md.Search("target")
+	require.Len(t, md.searchResults, 2)
+
+	// LocationSlice starts at first result (visible at Y=0).
+	assert.Equal(t, 0, md.SeekOffset())
+
+	// Next() moves to the second result which is off-screen.
+	ok := md.SeekToNextSearchResult()
+	assert.True(t, ok)
+
+	// Viewport should have scrolled to show the second result.
+	targetY := md.searchResults[1].From.Y
+	screenY := targetY - md.SeekOffset()
+	assert.GreaterOrEqual(t, screenY, 0)
+	assert.Less(t, screenY, md.height)
+}
+
+func TestSearchRerunsOnResize(t *testing.T) {
+	md, err := New("hello world hello")
+	require.NoError(t, err)
+	md.Resize(20, 5)
+
+	md.Search("hello")
+	require.Len(t, md.searchResults, 2)
+
+	// Resize to narrower width — text wraps, positions change.
+	md.Resize(10, 5)
+	// Search should have been re-run.
+	assert.NotEmpty(t, md.searchResults)
+	assert.NotNil(t, md.searchList)
+}
+
+func TestSearchRerunsOnInit(t *testing.T) {
+	md, err := New("hello world")
+	require.NoError(t, err)
+	md.Resize(20, 5)
+
+	md.Search("hello")
+	require.Len(t, md.searchResults, 1)
+
+	// Init with new content containing the same term.
+	err = md.Init("hello there hello again")
+	require.NoError(t, err)
+
+	assert.Len(t, md.searchResults, 2)
+}
+
+func TestSearchDrawHighlights(t *testing.T) {
+	md, err := New("hi")
+	require.NoError(t, err)
+	md.Resize(10, 3)
+
+	md.Search("hi")
+	require.Len(t, md.searchResults, 1)
+
+	w := term.NewStringWriter(10, 3)
+	require.NoError(t, w.Clear(term.Attributes{}))
+	md.Draw(w)
+	require.NoError(t, w.Flush())
+
+	// Verify the text still renders correctly.
+	assert.Equal(t, "hi        \n          \n          ", w.String())
+}
+
+func TestSearchDoesNotScrollOnVisibleResult(t *testing.T) {
+	md, err := New("hello world")
+	require.NoError(t, err)
+	md.Resize(20, 5)
+
+	md.Search("hello")
+
+	assert.Equal(t, 0, md.SeekOffset())
+	md.SeekToNextSearchResult()
+	// Result is already visible at Y=0, so offset should stay at 0.
+	assert.Equal(t, 0, md.SeekOffset())
+}

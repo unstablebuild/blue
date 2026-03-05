@@ -48,6 +48,9 @@ import (
 //   - End/G:         Go to bottom
 //   - d:             Scroll down half page
 //   - u:             Scroll up half page
+//   - /:             Open search prompt
+//   - n:             Jump to next search result
+//   - N:             Jump to previous search result
 //   - H/Alt+Left:    Go back in history
 //   - L/Alt+Right:   Go forward in history
 //   - r/F5:          Refresh current page
@@ -85,6 +88,7 @@ type Handler struct {
 
 	// Selection highlight style.
 	selectionAttrs term.Attributes
+
 }
 
 var _ handler.ScrollableFloating = (*Handler)(nil)
@@ -94,11 +98,11 @@ var _ mouse.Delegate = (*Handler)(nil)
 // URL and renders it as markdown.
 func New(interrupter term.Interrupter, u *url.URL, opts ...Option) *Handler {
 	h := &Handler{
-		interrupter:    interrupter,
-		cache:          make(map[string]*htmlcomp.Component),
-		httpClient:     http.DefaultClient,
-		mdCfg:          markdown.DefaultConfig(),
-		selectionAttrs: term.Attributes{Attrs: tcell.AttrReverse},
+		interrupter:     interrupter,
+		cache:           make(map[string]*htmlcomp.Component),
+		httpClient:      http.DefaultClient,
+		mdCfg:           markdown.DefaultConfig(),
+		selectionAttrs:  term.Attributes{Attrs: tcell.AttrReverse},
 	}
 	for _, opt := range opts {
 		opt(h)
@@ -132,6 +136,9 @@ func (h *Handler) Draw(w term.Writer) {
 	if h.bar == nil {
 		h.current.Draw(w)
 		h.drawSelection(w, h.height)
+		if r := h.current.Resolved(); r != nil {
+			r.DrawSearchPrompt(w, h.height-1, h.width)
+		}
 		return
 	}
 
@@ -156,6 +163,10 @@ func (h *Handler) Draw(w term.Writer) {
 	}
 	h.current.Draw(contentW)
 	h.drawSelection(contentW, ch)
+
+	if r := h.current.Resolved(); r != nil {
+		r.DrawSearchPrompt(w, h.height-1, h.width)
+	}
 }
 
 // drawSelection renders the selection highlight overlay.
@@ -214,6 +225,11 @@ func (h *Handler) Handle(ev term.Event) (exit, handled bool) {
 
 // Cursor returns the cursor position, style, and visibility.
 func (h *Handler) Cursor() (term.Coordinates, term.CursorStyle, bool) {
+	if r := h.current.Resolved(); r != nil {
+		if pos, style, show := r.SearchPromptCursor(h.height - 1); show {
+			return pos, style, true
+		}
+	}
 	if h.bar != nil && h.bar.focused {
 		pos, style, show := h.bar.Cursor()
 		barY, _ := h.barContentOffsets()
@@ -345,6 +361,10 @@ func (h *Handler) OnAction(ev term.Event, pos term.Coordinates, action mouse.Act
 		return true
 	}
 	if parsed.Scheme == "http" || parsed.Scheme == "https" {
+		if parsed.Fragment != "" && h.samePageURL(parsed) {
+			r.SeekToAnchor(parsed.Fragment)
+			return true
+		}
 		h.navigateTo(parsed)
 		return true
 	}
@@ -401,6 +421,19 @@ func (h *Handler) Width() int { return h.width }
 
 // Height returns the content viewport height (excluding any navigation bar).
 func (h *Handler) Height() int { return h.contentHeight() }
+
+// samePageURL reports whether u refers to the same page as the
+// currently displayed URL (i.e. everything matches except the fragment).
+func (h *Handler) samePageURL(u *url.URL) bool {
+	if len(h.history) == 0 {
+		return false
+	}
+	cur := h.history[h.historyIdx]
+	return cur.Scheme == u.Scheme &&
+		cur.Host == u.Host &&
+		cur.Path == u.Path &&
+		cur.RawQuery == u.RawQuery
+}
 
 // screenToDoc converts screen coordinates to document coordinates.
 func (h *Handler) screenToDoc(pos term.Coordinates) term.Coordinates {
@@ -462,6 +495,10 @@ func (h *Handler) handleKeyLoading(ev term.Event) (exit, handled bool) {
 
 // handleKeyLoaded handles keyboard events after the content has loaded.
 func (h *Handler) handleKeyLoaded(ev term.Event, r *markdown.Component) (exit, handled bool) {
+	if r.HandleSearchKey(ev) {
+		return false, true
+	}
+
 	// Alt+Arrow: history navigation.
 	if ev.Mod&term.ModAlt != 0 {
 		switch ev.Key {
@@ -514,6 +551,18 @@ func (h *Handler) handleKeyLoaded(ev term.Event, r *markdown.Component) (exit, h
 	switch ev.Ch {
 	case 'q':
 		return true, true
+
+	case '/':
+		r.OpenSearchPrompt()
+		return false, true
+
+	case 'n':
+		r.SeekToNextSearchResult()
+		return false, true
+
+	case 'N':
+		r.SeekToPrevSearchResult()
+		return false, true
 
 	case 'k':
 		r.SeekUp()

@@ -603,3 +603,119 @@ func TestMouseScrollIntegration(t *testing.T) {
 	})
 	assert.Equal(t, 0, h.SeekOffset())
 }
+
+func TestHandlerSearch(t *testing.T) {
+	comp, err := markdown.New("hello world hello")
+	require.NoError(t, err)
+
+	h := New(comp)
+	h.Resize(20, 5)
+
+	h.Search("hello")
+
+	// LocationSlice starts at index 0. First Next moves to second result.
+	ok := h.SeekToNextSearchResult()
+	assert.True(t, ok)
+
+	// End of results.
+	ok = h.SeekToNextSearchResult()
+	assert.False(t, ok)
+
+	// Go back.
+	ok = h.SeekToPrevSearchResult()
+	assert.True(t, ok)
+}
+
+func TestHandlerSearchNoResults(t *testing.T) {
+	comp, err := markdown.New("hello world")
+	require.NoError(t, err)
+
+	h := New(comp)
+	h.Resize(20, 5)
+
+	h.Search("xyz")
+
+	assert.False(t, h.SeekToNextSearchResult())
+	assert.False(t, h.SeekToPrevSearchResult())
+}
+
+func TestSlashSearch(t *testing.T) {
+	content := "hello world hello"
+	comp, err := markdown.New(content)
+	require.NoError(t, err)
+
+	h := New(comp)
+	width, height := 20, 5
+	h.Resize(width, height)
+
+	// '/' opens search prompt.
+	_, handled := h.Handle(term.Event{Type: term.EventKey, Ch: '/'})
+	assert.True(t, handled)
+
+	// Cursor should be visible (search prompt).
+	_, _, show := h.Cursor()
+	assert.True(t, show)
+
+	// Type "hello".
+	for _, ch := range "hello" {
+		h.Handle(term.Event{Type: term.EventKey, Ch: ch})
+	}
+
+	// Enter confirms search.
+	h.Handle(term.Event{Type: term.EventKey, Key: term.KeyEnter})
+
+	// Cursor should hide again.
+	_, _, show = h.Cursor()
+	assert.False(t, show)
+
+	// 'n' advances to next result.
+	_, handled = h.Handle(term.Event{Type: term.EventKey, Ch: 'n'})
+	assert.True(t, handled)
+
+	// 'N' goes back.
+	_, handled = h.Handle(term.Event{Type: term.EventKey, Ch: 'N'})
+	assert.True(t, handled)
+}
+
+func TestSlashSearchEscCancels(t *testing.T) {
+	comp, err := markdown.New("hello world")
+	require.NoError(t, err)
+
+	h := New(comp)
+	h.Resize(20, 5)
+
+	// '/' then type then Esc should cancel search.
+	h.Handle(term.Event{Type: term.EventKey, Ch: '/'})
+	h.Handle(term.Event{Type: term.EventKey, Ch: 'h'})
+
+	exit, handled := h.Handle(term.Event{Type: term.EventKey, Key: term.KeyEsc})
+	assert.False(t, exit, "Esc during search should not exit handler")
+	assert.True(t, handled)
+
+	// Esc again should exit the handler (no active search prompt).
+	exit, _ = h.Handle(term.Event{Type: term.EventKey, Key: term.KeyEsc})
+	assert.True(t, exit)
+}
+
+func TestSlashSearchDraw(t *testing.T) {
+	comp, err := markdown.New("Hi")
+	require.NoError(t, err)
+
+	h := New(comp)
+	width, height := 10, 3
+	h.Resize(width, height)
+
+	// Open search prompt.
+	h.Handle(term.Event{Type: term.EventKey, Ch: '/'})
+	h.Handle(term.Event{Type: term.EventKey, Ch: 'h'})
+	h.Handle(term.Event{Type: term.EventKey, Ch: 'i'})
+
+	w := term.NewStringWriter(width, height)
+	_ = w.Clear(term.Attributes{})
+	h.Draw(w)
+	_ = w.Flush()
+
+	lines := w.String()
+	// Last line should show the search prompt.
+	assert.Contains(t, lines, "/hi")
+}
