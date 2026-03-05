@@ -25,6 +25,7 @@ package lspcmd
 
 import (
 	"context"
+	"strings"
 
 	mdcomp "github.com/unstablebuild/blue/tui/component/markdown"
 	mdhandler "github.com/unstablebuild/blue/tui/handler/markdown"
@@ -74,7 +75,18 @@ type hoverHandler struct {
 }
 
 func (h *hoverHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
-	if cmd.Resource == nil {
+	if len(cmd.Args) > 0 {
+		uri, pos, err := ResolveSymbol(ctx, h.lsp, strings.Join(cmd.Args, " "))
+		if err != nil {
+			return err
+		}
+		wsURI, err := LspToURI(uri)
+		if err != nil {
+			return err
+		}
+		cmd.URI = wsURI
+		cmd.Cursor.Content = PosToCoord(pos)
+	} else if cmd.Resource == nil {
 		return nil
 	}
 	params := semanticapi.HoverParams{
@@ -109,10 +121,10 @@ func (h *hoverHandler) HandleCommand(ctx context.Context, cmd textapi.Command) e
 	return err
 }
 
-func (h *hoverHandler) Complete(_ context.Context, _ string, _ []string) (
+func (h *hoverHandler) Complete(ctx context.Context, _ string, args []string) (
 	iterator.Iterator[string], error,
 ) {
-	return iterator.Empty[string](), nil
+	return CompleteSymbol(ctx, h.lsp, args)
 }
 
 func newHoverFloating(f component.Floating) *hoverFloating {

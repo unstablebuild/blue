@@ -43,12 +43,14 @@ func TestDefinitionHandler(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name         string
-		result       semanticapi.LocationResult
-		nilResource  bool
-		wantFloat    bool
-		wantNavigate bool
-		wantEntries  int
+		name            string
+		result          semanticapi.LocationResult
+		nilResource     bool
+		args            []string
+		workspaceSymbol []semanticapi.SymbolInformation
+		wantFloat       bool
+		wantNavigate    bool
+		wantEntries     int
 	}{
 		{
 			name: "single definition navigates directly",
@@ -76,12 +78,41 @@ func TestDefinitionHandler(t *testing.T) {
 		},
 		{name: "no definitions"},
 		{name: "nil resource", nilResource: true},
+		{
+			name:        "definition via symbol name",
+			nilResource: true,
+			args:        []string{"MyFunc"},
+			workspaceSymbol: []semanticapi.SymbolInformation{
+				{
+					Name: "MyFunc",
+					Location: semanticapi.Location{
+						URI: "file:///project/b.go",
+						Range: semanticapi.Range{
+							Start: semanticapi.Position{Line: 42, Character: 4},
+						},
+					},
+				},
+			},
+			result: semanticapi.LocationResult{
+				Location: &semanticapi.Location{
+					URI: "file:///project/b.go",
+					Range: semanticapi.Range{
+						Start: semanticapi.Position{Line: 42, Character: 4},
+						End:   semanticapi.Position{Line: 42, Character: 10},
+					},
+				},
+			},
+			wantNavigate: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			lsp := &mockLSP{
 				definitionFn: func(_ context.Context, _ semanticapi.DefinitionParams) (semanticapi.LocationResult, error) {
 					return tt.result, nil
+				},
+				workspaceSymbolFn: func(_ context.Context, _ semanticapi.WorkspaceSymbolParams) ([]semanticapi.SymbolInformation, error) {
+					return tt.workspaceSymbol, nil
 				},
 			}
 			var navigated bool
@@ -107,7 +138,7 @@ func TestDefinitionHandler(t *testing.T) {
 			)
 
 			uri, _ := workspaceapi.ParseURI("file:///project/a.go")
-			cmd := textapi.Command{Name: "definition", URI: uri}
+			cmd := textapi.Command{Name: "definition", URI: uri, Args: tt.args}
 			if !tt.nilResource {
 				cmd.Resource = &mockHandler{uri: uri}
 			}

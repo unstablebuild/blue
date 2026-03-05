@@ -25,6 +25,7 @@ package lspcmd
 
 import (
 	"context"
+	"strings"
 
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
@@ -76,7 +77,18 @@ type definitionHandler struct {
 }
 
 func (h *definitionHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
-	if cmd.Resource == nil {
+	if len(cmd.Args) > 0 {
+		uri, pos, err := ResolveSymbol(ctx, h.lsp, strings.Join(cmd.Args, " "))
+		if err != nil {
+			return err
+		}
+		wsURI, err := LspToURI(uri)
+		if err != nil {
+			return err
+		}
+		cmd.URI = wsURI
+		cmd.Cursor.Content = PosToCoord(pos)
+	} else if cmd.Resource == nil {
 		return nil
 	}
 	params := semanticapi.DefinitionParams{
@@ -105,7 +117,7 @@ func (h *definitionHandler) HandleCommand(ctx context.Context, cmd textapi.Comma
 }
 
 func (h *definitionHandler) Complete(
-	_ context.Context, _ string, _ []string,
+	ctx context.Context, _ string, args []string,
 ) (iterator.Iterator[string], error) {
-	return iterator.Empty[string](), nil
+	return CompleteSymbol(ctx, h.lsp, args)
 }
