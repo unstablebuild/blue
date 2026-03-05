@@ -432,8 +432,7 @@ func (h *CallbackHandler) ShowMessageRequest(
 	errCh := make(chan error, 1)
 	ok := h.scheduleNextTick(func() {
 		win, err := h.windowManager.Floating(
-			browserapi.StaticFloating(prompt, 60, 10),
-			browserapi.FloatingConfig{},
+			prompt, browserapi.FloatingConfig{Alignment: component.AlignmentCentered},
 		)
 		if err != nil {
 			errCh <- fmt.Errorf("show floating: %w", err)

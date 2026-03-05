@@ -771,12 +771,9 @@ func (m *Manager) promptConfigChange(
 	})
 
 	ok := m.scheduleNextTick(func() {
-		_, err := m.wm.Floating(
-			browserapi.StaticFloating(prompt, 70, 20),
-			browserapi.FloatingConfig{
-				Alignment: component.AlignmentCentered,
-			},
-		)
+		_, err := m.wm.Floating(prompt, browserapi.FloatingConfig{
+			Alignment: component.AlignmentCentered,
+		})
 		if err != nil {
 			_, _ = m.n.Notify(browserapi.LevelError, "show config prompt: %s", err)
 		}
