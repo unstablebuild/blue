@@ -202,15 +202,12 @@ func (s *Server) streamList(list docpb.DocumentStore_ListServer, it document.Ite
 func (s *Server) List(
 	req *docpb.ListDocumentRequest, list docpb.DocumentStore_ListServer,
 ) error {
-	ctx := context.Background()
 	filters, err := makeModelFilters(s.marshaler, req.GetFilters())
 	if err != nil {
 		return err
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
+	ctx := list.Context()
 	it, err := s.other.List(ctx, filters)
 	if err != nil {
 		if err == document.ErrPermissionDenied {
