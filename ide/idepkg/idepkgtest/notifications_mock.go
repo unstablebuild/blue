@@ -125,7 +125,7 @@ func (n *Notifications) Notify(
 func (n *Notifications) NotifyOnce(
 	level browserapi.NotificationLevel, msg string, args ...any,
 ) (string, error) {
-	panic("unimplemented")
+	return n.Notify(level, msg, args...)
 }
 
 // UpdateNotificationProgress satisfies browserapi.Notifications.
