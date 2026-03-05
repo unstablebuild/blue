@@ -56,23 +56,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Option configures a Manager.
-type Option func(*Manager)
-
-// WithCrashReportPackage sets the package name used in crash reports.
-func WithCrashReportPackage(pkg string) Option {
-	return func(m *Manager) {
-		m.crashReportPkg = pkg
-	}
-}
-
-// WithCrashReportVersion sets the version string used in crash reports.
-func WithCrashReportVersion(version string) Option {
-	return func(m *Manager) {
-		m.crashReportVersion = version
-	}
-}
-
 // NewManager allocates storage for a new Manager and initializes it.
 // The dataDir argument will be used to store downloaded bundles
 // and manage executables.
@@ -98,6 +81,7 @@ func NewManager(
 		binDir:           binDir,
 		schemeURI:        schemeURI,
 		interrupter:      interrupter,
+		frameCharSet:     component.FrameCharSetDefault(),
 		wm:               wm,
 		scheduleNextTick: scheduleNextTick,
 		n:                n,
@@ -121,6 +105,7 @@ type Manager struct {
 	m                release.Manager
 	interrupter      term.Interrupter
 	wm               browserapi.WindowManager
+	frameCharSet     component.FrameCharSet
 	scheduleNextTick func(func()) bool
 	storage          document.Service
 	dataDir          string
@@ -761,7 +746,7 @@ func (m *Manager) promptConfigChange(
 		PromptConfig: component.PromptConfig{
 			Message: message,
 			Options: []string{"Allow", "Deny"},
-			Frame:   component.FrameCharSetDefault(),
+			Frame:   m.frameCharSet,
 		},
 		PromptHandler: handler.FuncPromptHandler(func(idx int, _ string) {
 			allowed := idx == 0

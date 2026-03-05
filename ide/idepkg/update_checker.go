@@ -363,7 +363,7 @@ func (uc *UpdateChecker) showUpdatePrompt(ctx context.Context, updates []Update)
 		PromptConfig: component.PromptConfig{
 			Message: message,
 			Options: []string{"Upgrade All", "Remind Later", "Skip"},
-			Frame:   component.FrameCharSetDefault(),
+			Frame:   uc.m.frameCharSet,
 		},
 		PromptHandler: handler.FuncPromptHandler(func(idx int, _ string) {
 			switch idx {
