@@ -18,6 +18,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/component"
 	"github.com/unstablebuild/rune-go-sdk/term"
 )
@@ -33,6 +34,11 @@ type Component struct {
 	width, height int
 	offset        int
 	totalHeight   int
+
+	searchQuery   string
+	searchResults []textapi.Location
+	searchList    textapi.LocationList
+	prompt        searchPrompt
 }
 
 var (
@@ -82,6 +88,9 @@ func (c *Component) Init(content string) error {
 		c.blockHeights = c.blockHeights[:0]
 		c.totalHeight = 0
 	}
+	if c.searchQuery != "" {
+		c.runSearch()
+	}
 	return nil
 }
 
@@ -107,10 +116,14 @@ func Anchor(text string) string {
 // Resize updates the viewport dimensions and recalculates
 // block heights if the width has changed.
 func (c *Component) Resize(width, height int) {
-	if width != c.width {
-		c.recalculateHeights(width)
-	}
+	widthChanged := width != c.width
 	c.width, c.height = width, height
+	if widthChanged {
+		c.recalculateHeights(width)
+		if c.searchQuery != "" {
+			c.runSearch()
+		}
+	}
 	if max := c.MaxSeekOffset(); c.offset > max {
 		c.offset = max
 	}
@@ -140,6 +153,28 @@ func (c *Component) Draw(w term.Writer) {
 		}
 		blk.Draw(vw)
 		y += blockHeight
+	}
+
+	if len(c.searchResults) == 0 {
+		return
+	}
+	var currentLoc textapi.Location
+	var hasCurrent bool
+	if c.searchList != nil {
+		currentLoc, hasCurrent = c.searchList.Current()
+	}
+	for _, loc := range c.searchResults {
+		screenY := loc.From.Y - c.offset
+		if screenY < 0 || screenY >= c.height {
+			continue
+		}
+		attr := c.cfg.SearchMatch
+		if hasCurrent && loc.From == currentLoc.From && loc.To == currentLoc.To {
+			attr = c.cfg.SearchCurrent
+		}
+		for x := loc.From.X; x < loc.To.X && x < c.width; x++ {
+			w.UnionAttributes(term.Coordinates{X: x, Y: screenY}, attr)
+		}
 	}
 }
 
@@ -391,6 +426,163 @@ func (c *Component) WordBoundsAt(
 	start = term.Coordinates{X: startX + wordStart, Y: y}
 	end = term.Coordinates{X: startX + wordEnd, Y: y}
 	return
+}
+
+// Search finds all case-insensitive occurrences of query in the rendered
+// text and highlights them using Config.SearchMatch and Config.SearchCurrent.
+// Pass an empty query to clear the search.
+func (c *Component) Search(query string) {
+	c.searchQuery = query
+	c.runSearch()
+}
+
+// SeekToNextSearchResult advances the internal LocationList cursor and
+// scrolls the viewport so the next match is visible. Returns false when
+// there are no results or the end of the list is reached.
+func (c *Component) SeekToNextSearchResult() bool {
+	if c.searchList == nil {
+		return false
+	}
+	loc, ok := c.searchList.Next()
+	if !ok {
+		return false
+	}
+	return c.seekToSearchResult(loc)
+}
+
+// SeekToPrevSearchResult moves the internal LocationList cursor backward
+// and scrolls the viewport so the previous match is visible. Returns false
+// when there are no results or the beginning of the list is reached.
+func (c *Component) SeekToPrevSearchResult() bool {
+	if c.searchList == nil {
+		return false
+	}
+	loc, ok := c.searchList.Prev()
+	if !ok {
+		return false
+	}
+	return c.seekToSearchResult(loc)
+}
+
+// OpenSearchPrompt opens the less-style "/" search input bar.
+func (c *Component) OpenSearchPrompt() {
+	c.prompt.open()
+}
+
+// IsSearchPromptActive returns true if the search prompt is visible.
+func (c *Component) IsSearchPromptActive() bool {
+	return c.prompt.isActive()
+}
+
+// HandleSearchKey processes a key event for the search prompt.
+// When the prompt is not active it returns false and the caller
+// should handle the event. When active it consumes the event and
+// returns true. On confirm it automatically runs the search.
+func (c *Component) HandleSearchKey(ev term.Event) bool {
+	switch c.prompt.handleKey(ev) {
+	case searchIgnored:
+		return false
+	case searchConsumed:
+		return true
+	case searchConfirm:
+		if q := c.prompt.query(); q != "" {
+			c.Search(q)
+			c.seekToCurrentSearchResult()
+		}
+		return true
+	case searchCancel:
+		return true
+	}
+	return false
+}
+
+// DrawSearchPrompt renders the search prompt at the given y position.
+func (c *Component) DrawSearchPrompt(w term.Writer, y, width int) {
+	c.prompt.draw(w, y, width)
+}
+
+// SearchPromptCursor returns the cursor position for the search prompt.
+func (c *Component) SearchPromptCursor(y int) (term.Coordinates, term.CursorStyle, bool) {
+	return c.prompt.cursor(y)
+}
+
+func (c *Component) seekToCurrentSearchResult() {
+	if c.searchList == nil {
+		return
+	}
+	if loc, ok := c.searchList.Current(); ok {
+		c.seekToSearchResult(loc)
+	}
+}
+
+func (c *Component) seekToSearchResult(loc textapi.Location) bool {
+	screenY := loc.From.Y - c.offset
+	if screenY >= 0 && screenY < c.height {
+		return true
+	}
+	newOffset := loc.From.Y - c.height/2
+	if newOffset < 0 {
+		newOffset = 0
+	}
+	if m := c.MaxSeekOffset(); newOffset > m {
+		newOffset = m
+	}
+	c.offset = newOffset
+	return true
+}
+
+func (c *Component) runSearch() {
+	c.searchResults = c.searchResults[:0]
+	c.searchList = nil
+
+	if c.searchQuery == "" || c.width <= 0 {
+		return
+	}
+
+	queryRunes := []rune(c.searchQuery)
+	queryLen := len(queryRunes)
+	if queryLen == 0 {
+		return
+	}
+
+	docY := 0
+	for i, blk := range c.blocks {
+		blockHeight := c.blockHeights[i]
+		for relY := range blockHeight {
+			line := make([]rune, c.width)
+			for x := range c.width {
+				ch, ok := blk.CharAt(x, relY)
+				if !ok || ch == 0 {
+					line[x] = ' '
+				} else {
+					line[x] = ch
+				}
+			}
+			absY := docY + relY
+			for x := 0; x <= c.width-queryLen; x++ {
+				match := true
+				for qi := range queryLen {
+					if line[x+qi] != queryRunes[qi] {
+						match = false
+						break
+					}
+				}
+				if match {
+					c.searchResults = append(c.searchResults, textapi.Location{
+						From: term.Coordinates{X: x, Y: absY},
+						To:   term.Coordinates{X: x + queryLen, Y: absY},
+						Attr: c.cfg.SearchMatch,
+					})
+					x += queryLen - 1
+				}
+			}
+		}
+		docY += blockHeight
+	}
+
+	if len(c.searchResults) > 0 {
+		c.searchList = textapi.LocationSlice(c.searchResults)
+	}
 }
 
 // Close cancels any in-flight syntax highlighting goroutines.

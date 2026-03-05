@@ -279,6 +279,51 @@ func TestHandleAndDraw(t *testing.T) {
 	})
 }
 
+func TestClickSamePageAnchorLink(t *testing.T) {
+	// A page with a link whose href is the full URL with a #fragment.
+	// Clicking that link should scroll to the anchor instead of
+	// fetching a new page.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		base := "http://" + r.Host
+		_, _ = fmt.Fprintf(w,
+			`<p><a href="%s/#sec">GoSec</a></p><h2 id="sec">Section</h2>`, base)
+	}))
+	defer srv.Close()
+
+	h := New(term.NopInterrupter(), mustParseURL(t, srv.URL+"/"))
+	defer func() { _ = h.Close() }()
+	h.Resize(testWidth, testHeight)
+
+	waitFor(t, func() bool {
+		return h.current.State() == htmlcomp.StateLoaded
+	}, 5*time.Second)
+	h.Resize(testWidth, testHeight)
+
+	origComponent := h.current
+
+	// The link renders on row 0.
+	r := h.current.Resolved()
+	require.NotNil(t, r)
+	link := r.LinkAt(0, 0)
+	require.NotNil(t, link, "LinkAt(0,0) should find the anchor link")
+	assert.Contains(t, link.URL, "#sec")
+
+	// Click the link.
+	_, handled := h.Handle(term.Event{
+		Type: term.EventMouse, Key: term.MouseLeft,
+		MouseX: 0, MouseY: 0,
+	})
+	assert.True(t, handled, "click should be handled")
+	h.Handle(term.Event{Type: term.EventMouse, Key: term.MouseRelease})
+
+	// The component should NOT have changed (same-page navigation).
+	assert.True(t, h.current == origComponent,
+		"same-page anchor click should not create a new component")
+
+	// The cache should still have only one entry.
+	assert.Len(t, h.cache, 1, "no new cache entry for same-page anchor")
+}
+
 // ── Non-Handle/Draw tests ──────────────────────────────────────────
 
 func TestNew(t *testing.T) {
@@ -727,6 +772,56 @@ func TestNavigateBackFromError(t *testing.T) {
 			}, 5*time.Second)
 		})
 	}
+}
+
+func TestSlashSearch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, "<p>hello world hello</p>")
+	}))
+	defer srv.Close()
+
+	h := New(term.NopInterrupter(), mustParseURL(t, srv.URL+"/"))
+	defer func() { _ = h.Close() }()
+	h.Resize(testWidth, testHeight)
+
+	waitFor(t, func() bool {
+		return h.current.State() == htmlcomp.StateLoaded
+	}, 5*time.Second)
+	h.Resize(testWidth, testHeight)
+
+	sendKeys := func(seq string) {
+		t.Helper()
+		keys, err := term.ParseKeys(seq)
+		require.NoError(t, err)
+		for _, k := range keys {
+			h.Handle(term.Event{Type: term.EventKey, Ch: k.Ch, Mod: k.Mod, Key: k.Key})
+		}
+	}
+
+	// '/' opens search prompt, cursor should appear.
+	sendKeys("/")
+	_, _, show := h.Cursor()
+	assert.True(t, show, "cursor visible during search input")
+
+	// Type "hello" and confirm.
+	sendKeys("hello<enter>")
+
+	// Cursor should hide.
+	_, _, show = h.Cursor()
+	assert.False(t, show, "cursor hidden after search confirm")
+
+	// 'n' advances, 'N' goes back.
+	sendKeys("n")
+	sendKeys("<shift-n>")
+
+	// Esc during search input should not exit.
+	sendKeys("/h<esc>")
+	_, _, show = h.Cursor()
+	assert.False(t, show, "cursor hidden after search cancel")
+
+	// Esc now should exit handler.
+	exit, _ := h.Handle(term.Event{Type: term.EventKey, Key: term.KeyEsc})
+	assert.True(t, exit)
 }
 
 func TestRefresh(t *testing.T) {

@@ -68,6 +68,10 @@ type Config struct {
 
 	// Spacing
 	ParagraphSpacing int
+
+	// Search highlight styles
+	SearchMatch   term.Attributes // non-current search matches
+	SearchCurrent term.Attributes // current search match
 }
 
 // TableCharSet defines the characters used to draw table borders.
@@ -151,5 +155,8 @@ func DefaultConfig() Config {
 		ScheduleNextTick: func(cb func()) bool { cb(); return true },
 
 		ParagraphSpacing: 1,
+
+		SearchMatch:   term.Attributes{Attrs: tcell.AttrReverse},
+		SearchCurrent: term.Attributes{Bg: tcell.ColorYellow, Fg: tcell.ColorBlack},
 	}
 }
