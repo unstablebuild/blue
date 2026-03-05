@@ -165,8 +165,8 @@ const (
 	updateCheckLastKey    = "update-check:last"
 	updateAvailablePrefix = "update-available:"
 	updateAvailableIndex  = "update-available:__index__"
-	throttleDuration      = 6 * time.Second
-	promptAfterDuration   = 10 * time.Second
+	throttleDuration      = 24 * time.Hour
+	promptAfterDuration   = 7 * 24 * time.Hour
 )
 
 type updateCheckValue struct {
@@ -362,7 +362,7 @@ func (uc *UpdateChecker) showUpdatePrompt(ctx context.Context, updates []Update)
 		OptionBindings: []term.KeyComb{{Ch: 'u'}, {Ch: 'r'}, {Ch: 's'}},
 		PromptConfig: component.PromptConfig{
 			Message: message,
-			Options: []string{"Update All", "Remind Later", "Skip These Versions"},
+			Options: []string{"Upgrade All", "Remind Later", "Skip"},
 			Frame:   component.FrameCharSetDefault(),
 		},
 		PromptHandler: handler.FuncPromptHandler(func(idx int, _ string) {
