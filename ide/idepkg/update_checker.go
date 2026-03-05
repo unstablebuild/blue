@@ -37,6 +37,8 @@ import (
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/component"
 	"github.com/unstablebuild/rune-go-sdk/handler"
+	"github.com/unstablebuild/rune-go-sdk/term"
+	"github.com/unstablebuild/tcell/v3"
 )
 
 // Update represents an available package update.
@@ -163,8 +165,8 @@ const (
 	updateCheckLastKey    = "update-check:last"
 	updateAvailablePrefix = "update-available:"
 	updateAvailableIndex  = "update-available:__index__"
-	throttleDuration      = 24 * time.Hour
-	promptAfterDuration   = 7 * 24 * time.Hour
+	throttleDuration      = 6 * time.Second
+	promptAfterDuration   = 10 * time.Second
 )
 
 type updateCheckValue struct {
@@ -353,9 +355,15 @@ func (uc *UpdateChecker) showUpdatePrompt(ctx context.Context, updates []Update)
 	message := formatUpdateSummary(updates) + "\n\nInstall updates?"
 
 	prompt := handler.NewPrompt(handler.PromptConfig{
+		HighlightAttr: term.Attributes{
+			Attrs: tcell.AttrBold,
+			Fg:    tcell.ColorBlue,
+		},
+		OptionBindings: []term.KeyComb{{Ch: 'u'}, {Ch: 'r'}, {Ch: 's'}},
 		PromptConfig: component.PromptConfig{
 			Message: message,
 			Options: []string{"Update All", "Remind Later", "Skip These Versions"},
+			Frame:   component.FrameCharSetDefault(),
 		},
 		PromptHandler: handler.FuncPromptHandler(func(idx int, _ string) {
 			switch idx {
@@ -380,7 +388,7 @@ func (uc *UpdateChecker) showUpdatePrompt(ctx context.Context, updates []Update)
 
 	uc.m.scheduleNextTick(func() {
 		_, err := uc.m.wm.Floating(
-			browserapi.StaticFloating(prompt, 70, 20),
+			browserapi.StaticFloating(prompt, 50, 20),
 			browserapi.FloatingConfig{
 				Alignment: component.AlignmentCentered,
 			},
