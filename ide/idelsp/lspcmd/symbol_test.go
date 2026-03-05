@@ -118,10 +118,11 @@ func TestResolveSymbol(t *testing.T) {
 func TestCompleteSymbol(t *testing.T) {
 	t.Parallel()
 
-	t.Run("empty args returns symbol names", func(t *testing.T) {
+	t.Run("empty query returns all symbol names", func(t *testing.T) {
 		t.Parallel()
 		lsp := &mockLSP{
-			workspaceSymbolFn: func(_ context.Context, _ semanticapi.WorkspaceSymbolParams) ([]semanticapi.SymbolInformation, error) {
+			workspaceSymbolFn: func(_ context.Context, p semanticapi.WorkspaceSymbolParams) ([]semanticapi.SymbolInformation, error) {
+				assert.Empty(t, p.Query)
 				return []semanticapi.SymbolInformation{
 					{Name: "Alpha"},
 					{Name: "Beta"},
@@ -129,7 +130,7 @@ func TestCompleteSymbol(t *testing.T) {
 				}, nil
 			},
 		}
-		iter, err := CompleteSymbol(context.Background(), lsp, nil)
+		iter, err := CompleteSymbol(context.Background(), lsp, "")
 		require.NoError(t, err)
 
 		var names []string
@@ -143,14 +144,29 @@ func TestCompleteSymbol(t *testing.T) {
 		assert.Equal(t, []string{"Alpha", "Beta", "Gamma"}, names)
 	})
 
-	t.Run("existing args returns empty", func(t *testing.T) {
+	t.Run("non-empty query is forwarded", func(t *testing.T) {
 		t.Parallel()
-		lsp := &mockLSP{}
-		iter, err := CompleteSymbol(context.Background(), lsp, []string{"already"})
+		lsp := &mockLSP{
+			workspaceSymbolFn: func(_ context.Context, p semanticapi.WorkspaceSymbolParams) ([]semanticapi.SymbolInformation, error) {
+				assert.Equal(t, "My", p.Query)
+				return []semanticapi.SymbolInformation{
+					{Name: "MyFunc"},
+					{Name: "MyType"},
+				}, nil
+			},
+		}
+		iter, err := CompleteSymbol(context.Background(), lsp, "My")
 		require.NoError(t, err)
 
-		_, ok := iter.Next(context.Background())
-		assert.False(t, ok)
+		var names []string
+		for {
+			v, ok := iter.Next(context.Background())
+			if !ok {
+				break
+			}
+			names = append(names, v)
+		}
+		assert.Equal(t, []string{"MyFunc", "MyType"}, names)
 	})
 
 	t.Run("lsp error propagated", func(t *testing.T) {
@@ -160,7 +176,7 @@ func TestCompleteSymbol(t *testing.T) {
 				return nil, errors.New("fail")
 			},
 		}
-		_, err := CompleteSymbol(context.Background(), lsp, nil)
+		_, err := CompleteSymbol(context.Background(), lsp, "")
 		require.Error(t, err)
 	})
 }
