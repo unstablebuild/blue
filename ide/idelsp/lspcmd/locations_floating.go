@@ -68,6 +68,7 @@ type locationsFloatingHandler struct {
 	editor           textapi.Editor
 	opener           browserapi.ResourceOpener
 	wm               browserapi.WindowManager
+	win              browserapi.Window
 	notify           browserapi.Notifications
 	fs               workspaceapi.FileSystem
 	scheduleNextTick func(func()) bool
@@ -307,7 +308,12 @@ func (l *locationsFloatingHandler) Resize(w, h int) {
 	l.span.Resize(w, h)
 }
 
-func (l *locationsFloatingHandler) Close() error { return nil }
+func (l *locationsFloatingHandler) Close() error {
+	if l.win != nil {
+		return l.wm.CloseWindow(l.win)
+	}
+	return nil
+}
 
 func (l *locationsFloatingHandler) loadPreview() {
 	idx := l.list.FocusOffset()

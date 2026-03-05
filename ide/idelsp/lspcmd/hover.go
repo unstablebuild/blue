@@ -118,7 +118,6 @@ func (h *hoverHandler) execute(
 	if result == nil || result.Contents.Value == "" {
 		return nil
 	}
-	var floating browserapi.Floating
 	if result.Contents.Kind == semanticapi.MarkupKindMarkdown {
 		comp, mdErr := mdcomp.NewWithConfig(result.Contents.Value, h.cfg.MarkdownConfig)
 		if mdErr != nil {
@@ -129,14 +128,25 @@ func (h *hoverHandler) execute(
 			PadHorizontal:    2,
 			ContentAlignment: component.AlignmentCentered,
 		})
-		floating = browserapi.FuncFloatingHandler(span, mdh.Close)
-	} else {
-		floating = newHoverFloating(component.NewString(result.Contents.Value))
+		var win browserapi.Window
+		floating := browserapi.FuncFloatingHandler(span, func() error {
+			defer h.wm.CloseWindow(win) //nolint:errcheck
+			return mdh.Close()
+		})
+		win, err = h.wm.Floating(floating, browserapi.FloatingConfig{
+			Alignment: component.AlignmentCentered,
+		})
+		return err
 	}
-	_, err = h.wm.Floating(floating, browserapi.FloatingConfig{
+	f := newHoverFloating(component.NewString(result.Contents.Value), h.wm)
+	win, err := h.wm.Floating(f, browserapi.FloatingConfig{
 		Alignment: component.AlignmentCentered,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	f.win = win
+	return nil
 }
 
 func (h *hoverHandler) Complete(ctx context.Context, _ string, args []string) (
@@ -152,14 +162,16 @@ func (h *hoverHandler) Complete(ctx context.Context, _ string, args []string) (
 	return CompleteSymbol(ctx, h.lsp, arg)
 }
 
-func newHoverFloating(f component.Floating) *hoverFloating {
+func newHoverFloating(f component.Floating, wm browserapi.WindowManager) *hoverFloating {
 	w, h := f.Dimensions()
 	f.Resize(w, h)
-	return &hoverFloating{Floating: f}
+	return &hoverFloating{Floating: f, wm: wm}
 }
 
 type hoverFloating struct {
 	component.Floating
+	wm  browserapi.WindowManager
+	win browserapi.Window
 }
 
 // Handle dismisses the hover on any key event, including modifier-only
@@ -181,5 +193,8 @@ func (h *hoverFloating) Selection() (string, bool) {
 }
 
 func (h *hoverFloating) Close() error {
+	if h.win != nil {
+		return h.wm.CloseWindow(h.win)
+	}
 	return nil
 }

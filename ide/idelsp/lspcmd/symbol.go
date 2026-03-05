@@ -204,10 +204,14 @@ func showSymbolPicker(
 	handler.onSelect = func(idx int) {
 		onPick(matches[idx])
 	}
-	_, err := wm.Floating(handler, browserapi.FloatingConfig{
+	win, err := wm.Floating(handler, browserapi.FloatingConfig{
 		Alignment: component.AlignmentCentered,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	handler.win = win
+	return nil
 }
 
 // CompleteSymbol returns symbol-name completions from the workspace symbol

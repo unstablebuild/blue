@@ -55,7 +55,7 @@ func TestSignatureHelpFloatingHandle(t *testing.T) {
 		{Label: "foo(a int, b string)"},
 		{Label: "foo(a int)"},
 	}, 0, 0)
-	f := newSignatureHelpFloating(result, DefaultSignatureHelpConfig())
+	f := newSignatureHelpFloating(result, DefaultSignatureHelpConfig(), &mockWindowManager{})
 
 	// Esc dismisses.
 	exit, handled := f.Handle(term.Event{Type: term.EventKey, Key: term.KeyEsc})
@@ -137,7 +137,7 @@ func TestSignatureHelpFloatingDimensions(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			result := testSignatureHelp(test.sigs, test.aSig, test.aPar)
-			f := newSignatureHelpFloating(result, DefaultSignatureHelpConfig())
+			f := newSignatureHelpFloating(result, DefaultSignatureHelpConfig(), &mockWindowManager{})
 			w, h := f.Dimensions()
 			assert.Equal(t, test.wantW, w, "width")
 			assert.Equal(t, test.wantH, h, "height")
@@ -156,7 +156,7 @@ func TestSignatureHelpFloatingDraw(t *testing.T) {
 		},
 	}
 	result := testSignatureHelp([]semanticapi.SignatureInformation{sig}, 0, 1)
-	f := newSignatureHelpFloating(result, cfg)
+	f := newSignatureHelpFloating(result, cfg, &mockWindowManager{})
 	w, h := f.Dimensions()
 	f.Resize(w, h)
 
@@ -192,7 +192,7 @@ func TestSignatureHelpFloatingOverloadCycling(t *testing.T) {
 		{Label: "foo(a int, b string, c bool)"},
 	}
 	result := testSignatureHelp(sigs, 0, 0)
-	f := newSignatureHelpFloating(result, DefaultSignatureHelpConfig())
+	f := newSignatureHelpFloating(result, DefaultSignatureHelpConfig(), &mockWindowManager{})
 	assert.Equal(t, 0, f.activeIdx)
 
 	// Down twice.
