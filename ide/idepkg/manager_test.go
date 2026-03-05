@@ -457,6 +457,33 @@ func TestListInstalledPackageVersions(t *testing.T) {
 
 		assert.ElementsMatch(t, []string{"go"}, installed)
 	})
+	t.Run("deduplicates when multiple versions are installed", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{
+			{Package: "go", Version: "1"},
+			{Package: "go", Version: "2"},
+		})
+		m, n, _, _ := newTestManager(t, pkgs, versions)
+
+		n.SetWg(1)
+		err := m.InstallPackageVersion(context.Background(), "go", "1")
+		require.NoError(t, err)
+		n.Wait()
+
+		n.SetWg(1)
+		err = m.InstallPackageVersion(context.Background(), "go", "2")
+		require.NoError(t, err)
+		n.Wait()
+
+		it, err := m.ListInstalledPackages(context.Background())
+		require.NoError(t, err)
+
+		installed, err := iterator.ToSlice(context.Background(), it)
+		require.NoError(t, err)
+
+		assert.Equal(t, []string{"go"}, installed)
+	})
 	t.Run("returns nothing if there are no packages installed", func(t *testing.T) {
 		t.Parallel()
 		pkgs := idepkgtest.MakePackages()

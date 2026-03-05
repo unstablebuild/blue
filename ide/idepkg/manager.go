@@ -375,8 +375,16 @@ func (m *Manager) ListInstalledPackages(ctx context.Context) (
 		return nil, err
 	}
 	it := iterator.FromDocumentIterator[pkgVersionValue](dit)
-	return iterator.Map(it, func(p pkgVersionValue) string {
+	mapped := iterator.Map(it, func(p pkgVersionValue) string {
 		return p.Package
+	})
+	seen := make(map[string]struct{})
+	return iterator.Filter(mapped, func(pkg string) bool {
+		if _, ok := seen[pkg]; ok {
+			return false
+		}
+		seen[pkg] = struct{}{}
+		return true
 	}), nil
 }
 
