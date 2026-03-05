@@ -1790,6 +1790,53 @@ type Config struct {
 			}
 		}
 	})
+
+	t.Run("WorkspaceSymbolReturnsInterfaces", func(t *testing.T) {
+		t.Parallel()
+		env := initGopls(t, goplsBin, []testFile{
+			{name: "main.go", content: typeSwitchSrc},
+		})
+		ctx := t.Context()
+
+		// Query for "Animal" (an interface) and "Dog" (a struct).
+		// Interface (kind 11) is in the default 1–18 range, but
+		// Struct (kind 23) is NOT — so without an explicit
+		// symbolKind.valueSet the server may downgrade Struct
+		// to Class (kind 5).
+		type wantSym struct {
+			name string
+			kind semanticapi.SymbolKind
+		}
+		wants := []wantSym{
+			{"Animal", semanticapi.SymbolKindInterface},
+			{"Dog", semanticapi.SymbolKindStruct},
+		}
+
+		for _, w := range wants {
+			var syms []semanticapi.SymbolInformation
+			require.Eventually(t, func() bool {
+				var err error
+				syms, err = env.mgr.WorkspaceSymbol(ctx, semanticapi.WorkspaceSymbolParams{
+					Query: w.name,
+				})
+				if err != nil || len(syms) == 0 {
+					return false
+				}
+				return true
+			}, 10*time.Second, 200*time.Millisecond,
+				"gopls should return symbols matching %q", w.name)
+
+			var found bool
+			for _, s := range syms {
+				if s.Name == w.name && s.Kind == w.kind {
+					found = true
+					break
+				}
+			}
+			require.True(t, found,
+				"workspace/symbol should return %s with SymbolKind %d; got: %v", w.name, w.kind, syms)
+		}
+	})
 }
 
 func TestFindGoModURI(t *testing.T) {
