@@ -52,6 +52,7 @@ import (
 	"github.com/unstablebuild/rune-go-sdk/component"
 	"github.com/unstablebuild/rune-go-sdk/handler"
 	"github.com/unstablebuild/rune-go-sdk/term"
+	"github.com/unstablebuild/tcell/v3"
 	"gopkg.in/yaml.v3"
 )
 
@@ -721,7 +722,7 @@ func (m *Manager) promptConfigChange(
 	userDoc, pkgDoc *yaml.Node,
 ) error {
 	message := fmt.Sprintf(
-		"Extension %s (v%s) wants to update your configuration "+
+		"Extension %s (version %s) wants to update your configuration "+
 			"with the following settings:\n\n%s\n\nDo you want to allow this?",
 		pkgID, pkgVersion, string(configYAML))
 
@@ -744,16 +745,27 @@ func (m *Manager) promptConfigChange(
 	}
 
 	prompt := handler.NewPrompt(handler.PromptConfig{
+		HighlightAttr: term.Attributes{
+			Attrs: tcell.AttrBold,
+			Fg:    tcell.ColorBlue,
+		},
+		OptionBindings: []term.KeyComb{{Ch: 'a'}, {Ch: 'd'}},
 		PromptConfig: component.PromptConfig{
 			Message: message,
 			Options: []string{"Allow", "Deny"},
+			Frame:   component.FrameCharSetDefault(),
 		},
 		PromptHandler: handler.FuncPromptHandler(func(idx int, _ string) {
 			allowed := idx == 0
-			if allowed {
-				if err := apply(); err != nil {
-					_, _ = m.n.Notify(browserapi.LevelError, "apply configuration: %s", err)
-				}
+			if !allowed {
+				return
+			}
+			if err := apply(); err != nil {
+				_, _ = m.n.Notify(browserapi.LevelError, "apply configuration: %s", err)
+			} else {
+				_, _ = m.n.Notify(browserapi.LevelSuccess, "applied %s "+
+					"configuration updates. Restart the program to load the changes.",
+					pkgID)
 			}
 		}, func() error { return nil }),
 	})
