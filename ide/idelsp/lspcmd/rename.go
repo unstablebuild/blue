@@ -92,20 +92,25 @@ func (h *renameHandler) HandleCommand(ctx context.Context, cmd textapi.Command) 
 		lsp:      h.lsp,
 		editor:   h.editor,
 		opener:   h.opener,
+		wm:       h.wm,
 		uri:      cmd.URI,
 		position: pos,
 		ctx:      ctx,
 		cancel:   cancel,
 	}
 
-	_, err = h.wm.Floating(floating, browserapi.FloatingConfig{
+	win, err := h.wm.Floating(floating, browserapi.FloatingConfig{
 		Alignment: component.AlignmentLeft | component.AlignmentTop,
 		Offset: term.Coordinates{
 			X: cmd.Cursor.Window.X + 1,
 			Y: cmd.Cursor.Window.Y + 2,
 		},
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	floating.win = win
+	return nil
 }
 
 func (h *renameHandler) Complete(_ context.Context, _ string, _ []string) (
@@ -124,6 +129,8 @@ type renameFloatingHandler struct {
 	lsp      semanticapi.LSP
 	editor   textapi.Editor
 	opener   browserapi.ResourceOpener
+	wm       browserapi.WindowManager
+	win      browserapi.Window
 	uri      workspaceapi.URI
 	position semanticapi.Position
 	ctx      context.Context
@@ -189,6 +196,9 @@ func (r *renameFloatingHandler) Dimensions() (int, int) {
 
 func (r *renameFloatingHandler) Close() error {
 	r.cancel()
+	if r.win != nil {
+		return r.wm.CloseWindow(r.win)
+	}
 	return nil
 }
 

@@ -38,7 +38,7 @@ import (
 
 func TestHoverFloatingHandle(t *testing.T) {
 	t.Parallel()
-	f := newHoverFloating(component.NewString("test content"))
+	f := newHoverFloating(component.NewString("test content"), &mockWindowManager{})
 
 	exit, handled := f.Handle(term.Event{Type: term.EventKey})
 	assert.True(t, exit, "key event should exit")

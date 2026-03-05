@@ -120,8 +120,12 @@ func (h *implementationHandler) execute(
 		entries, h.opener, h.wm, h.editor, h.notify, h.fs,
 		h.scheduleNextTick, h.parser, h.cfg.ListConfig,
 	)
-	_, err = h.wm.Floating(handler, browserapi.FloatingConfig{Alignment: component.AlignmentCentered})
-	return err
+	win, err := h.wm.Floating(handler, browserapi.FloatingConfig{Alignment: component.AlignmentCentered})
+	if err != nil {
+		return err
+	}
+	handler.win = win
+	return nil
 }
 
 func (h *implementationHandler) Complete(
