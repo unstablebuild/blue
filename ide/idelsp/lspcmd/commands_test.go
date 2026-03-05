@@ -40,8 +40,118 @@ import (
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
+	"github.com/unstablebuild/rune-go-sdk/iterator"
 	"github.com/unstablebuild/rune-go-sdk/term"
 )
+
+// collectIter drains an iterator into a string slice.
+func collectIter(t *testing.T, iter iterator.Iterator[string]) []string {
+	t.Helper()
+	var out []string
+	for {
+		v, ok := iter.Next(context.Background())
+		if !ok {
+			break
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
+func TestRouterCompleteSymbol(t *testing.T) {
+	t.Parallel()
+
+	symbols := []semanticapi.SymbolInformation{
+		{Name: "Alpha"},
+		{Name: "Beta"},
+		{Name: "MyFunc"},
+	}
+
+	rootURI, err := workspaceapi.ParseURI("file:///project")
+	require.NoError(t, err)
+
+	newRouter := func(t *testing.T, lsp *mockLSP) textapi.CommandHandler {
+		t.Helper()
+		cfg := DefaultConfig()
+		cfg.RootURI = rootURI
+		cfg.ScheduleNextTick = syncTick
+		cfg.Interrupter = term.NopInterrupter()
+		router, err := AllHandler(
+			lsp, &mockEditor{}, &mockWindowManager{},
+			&mockResourceOpener{}, &mockNotifications{},
+			&mockFileSystem{}, cfg,
+		)
+		require.NoError(t, err)
+		return router
+	}
+
+	// All subcommands that use CompleteSymbol.
+	subcommands := []string{
+		"hover", "definition", "declaration",
+		"type-definition", "implementation", "references",
+	}
+
+	for _, sub := range subcommands {
+		t.Run(sub, func(t *testing.T) {
+			t.Parallel()
+
+			t.Run("trailing space completes with empty query", func(t *testing.T) {
+				t.Parallel()
+				lsp := &mockLSP{
+					workspaceSymbolFn: func(_ context.Context, p semanticapi.WorkspaceSymbolParams) ([]semanticapi.SymbolInformation, error) {
+						assert.Empty(t, p.Query)
+						return symbols, nil
+					},
+				}
+				router := newRouter(t, lsp)
+				// "lsp hover " → args = ["hover", ""]
+				iter, err := router.Complete(context.Background(), "lsp", []string{sub, ""})
+				require.NoError(t, err)
+				assert.Equal(t, []string{"Alpha", "Beta", "MyFunc"}, collectIter(t, iter))
+			})
+
+			t.Run("no trailing space completes with empty query", func(t *testing.T) {
+				t.Parallel()
+				lsp := &mockLSP{
+					workspaceSymbolFn: func(_ context.Context, p semanticapi.WorkspaceSymbolParams) ([]semanticapi.SymbolInformation, error) {
+						assert.Empty(t, p.Query)
+						return symbols, nil
+					},
+				}
+				router := newRouter(t, lsp)
+				// "lsp hover" → args = ["hover"]
+				iter, err := router.Complete(context.Background(), "lsp", []string{sub})
+				require.NoError(t, err)
+				assert.Equal(t, []string{"Alpha", "Beta", "MyFunc"}, collectIter(t, iter))
+			})
+
+			t.Run("partial symbol completes with query", func(t *testing.T) {
+				t.Parallel()
+				lsp := &mockLSP{
+					workspaceSymbolFn: func(_ context.Context, p semanticapi.WorkspaceSymbolParams) ([]semanticapi.SymbolInformation, error) {
+						assert.Equal(t, "My", p.Query)
+						return []semanticapi.SymbolInformation{{Name: "MyFunc"}}, nil
+					},
+				}
+				router := newRouter(t, lsp)
+				// "lsp hover My" → args = ["hover", "My"]
+				iter, err := router.Complete(context.Background(), "lsp", []string{sub, "My"})
+				require.NoError(t, err)
+				assert.Equal(t, []string{"MyFunc"}, collectIter(t, iter))
+			})
+
+			t.Run("extra args returns empty", func(t *testing.T) {
+				t.Parallel()
+				lsp := &mockLSP{}
+				router := newRouter(t, lsp)
+				// "lsp hover MyFunc extra" → args = ["hover", "MyFunc", "extra"]
+				iter, err := router.Complete(context.Background(), "lsp", []string{sub, "MyFunc", "extra"})
+				require.NoError(t, err)
+				assert.Empty(t, collectIter(t, iter))
+			})
+		})
+	}
+}
 
 func TestE2ECommands(t *testing.T) {
 	t.Parallel()

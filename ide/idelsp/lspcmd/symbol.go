@@ -57,15 +57,13 @@ func ResolveSymbol(
 }
 
 // CompleteSymbol returns symbol-name completions from the workspace symbol
-// provider. It only completes the first argument; if args already contains
-// a value, it returns an empty iterator.
+// provider. The arg is forwarded as the query to the workspace symbol request.
 func CompleteSymbol(
-	ctx context.Context, lsp semanticapi.LSP, args []string,
+	ctx context.Context, lsp semanticapi.LSP, arg string,
 ) (iterator.Iterator[string], error) {
-	if len(args) > 0 {
-		return iterator.Empty[string](), nil
-	}
-	syms, err := lsp.WorkspaceSymbol(ctx, semanticapi.WorkspaceSymbolParams{})
+	syms, err := lsp.WorkspaceSymbol(ctx, semanticapi.WorkspaceSymbolParams{
+		Query: arg,
+	})
 	if err != nil {
 		return nil, err
 	}

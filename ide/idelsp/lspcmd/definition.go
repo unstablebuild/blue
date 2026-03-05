@@ -119,5 +119,12 @@ func (h *definitionHandler) HandleCommand(ctx context.Context, cmd textapi.Comma
 func (h *definitionHandler) Complete(
 	ctx context.Context, _ string, args []string,
 ) (iterator.Iterator[string], error) {
-	return CompleteSymbol(ctx, h.lsp, args)
+	if len(args) > 1 {
+		return iterator.Empty[string](), nil
+	}
+	var arg string
+	if len(args) == 1 {
+		arg = args[0]
+	}
+	return CompleteSymbol(ctx, h.lsp, arg)
 }
