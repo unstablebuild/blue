@@ -387,12 +387,9 @@ func (uc *UpdateChecker) showUpdatePrompt(ctx context.Context, updates []Update)
 	})
 
 	uc.m.scheduleNextTick(func() {
-		_, err := uc.m.wm.Floating(
-			browserapi.StaticFloating(prompt, 50, 20),
-			browserapi.FloatingConfig{
-				Alignment: component.AlignmentCentered,
-			},
-		)
+		_, err := uc.m.wm.Floating(prompt, browserapi.FloatingConfig{
+			Alignment: component.AlignmentCentered,
+		})
 		if err != nil {
 			uc.m.log(log.WarnLevel, "show update prompt: %v", err)
 		}
