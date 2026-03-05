@@ -25,13 +25,14 @@ package lspcmd
 
 import (
 	"context"
-	"strings"
 
 	mdcomp "github.com/unstablebuild/blue/tui/component/markdown"
 	mdhandler "github.com/unstablebuild/blue/tui/handler/markdown"
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
+	"github.com/unstablebuild/rune-go-sdk/api/syntaxapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
+	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
 	"github.com/unstablebuild/rune-go-sdk/component"
 	"github.com/unstablebuild/rune-go-sdk/handler"
 	"github.com/unstablebuild/rune-go-sdk/iterator"
@@ -58,9 +59,15 @@ func DefaultHoverConfig() HoverConfig {
 // HoverHandler creates a textapi.CommandHandler for the "hover" subcommand.
 // It calls the LSP hover request and displays the result in a floating window.
 func HoverHandler(
-	lsp semanticapi.LSP, wm browserapi.WindowManager, cfg HoverConfig,
+	lsp semanticapi.LSP, wm browserapi.WindowManager,
+	notify browserapi.Notifications, fs workspaceapi.FileSystem,
+	scheduleNextTick func(func()) bool,
+	parser syntaxapi.Parser, cfg HoverConfig,
 ) textapi.CommandHandler {
-	return &hoverHandler{lsp: lsp, wm: wm, cfg: cfg}
+	return &hoverHandler{
+		lsp: lsp, wm: wm, notify: notify, fs: fs,
+		scheduleNextTick: scheduleNextTick, parser: parser, cfg: cfg,
+	}
 }
 
 var (
@@ -69,29 +76,40 @@ var (
 )
 
 type hoverHandler struct {
-	lsp semanticapi.LSP
-	wm  browserapi.WindowManager
-	cfg HoverConfig
+	lsp              semanticapi.LSP
+	wm               browserapi.WindowManager
+	notify           browserapi.Notifications
+	fs               workspaceapi.FileSystem
+	scheduleNextTick func(func()) bool
+	parser           syntaxapi.Parser
+	cfg              HoverConfig
 }
 
 func (h *hoverHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
-	if len(cmd.Args) > 0 {
-		uri, pos, err := ResolveSymbol(ctx, h.lsp, strings.Join(cmd.Args, " "))
-		if err != nil {
-			return err
-		}
-		wsURI, err := LspToURI(uri)
-		if err != nil {
-			return err
-		}
-		cmd.URI = wsURI
-		cmd.Cursor.Content = PosToCoord(pos)
-	} else if cmd.Resource == nil {
-		return nil
+	proceed, err := resolveCommandSymbol(ctx, &cmd, h.lsp, h.wm, h.fs, h.scheduleNextTick, h.parser, func(m SymbolMatch) {
+		h.scheduleNextTick(func() {
+			wsURI, err := LspToURI(m.URI)
+			if err != nil {
+				_, _ = h.notify.Notify(browserapi.LevelError, "hover: %s", err)
+				return
+			}
+			if err := h.execute(context.Background(), wsURI, m.Pos); err != nil {
+				_, _ = h.notify.Notify(browserapi.LevelError, "hover: %s", err)
+			}
+		})
+	})
+	if !proceed || err != nil {
+		return err
 	}
+	return h.execute(ctx, cmd.URI, CoordToPos(cmd.Cursor.Content))
+}
+
+func (h *hoverHandler) execute(
+	ctx context.Context, uri workspaceapi.URI, pos semanticapi.Position,
+) error {
 	params := semanticapi.HoverParams{
-		TextDocument: TextDocID(cmd.URI),
-		Position:     CoordToPos(cmd.Cursor.Content),
+		TextDocument: TextDocID(uri),
+		Position:     pos,
 	}
 	result, err := h.lsp.Hover(ctx, params)
 	if err != nil {

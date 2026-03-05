@@ -73,6 +73,10 @@ type locationsFloatingHandler struct {
 	scheduleNextTick func(func()) bool
 	parser           syntaxapi.Parser
 
+	// onSelect, when set, is called with the focused entry index on
+	// Enter instead of the default navigateTo behaviour.
+	onSelect func(int)
+
 	previewCells [][]term.Cell // cell matrix for the currently previewed file
 	prevURI      string        // URI of the currently loaded preview
 
@@ -189,7 +193,11 @@ func (l *locationsFloatingHandler) Handle(ev term.Event) (exit, handled bool) {
 	case term.KeyEnter:
 		idx := l.list.FocusOffset()
 		if idx < len(l.entries) {
-			navigateTo(l.entries[idx], l.opener, l.wm, l.editor, l.notify, l.scheduleNextTick)
+			if l.onSelect != nil {
+				l.onSelect(idx)
+			} else {
+				navigateTo(l.entries[idx], l.opener, l.wm, l.editor, l.notify, l.scheduleNextTick)
+			}
 		}
 		return true, true
 	case term.KeyArrowUp:

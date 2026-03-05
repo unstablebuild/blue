@@ -37,13 +37,12 @@ func TestResolveSymbol(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		query   string
-		symbols []semanticapi.SymbolInformation
-		lspErr  error
-		wantURI string
-		wantPos semanticapi.Position
-		wantErr bool
+		name        string
+		query       string
+		symbols     []semanticapi.SymbolInformation
+		lspErr      error
+		wantMatches []SymbolMatch
+		wantErr     bool
 	}{
 		{
 			name:  "exact match",
@@ -64,8 +63,11 @@ func TestResolveSymbol(t *testing.T) {
 					},
 				},
 			},
-			wantURI: "file:///project/main.go",
-			wantPos: semanticapi.Position{Line: 10, Character: 5},
+			wantMatches: []SymbolMatch{{
+				URI:     "file:///project/main.go",
+				Pos:     semanticapi.Position{Line: 10, Character: 5},
+				Display: "MyFunc",
+			}},
 		},
 		{
 			name:  "fuzzy fallback",
@@ -79,8 +81,11 @@ func TestResolveSymbol(t *testing.T) {
 					},
 				},
 			},
-			wantURI: "file:///project/helper.go",
-			wantPos: semanticapi.Position{Line: 3, Character: 0},
+			wantMatches: []SymbolMatch{{
+				URI:     "file:///project/helper.go",
+				Pos:     semanticapi.Position{Line: 3, Character: 0},
+				Display: "MyFuncHelper",
+			}},
 		},
 		{
 			name:    "no results",
@@ -94,6 +99,79 @@ func TestResolveSymbol(t *testing.T) {
 			lspErr:  errors.New("workspace symbol failed"),
 			wantErr: true,
 		},
+		{
+			name:  "multiple exact matches different packages",
+			query: "Buffer",
+			symbols: []semanticapi.SymbolInformation{
+				{
+					Name: "Buffer",
+					Location: semanticapi.Location{
+						URI:   "file:///project/bytes/buffer.go",
+						Range: semanticapi.Range{Start: semanticapi.Position{Line: 10}},
+					},
+				},
+				{
+					Name: "Buffer",
+					Location: semanticapi.Location{
+						URI:   "file:///project/cell/buffer.go",
+						Range: semanticapi.Range{Start: semanticapi.Position{Line: 20}},
+					},
+				},
+			},
+			wantMatches: []SymbolMatch{
+				{URI: "file:///project/bytes/buffer.go", Pos: semanticapi.Position{Line: 10}, Display: "bytes.Buffer"},
+				{URI: "file:///project/cell/buffer.go", Pos: semanticapi.Position{Line: 20}, Display: "cell.Buffer"},
+			},
+		},
+		{
+			name:  "multiple exact matches same short package disambiguated",
+			query: "Buffer",
+			symbols: []semanticapi.SymbolInformation{
+				{
+					Name: "Buffer",
+					Location: semanticapi.Location{
+						URI:   "file:///project/pkgA/cell/buffer.go",
+						Range: semanticapi.Range{Start: semanticapi.Position{Line: 10}},
+					},
+				},
+				{
+					Name: "Buffer",
+					Location: semanticapi.Location{
+						URI:   "file:///project/pkgB/cell/buffer.go",
+						Range: semanticapi.Range{Start: semanticapi.Position{Line: 20}},
+					},
+				},
+			},
+			wantMatches: []SymbolMatch{
+				{URI: "file:///project/pkgA/cell/buffer.go", Pos: semanticapi.Position{Line: 10}, Display: "/project/pkgA/cell.Buffer"},
+				{URI: "file:///project/pkgB/cell/buffer.go", Pos: semanticapi.Position{Line: 20}, Display: "/project/pkgB/cell.Buffer"},
+			},
+		},
+		{
+			name:  "duplicate URIs deduplicated",
+			query: "Buffer",
+			symbols: []semanticapi.SymbolInformation{
+				{
+					Name: "Buffer",
+					Location: semanticapi.Location{
+						URI:   "file:///project/cell/buffer.go",
+						Range: semanticapi.Range{Start: semanticapi.Position{Line: 10}},
+					},
+				},
+				{
+					Name: "Buffer",
+					Location: semanticapi.Location{
+						URI:   "file:///project/cell/buffer.go",
+						Range: semanticapi.Range{Start: semanticapi.Position{Line: 10}},
+					},
+				},
+			},
+			wantMatches: []SymbolMatch{{
+				URI:     "file:///project/cell/buffer.go",
+				Pos:     semanticapi.Position{Line: 10},
+				Display: "Buffer",
+			}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -103,14 +181,172 @@ func TestResolveSymbol(t *testing.T) {
 					return tt.symbols, tt.lspErr
 				},
 			}
-			uri, pos, err := ResolveSymbol(context.Background(), lsp, tt.query)
+			matches, err := ResolveSymbol(context.Background(), lsp, tt.query)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tt.wantURI, uri)
-			assert.Equal(t, tt.wantPos, pos)
+			assert.Equal(t, tt.wantMatches, matches)
+		})
+	}
+}
+
+func TestPackagePathFromURI(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		uri  string
+		want string
+	}{
+		{
+			uri:  "file:///Users/foo/go/pkg/mod/github.com/org/repo@v1.2.3/cell/buffer.go",
+			want: "github.com/org/repo/cell",
+		},
+		{
+			uri:  "file:///project/internal/cell/buffer.go",
+			want: "/project/internal/cell",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.uri, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, packagePathFromURI(tt.uri))
+		})
+	}
+}
+
+func TestNormalizeMethodName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		// Pointer receiver methods — the core case.
+		{
+			name: "simple pointer receiver",
+			in:   "(*Greeter).Greet",
+			want: "Greeter.Greet",
+		},
+		{
+			name: "pointer receiver with short name",
+			in:   "(*T).M",
+			want: "T.M",
+		},
+		{
+			name: "pointer receiver with long type name",
+			in:   "(*definitionHandler).HandleCommand",
+			want: "definitionHandler.HandleCommand",
+		},
+		{
+			name: "pointer receiver with unexported type",
+			in:   "(*routerHandler).Handle",
+			want: "routerHandler.Handle",
+		},
+		{
+			name: "pointer receiver with underscore type",
+			in:   "(*my_type).do_thing",
+			want: "my_type.do_thing",
+		},
+		{
+			name: "pointer receiver with numeric suffix",
+			in:   "(*Handler2).ServeHTTP",
+			want: "Handler2.ServeHTTP",
+		},
+
+		// Value receiver methods.
+		{
+			name: "value receiver",
+			in:   "(Counter).Count",
+			want: "Counter.Count",
+		},
+		{
+			name: "value receiver short",
+			in:   "(T).String",
+			want: "T.String",
+		},
+		{
+			name: "value receiver with unexported type",
+			in:   "(myStruct).value",
+			want: "myStruct.value",
+		},
+
+		// Non-method symbols — should pass through unchanged.
+		{
+			name: "plain function",
+			in:   "Add",
+			want: "Add",
+		},
+		{
+			name: "plain type",
+			in:   "Greeter",
+			want: "Greeter",
+		},
+		{
+			name: "constant",
+			in:   "MaxSize",
+			want: "MaxSize",
+		},
+		{
+			name: "qualified symbol",
+			in:   "mylib.MyType",
+			want: "mylib.MyType",
+		},
+		{
+			name: "value receiver method already normalized",
+			in:   "Counter.Count",
+			want: "Counter.Count",
+		},
+		{
+			name: "empty string",
+			in:   "",
+			want: "",
+		},
+
+		// Edge cases — malformed but shouldn't panic.
+		{
+			name: "open paren star without close",
+			in:   "(*Foo",
+			want: "(*Foo",
+		},
+		{
+			name: "only prefix",
+			in:   "(*",
+			want: "(*",
+		},
+		{
+			name: "paren star with close but no dot",
+			in:   "(*Foo)",
+			want: "(*Foo)",
+		},
+		{
+			name: "nested parens are not mangled",
+			in:   "func(*int)",
+			want: "func(*int)",
+		},
+		{
+			name: "open paren without close",
+			in:   "(Foo",
+			want: "(Foo",
+		},
+		{
+			name: "paren with close but no dot",
+			in:   "(Foo)",
+			want: "(Foo)",
+		},
+		{
+			name: "star without paren prefix",
+			in:   "*Foo.Bar",
+			want: "*Foo.Bar",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, normalizeMethodName(tt.in))
 		})
 	}
 }

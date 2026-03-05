@@ -466,6 +466,7 @@ type mockLSP struct {
 	renameFn            func(context.Context, semanticapi.RenameParams) (*semanticapi.WorkspaceEdit, error)
 	signatureHelpFn     func(context.Context, semanticapi.SignatureHelpParams) (*semanticapi.SignatureHelp, error)
 	documentHighlightFn func(context.Context, semanticapi.DocumentHighlightParams) ([]semanticapi.DocumentHighlight, error)
+	documentSymbolFn    func(context.Context, semanticapi.DocumentSymbolParams) (semanticapi.DocumentSymbolResult, error)
 	workspaceSymbolFn   func(context.Context, semanticapi.WorkspaceSymbolParams) ([]semanticapi.SymbolInformation, error)
 }
 
@@ -566,6 +567,16 @@ func (m *mockLSP) Rename(
 		return m.renameFn(ctx, params)
 	}
 	return nil, nil
+}
+
+func (m *mockLSP) DocumentSymbol(
+	ctx context.Context,
+	params semanticapi.DocumentSymbolParams,
+) (semanticapi.DocumentSymbolResult, error) {
+	if m.documentSymbolFn != nil {
+		return m.documentSymbolFn(ctx, params)
+	}
+	return semanticapi.DocumentSymbolResult{}, nil
 }
 
 func (m *mockLSP) WorkspaceSymbol(

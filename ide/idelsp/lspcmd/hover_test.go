@@ -92,7 +92,7 @@ func TestHoverHandlerSymbolName(t *testing.T) {
 		},
 	}
 
-	h := HoverHandler(wrapper, wm, DefaultHoverConfig())
+	h := HoverHandler(wrapper, wm, &mockNotifications{}, &mockFileSystem{}, syncTick, nil, DefaultHoverConfig())
 
 	// No resource, but args provided — should still work.
 	cmd := textapi.Command{

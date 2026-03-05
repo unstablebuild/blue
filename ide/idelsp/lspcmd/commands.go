@@ -155,42 +155,66 @@ func AllHandler(
 	if err != nil {
 		return nil, err
 	}
-	return &routerHandler{
-		handlers: map[string]textapi.CommandHandler{
-			"format":   formatH,
-			"hover":    HoverHandler(lsp, wm, cfg.Hover),
-			"complete": CompleteHandler(lsp, editor, wm, cfg.Complete, cfg.Interrupter),
-			"definition": DefinitionHandler(
-				lsp, editor, wm, opener, notify, fs,
-				cfg.ScheduleNextTick, cfg.Parser, cfg.Definition,
-			),
-			"declaration": DeclarationHandler(
-				lsp, editor, wm, opener, notify, fs,
-				cfg.ScheduleNextTick, cfg.Parser, cfg.Declaration,
-			),
-			"type-definition": TypeDefinitionHandler(
-				lsp, editor, wm, opener, notify, fs,
-				cfg.ScheduleNextTick, cfg.Parser, cfg.TypeDefinition,
-			),
-			"implementation": ImplementationHandler(
-				lsp, editor, wm, opener, notify, fs,
-				cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.Implementation,
-			),
-			"references": ReferencesHandler(
-				lsp, editor, wm, opener, notify, fs,
-				cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.References,
-			),
-			"signature-help": SignatureHelpHandler(lsp, editor, wm,
-				cfg.ScheduleNextTick, cfg.SignatureHelp),
-			"rename": RenameHandler(lsp, editor, wm, opener),
+	r := &routerHandler{
+		lsp: lsp,
+		symbolComplete: map[string]bool{
+			"hover": true, "definition": true, "declaration": true,
+			"type-definition": true, "implementation": true, "references": true,
 		},
-	}, nil
+	}
+	if err := editor.SubscribeEvents(
+		[]textapi.EventType{textapi.EventTypeFocus}, r,
+	); err != nil {
+		return nil, err
+	}
+	r.handlers = map[string]textapi.CommandHandler{
+		"format":   formatH,
+		"hover":    HoverHandler(lsp, wm, notify, fs, cfg.ScheduleNextTick, cfg.Parser, cfg.Hover),
+		"complete": CompleteHandler(lsp, editor, wm, cfg.Complete, cfg.Interrupter),
+		"definition": DefinitionHandler(
+			lsp, editor, wm, opener, notify, fs,
+			cfg.ScheduleNextTick, cfg.Parser, cfg.Definition,
+		),
+		"declaration": DeclarationHandler(
+			lsp, editor, wm, opener, notify, fs,
+			cfg.ScheduleNextTick, cfg.Parser, cfg.Declaration,
+		),
+		"type-definition": TypeDefinitionHandler(
+			lsp, editor, wm, opener, notify, fs,
+			cfg.ScheduleNextTick, cfg.Parser, cfg.TypeDefinition,
+		),
+		"implementation": ImplementationHandler(
+			lsp, editor, wm, opener, notify, fs,
+			cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.Implementation,
+		),
+		"references": ReferencesHandler(
+			lsp, editor, wm, opener, notify, fs,
+			cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.References,
+		),
+		"signature-help": SignatureHelpHandler(lsp, editor, wm,
+			cfg.ScheduleNextTick, cfg.SignatureHelp),
+		"rename": RenameHandler(lsp, editor, wm, opener),
+	}
+	return r, nil
 }
 
-var _ textapi.CommandHandler = (*routerHandler)(nil)
+var (
+	_ textapi.CommandHandler = (*routerHandler)(nil)
+	_ textapi.EventHandler   = (*routerHandler)(nil)
+)
 
 type routerHandler struct {
-	handlers map[string]textapi.CommandHandler
+	handlers       map[string]textapi.CommandHandler
+	symbolComplete map[string]bool
+	lsp            semanticapi.LSP
+	focusURI       workspaceapi.URI
+}
+
+func (r *routerHandler) Handle(_ context.Context, ev textapi.Event) bool {
+	if ev.Type == textapi.EventTypeFocus && ev.URI.String() != "" {
+		r.focusURI = ev.URI
+	}
+	return false
 }
 
 func (r *routerHandler) HandleCommand(
@@ -227,6 +251,13 @@ func (r *routerHandler) Complete(
 	cmd = args[0]
 	args = args[1:]
 	if h, ok := r.handlers[cmd]; ok {
+		// For symbol-completing subcommands with an empty query,
+		// fall back to document symbols from the focused file
+		// because gopls returns nothing for empty workspace/symbol queries.
+		if r.symbolComplete[cmd] && r.focusURI.String() != "" &&
+			(len(args) == 0 || (len(args) == 1 && args[0] == "")) {
+			return CompleteDocumentSymbol(ctx, r.lsp, r.focusURI)
+		}
 		return h.Complete(ctx, cmd, args)
 	}
 	names := make([]string, 0, len(r.handlers))
