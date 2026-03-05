@@ -185,44 +185,35 @@ func (h *CallbackHandler) PublishDiagnostics(
 		return fmt.Errorf("parse URI: %w", err)
 	}
 
+	locs := make([]textapi.Location, 0, len(params.Diagnostics))
+	highest := textapi.LocationPriorityInfo
+	for _, diag := range params.Diagnostics {
+		p := diagnosticSeverityToLocationPriority(diag.Severity)
+		if p > highest {
+			highest = p
+		}
+		locs = append(locs, textapi.Location{
+			From: term.Coordinates{
+				X: int(diag.Range.Start.Character),
+				Y: int(diag.Range.Start.Line),
+			},
+			To: term.Coordinates{
+				X: int(diag.Range.End.Character),
+				Y: int(diag.Range.End.Line),
+			},
+			Message: diag.Message,
+			Attr:    diagnosticSeverityToAttr(diag.Severity),
+		})
+	}
+	ll := textapi.LocationSlice(locs)
+
 	ok := h.scheduleNextTick(func() {
 		eh, err := h.editor.Editor(uri)
 		if err != nil {
 			slog.Warn("editor for diagnostics", "uri", uri.Name(), "err", err)
 			return
 		}
-
-		if len(params.Diagnostics) == 0 {
-			err = h.editor.SetLocationList(eh,
-				textapi.LocationPriorityInfo, "lsp-diagnostics", nil)
-			if err != nil {
-				slog.Warn("clear diagnostics", "err", err)
-			}
-			return
-		}
-
-		locs := make([]textapi.Location, 0, len(params.Diagnostics))
-		highest := textapi.LocationPriorityInfo
-		for _, diag := range params.Diagnostics {
-			p := diagnosticSeverityToLocationPriority(diag.Severity)
-			if p > highest {
-				highest = p
-			}
-			locs = append(locs, textapi.Location{
-				From: term.Coordinates{
-					X: int(diag.Range.Start.Character),
-					Y: int(diag.Range.Start.Line),
-				},
-				To: term.Coordinates{
-					X: int(diag.Range.End.Character),
-					Y: int(diag.Range.End.Line),
-				},
-				Message: diag.Message,
-				Attr:    diagnosticSeverityToAttr(diag.Severity),
-			})
-		}
-		err = h.editor.SetLocationList(eh, highest, "lsp-diagnostics",
-			textapi.LocationSlice(locs))
+		err = h.editor.SetLocationList(eh, highest, "lsp-diagnostics", ll)
 		if err != nil {
 			slog.Warn("set diagnostics", "err", err)
 		}
