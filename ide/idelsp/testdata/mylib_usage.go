@@ -1,6 +1,6 @@
 // Unstable Build LLC ("COMPANY") CONFIDENTIAL
 //
-// Unpublished Copyright (c) 2017-2026 Unstable Build, All Rights Reserved.
+// Unpublished Copyright (c) 2018-2026 Unstable Build, All Rights Reserved.
 //
 // NOTICE: All information contained herein is, and remains the property of COMPANY.
 // The intellectual and technical concepts contained herein are proprietary to
@@ -23,35 +23,14 @@
 
 package main
 
-// Multiply multiplies two integers.
-func Multiply(a, b int) int {
-	return a * b
-}
+import (
+	"fmt"
 
-// Max returns the maximum of two integers.
-func Max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
+	"example.com/testproject/mylib"
+)
 
-// Counter tracks a count with a value receiver method.
-type Counter struct {
-	N int
-}
-
-// Count returns the current count (value receiver).
-func (c Counter) Count() int {
-	return c.N
-}
-
-// Increment increases the counter (pointer receiver).
-func (c *Counter) Increment() {
-	c.N++
-}
-
-// Reset sets the counter to zero (pointer receiver).
-func (c *Counter) Reset() {
-	c.N = 0
+// UseMyLib exercises mylib.MyType for testing qualified symbol resolution.
+func UseMyLib() string {
+	m := &mylib.MyType{Value: "hello"}
+	return fmt.Sprintf("mylib says: %s", m.String())
 }

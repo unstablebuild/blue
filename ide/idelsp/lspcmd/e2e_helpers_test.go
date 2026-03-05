@@ -77,18 +77,28 @@ func setupTestWorkspace(
 		return tmpDir
 	}
 
-	entries, err := os.ReadDir(testdataDir)
+	copyDir(t, testdataDir, tmpDir)
+	return tmpDir
+}
+
+func copyDir(t *testing.T, src, dst string) {
+	t.Helper()
+	entries, err := os.ReadDir(src)
 	require.NoError(t, err)
 	for _, e := range entries {
-		src := filepath.Join(testdataDir, e.Name())
-		dst := filepath.Join(tmpDir, e.Name())
-		data, err := os.ReadFile(src)
+		srcPath := filepath.Join(src, e.Name())
+		dstPath := filepath.Join(dst, e.Name())
+		if e.IsDir() {
+			require.NoError(t, os.MkdirAll(dstPath, 0o755))
+			copyDir(t, srcPath, dstPath)
+			continue
+		}
+		data, err := os.ReadFile(srcPath)
 		require.NoError(t, err)
 		require.NoError(t, os.WriteFile(
-			dst, data, 0o644,
+			dstPath, data, 0o644,
 		))
 	}
-	return tmpDir
 }
 
 // stubPkgManager implements idelsp.PkgManager for tests.

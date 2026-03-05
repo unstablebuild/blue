@@ -1,6 +1,6 @@
 // Unstable Build LLC ("COMPANY") CONFIDENTIAL
 //
-// Unpublished Copyright (c) 2017-2026 Unstable Build, All Rights Reserved.
+// Unpublished Copyright (c) 2018-2026 Unstable Build, All Rights Reserved.
 //
 // NOTICE: All information contained herein is, and remains the property of COMPANY.
 // The intellectual and technical concepts contained herein are proprietary to
@@ -21,37 +21,14 @@
 // REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
 // ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
 
-package main
+package mylib
 
-// Multiply multiplies two integers.
-func Multiply(a, b int) int {
-	return a * b
+// MyType is a simple type for testing qualified symbol resolution.
+type MyType struct {
+	Value string
 }
 
-// Max returns the maximum of two integers.
-func Max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-// Counter tracks a count with a value receiver method.
-type Counter struct {
-	N int
-}
-
-// Count returns the current count (value receiver).
-func (c Counter) Count() int {
-	return c.N
-}
-
-// Increment increases the counter (pointer receiver).
-func (c *Counter) Increment() {
-	c.N++
-}
-
-// Reset sets the counter to zero (pointer receiver).
-func (c *Counter) Reset() {
-	c.N = 0
+// String returns the string representation of MyType.
+func (m *MyType) String() string {
+	return m.Value
 }

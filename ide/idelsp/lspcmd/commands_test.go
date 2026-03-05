@@ -153,6 +153,68 @@ func TestRouterCompleteSymbol(t *testing.T) {
 	}
 }
 
+func TestRouterCompleteDocumentSymbolFallback(t *testing.T) {
+	t.Parallel()
+
+	rootURI, err := workspaceapi.ParseURI("file:///project")
+	require.NoError(t, err)
+
+	docURI, err := workspaceapi.ParseURI("file:///project/main.go")
+	require.NoError(t, err)
+
+	docSymbols := semanticapi.DocumentSymbolResult{
+		DocumentSymbols: []semanticapi.DocumentSymbol{
+			{Name: "main"},
+			{Name: "Greeter", Children: []semanticapi.DocumentSymbol{
+				{Name: "Greet"},
+			}},
+			{Name: "Add"},
+		},
+	}
+
+	subcommands := []string{
+		"hover", "definition", "declaration",
+		"type-definition", "implementation", "references",
+	}
+
+	for _, sub := range subcommands {
+		t.Run(sub, func(t *testing.T) {
+			t.Parallel()
+
+			t.Run("empty query with focused file returns document symbols", func(t *testing.T) {
+				t.Parallel()
+				lsp := &mockLSP{
+					documentSymbolFn: func(_ context.Context, p semanticapi.DocumentSymbolParams) (semanticapi.DocumentSymbolResult, error) {
+						assert.Equal(t, "file:///project/main.go", p.TextDocument.URI)
+						return docSymbols, nil
+					},
+				}
+				cfg := DefaultConfig()
+				cfg.RootURI = rootURI
+				cfg.ScheduleNextTick = syncTick
+				cfg.Interrupter = term.NopInterrupter()
+				router, err := AllHandler(
+					lsp, &mockEditor{}, &mockWindowManager{},
+					&mockResourceOpener{}, &mockNotifications{},
+					&mockFileSystem{}, cfg,
+				)
+				require.NoError(t, err)
+
+				// Simulate a focus event that sets the active URI.
+				router.(textapi.EventHandler).Handle(
+					context.Background(),
+					textapi.Event{Type: textapi.EventTypeFocus, URI: docURI},
+				)
+
+				// Now complete with empty query.
+				iter, err := router.Complete(context.Background(), "lsp", []string{sub, ""})
+				require.NoError(t, err)
+				assert.Equal(t, []string{"main", "Greeter", "Greet", "Add"}, collectIter(t, iter))
+			})
+		})
+	}
+}
+
 func TestE2ECommands(t *testing.T) {
 	t.Parallel()
 	goplsBin := findGopls(t)
@@ -395,7 +457,305 @@ func TestE2ECommands(t *testing.T) {
 			err := router.HandleCommand(ctx, cmd)
 			require.NoError(t, err)
 		})
+
+		t.Run("by symbol name", func(t *testing.T) {
+			var gotFloating browserapi.Floating
+
+			wm.floatingFn = func(h browserapi.Floating, _ browserapi.FloatingConfig) (
+				browserapi.Window, error,
+			) {
+				gotFloating = h
+				return nil, nil
+			}
+			defer func() { wm.floatingFn = nil }()
+
+			// "lsp hover Add" should resolve via workspace/symbol
+			// and show hover info for the Add function.
+			cmd := textapi.Command{
+				Name:     "lsp",
+				Args:     []string{"hover", "Add"},
+				URI:      mainWSURI,
+				Resource: &mockHandler{uri: mainWSURI},
+			}
+			err := router.HandleCommand(ctx, cmd)
+			require.NoError(t, err)
+			require.NotNil(t, gotFloating, "Floating must be called for symbol name hover")
+
+			w, h := gotFloating.Dimensions()
+			gotFloating.Resize(w, h)
+			sw := term.NewStringWriter(w, h)
+			gotFloating.Draw(sw)
+			require.NoError(t, sw.Flush())
+			rendered := sw.String()
+
+			assert.Contains(t, rendered, "Add",
+				"hover result should contain the Add function")
+		})
+
+		t.Run("by qualified symbol name", func(t *testing.T) {
+			var gotFloating browserapi.Floating
+
+			wm.floatingFn = func(h browserapi.Floating, _ browserapi.FloatingConfig) (
+				browserapi.Window, error,
+			) {
+				gotFloating = h
+				return nil, nil
+			}
+			defer func() { wm.floatingFn = nil }()
+
+			// "lsp hover mylib.MyType" should resolve the qualified
+			// symbol via workspace/symbol and show hover info.
+			cmd := textapi.Command{
+				Name:     "lsp",
+				Args:     []string{"hover", "mylib.MyType"},
+				URI:      mainWSURI,
+				Resource: &mockHandler{uri: mainWSURI},
+			}
+			err := router.HandleCommand(ctx, cmd)
+			require.NoError(t, err)
+			require.NotNil(t, gotFloating, "Floating must be called for qualified symbol hover")
+
+			w, h := gotFloating.Dimensions()
+			gotFloating.Resize(w, h)
+			sw := term.NewStringWriter(w, h)
+			gotFloating.Draw(sw)
+			require.NoError(t, sw.Flush())
+			rendered := sw.String()
+
+			assert.Contains(t, rendered, "MyType",
+				"hover result should contain MyType")
+		})
 	})
+}
+
+// TestE2EDocumentSymbolNormalization verifies that every method symbol
+// returned by textDocument/documentSymbol (which gopls renders as
+// "(*Type).Method") can be resolved via workspace/symbol after
+// normalizeMethodName strips the pointer-receiver syntax.
+//
+// This is critical because the document-symbol fallback feeds the
+// completer, and the completed name is later sent to workspace/symbol
+// for resolution. If the normalization is wrong, the user picks a
+// completion that can't be resolved.
+func TestE2EDocumentSymbolNormalization(t *testing.T) {
+	t.Parallel()
+	goplsBin := findGopls(t)
+	tmpDir := setupTestWorkspace(t, "../testdata")
+
+	rootURI, err := workspaceapi.ParseURI("file://" + tmpDir)
+	require.NoError(t, err)
+
+	// Collect all .go files (excluding _test.go for cleaner symbols).
+	type testFile struct {
+		path  string
+		wsURI workspaceapi.URI
+	}
+	var files []testFile
+	for _, rel := range []string{
+		"main.go", "util.go", "mylib/mylib.go",
+	} {
+		p := filepath.Join(tmpDir, rel)
+		uri, err := workspaceapi.ParseURI("file://" + p)
+		require.NoError(t, err)
+		files = append(files, testFile{path: p, wsURI: uri})
+	}
+
+	scheme := newTestScheme()
+
+	readyCh := make(chan struct{})
+	var ready sync.Once
+	callback := &e2eCallback{
+		onShowMessage: func(params semanticapi.ShowMessageParams) {
+			if strings.Contains(params.Message, "Finished loading packages") {
+				ready.Do(func() { close(readyCh) })
+			}
+		},
+		onProgress: readyOnProgress(&ready, readyCh),
+	}
+
+	mgr := idelsp.New(
+		rootURI, scheme, scheme, &stubPkgManager{bin: goplsBin},
+		nil, nil, idelsp.Config{Callback: callback, MaxRetries: 1},
+	)
+	ctx := context.Background()
+
+	// Open all files so gopls indexes them.
+	for _, f := range files {
+		content, err := os.ReadFile(f.path)
+		require.NoError(t, err)
+		mgr.Handle(ctx, textapi.Event{
+			Type:    textapi.EventTypeOpen,
+			URI:     f.wsURI,
+			Content: string(content),
+		})
+	}
+	waitReady(t, readyCh)
+	t.Cleanup(func() { _ = mgr.Close() })
+
+	// For each file, get document symbols, normalize their names,
+	// and verify workspace/symbol can resolve them.
+	for _, f := range files {
+		t.Run(filepath.Base(f.path), func(t *testing.T) {
+			docResult, err := mgr.DocumentSymbol(ctx, semanticapi.DocumentSymbolParams{
+				TextDocument: TextDocID(f.wsURI),
+			})
+			require.NoError(t, err)
+
+			// Collect all symbol names from the document symbol response.
+			var rawNames []string
+			collectRawDocSymbolNames(&rawNames, docResult.DocumentSymbols)
+			for _, s := range docResult.SymbolInformation {
+				rawNames = append(rawNames, s.Name)
+			}
+			require.NotEmpty(t, rawNames, "expected symbols in %s", f.path)
+
+			for _, raw := range rawNames {
+				normalized := normalizeMethodName(raw)
+
+				t.Run(normalized, func(t *testing.T) {
+					// Query workspace/symbol with the normalized name.
+					syms, err := mgr.WorkspaceSymbol(ctx, semanticapi.WorkspaceSymbolParams{
+						Query: normalized,
+					})
+					require.NoError(t, err)
+
+					// At least one result must match exactly.
+					var found bool
+					for _, s := range syms {
+						if s.Name == normalized {
+							found = true
+							break
+						}
+					}
+					assert.True(t, found,
+						"workspace/symbol should find %q (raw from documentSymbol: %q); got %d results",
+						normalized, raw, len(syms))
+				})
+			}
+		})
+	}
+}
+
+// collectRawDocSymbolNames collects all names from a DocumentSymbol
+// tree without normalization (for test verification).
+func collectRawDocSymbolNames(names *[]string, syms []semanticapi.DocumentSymbol) {
+	for _, s := range syms {
+		*names = append(*names, s.Name)
+		collectRawDocSymbolNames(names, s.Children)
+	}
+}
+
+// TestE2ECompleteNormalization exercises the full completion → resolve
+// round-trip through a real gopls instance. It focuses a file that
+// contains both pointer- and value-receiver methods, calls the router's
+// Complete method with an empty query (triggering the document-symbol
+// fallback), and then verifies that every returned method name:
+//  1. Is normalized (no "(*Type).Method" or "(Type).Method" syntax).
+//  2. Can be resolved back via ResolveSymbol / workspace/symbol.
+func TestE2ECompleteNormalization(t *testing.T) {
+	t.Parallel()
+	goplsBin := findGopls(t)
+	tmpDir := setupTestWorkspace(t, "../testdata")
+
+	rootURI, err := workspaceapi.ParseURI("file://" + tmpDir)
+	require.NoError(t, err)
+
+	// We open both main.go and util.go so gopls indexes them.
+	// util.go has Counter with pointer- and value-receiver methods.
+	// main.go has Greeter with a pointer-receiver method.
+	type testFile struct {
+		rel   string
+		wsURI workspaceapi.URI
+	}
+	var files []testFile
+	for _, rel := range []string{"main.go", "util.go"} {
+		p := filepath.Join(tmpDir, rel)
+		uri, parseErr := workspaceapi.ParseURI("file://" + p)
+		require.NoError(t, parseErr)
+		files = append(files, testFile{rel: rel, wsURI: uri})
+	}
+
+	scheme := newTestScheme()
+
+	readyCh := make(chan struct{})
+	var ready sync.Once
+	callback := &e2eCallback{
+		onShowMessage: func(params semanticapi.ShowMessageParams) {
+			if strings.Contains(params.Message, "Finished loading packages") {
+				ready.Do(func() { close(readyCh) })
+			}
+		},
+		onProgress: readyOnProgress(&ready, readyCh),
+	}
+
+	mgr := idelsp.New(
+		rootURI, scheme, scheme, &stubPkgManager{bin: goplsBin},
+		nil, nil, idelsp.Config{Callback: callback, MaxRetries: 1},
+	)
+	ctx := context.Background()
+
+	for _, f := range files {
+		content, readErr := os.ReadFile(filepath.Join(tmpDir, f.rel))
+		require.NoError(t, readErr)
+		mgr.Handle(ctx, textapi.Event{
+			Type:    textapi.EventTypeOpen,
+			URI:     f.wsURI,
+			Content: string(content),
+		})
+	}
+	waitReady(t, readyCh)
+	t.Cleanup(func() { _ = mgr.Close() })
+
+	editor := &mockEditor{
+		editorFn: func(uri workspaceapi.URI) (textapi.Handler, error) {
+			return &mockHandler{uri: uri}, nil
+		},
+	}
+	wm := &mockWindowManager{}
+	fs := &mockFileSystem{
+		openFileFn: func(path string, flag int, mode os.FileMode) (workspaceapi.File, error) {
+			return os.OpenFile(path, flag, mode)
+		},
+	}
+	cfg := DefaultConfig()
+	cfg.RootURI = rootURI
+	cfg.ScheduleNextTick = syncTick
+	router, err := AllHandler(mgr, editor, wm, &mockResourceOpener{}, &mockNotifications{}, fs, cfg)
+	require.NoError(t, err)
+
+	// Focus each file and verify completions for that file.
+	for _, f := range files {
+		t.Run(f.rel, func(t *testing.T) {
+			// Simulate focus event so the router knows which file to query.
+			router.(textapi.EventHandler).Handle(ctx, textapi.Event{
+				Type: textapi.EventTypeFocus,
+				URI:  f.wsURI,
+			})
+
+			// Empty-query completion triggers the document-symbol fallback.
+			iter, err := router.Complete(ctx, "lsp", []string{"hover", ""})
+			require.NoError(t, err)
+			names := collectIter(t, iter)
+			require.NotEmpty(t, names, "expected completions for %s", f.rel)
+
+			for _, name := range names {
+				// 1. No gopls receiver-method syntax should survive.
+				assert.NotContains(t, name, "(*",
+					"completion %q still has pointer-receiver syntax", name)
+				assert.NotRegexp(t, `^\(`, name,
+					"completion %q still has value-receiver paren prefix", name)
+
+				// 2. Every completion must resolve via workspace/symbol.
+				t.Run(name, func(t *testing.T) {
+					matches, err := ResolveSymbol(ctx, mgr, name)
+					require.NoError(t, err,
+						"ResolveSymbol failed for completion %q", name)
+					assert.NotEmpty(t, matches,
+						"ResolveSymbol returned no matches for %q", name)
+				})
+			}
+		})
+	}
 }
 
 func TestE2ESignatureHelpAutoTrigger(t *testing.T) {

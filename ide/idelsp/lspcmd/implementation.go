@@ -25,7 +25,6 @@ package lspcmd
 
 import (
 	"context"
-	"strings"
 
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
@@ -79,23 +78,30 @@ type implementationHandler struct {
 }
 
 func (h *implementationHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
-	if len(cmd.Args) > 0 {
-		uri, pos, err := ResolveSymbol(ctx, h.lsp, strings.Join(cmd.Args, " "))
-		if err != nil {
-			return err
-		}
-		wsURI, err := LspToURI(uri)
-		if err != nil {
-			return err
-		}
-		cmd.URI = wsURI
-		cmd.Cursor.Content = PosToCoord(pos)
-	} else if cmd.Resource == nil {
-		return nil
+	proceed, err := resolveCommandSymbol(ctx, &cmd, h.lsp, h.wm, h.fs, h.scheduleNextTick, h.parser, func(m SymbolMatch) {
+		h.scheduleNextTick(func() {
+			wsURI, err := LspToURI(m.URI)
+			if err != nil {
+				_, _ = h.notify.Notify(browserapi.LevelError, "implementation: %s", err)
+				return
+			}
+			if err := h.execute(context.Background(), wsURI, m.Pos); err != nil {
+				_, _ = h.notify.Notify(browserapi.LevelError, "implementation: %s", err)
+			}
+		})
+	})
+	if !proceed || err != nil {
+		return err
 	}
+	return h.execute(ctx, cmd.URI, CoordToPos(cmd.Cursor.Content))
+}
+
+func (h *implementationHandler) execute(
+	ctx context.Context, uri workspaceapi.URI, pos semanticapi.Position,
+) error {
 	params := semanticapi.ImplementationParams{
-		TextDocument: TextDocID(cmd.URI),
-		Position:     CoordToPos(cmd.Cursor.Content),
+		TextDocument: TextDocID(uri),
+		Position:     pos,
 	}
 	result, err := h.lsp.Implementation(ctx, params)
 	if err != nil {
