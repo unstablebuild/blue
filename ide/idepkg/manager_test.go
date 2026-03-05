@@ -1393,6 +1393,10 @@ func TestProcessConfigSkipsPromptWhenAlreadyMerged(t *testing.T) {
 		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "configpkg", Version: "1"}})
 		m, n, _, datadir := newTestManager(t, pkgs, versions)
 
+		// Create an existing user config so processConfig merges into it
+		configPath := filepath.Join(datadir, "config.yaml")
+		require.NoError(t, os.WriteFile(configPath, []byte("{}\n"), 0644))
+
 		// First install: prompt is shown and accepted (default mock auto-accepts)
 		n.SetWg(2) // apply success + download success
 		err := m.InstallPackageVersion(context.Background(), "configpkg", "1")
