@@ -1471,6 +1471,8 @@ type Config struct {
 		// After toggling gc_details ON, gopls publishes diagnostics with
 		// compiler optimization details (inlining decisions, escape analysis).
 		// mainSrc's Add function is trivially inlinable → "can inline Add".
+		// These diagnostics carry Source: "compiler" so the handler can
+		// classify and annotate them with category prefixes and icons.
 		fileURI := env.fileURIs["main.go"]
 		require.Eventually(t, func() bool {
 			env.cb.mu.Lock()
@@ -1480,8 +1482,12 @@ type Config struct {
 					continue
 				}
 				for _, d := range dp.Diagnostics {
-					if strings.Contains(d.Message, "can inline") ||
-						strings.Contains(d.Message, "escape") {
+					isCompilerOpt := strings.Contains(d.Message, "can inline") ||
+						strings.Contains(d.Message, "inlining") ||
+						strings.Contains(d.Message, "escape")
+					if isCompilerOpt {
+						assert.Equal(t, "compiler", d.Source,
+							"gc_details diagnostics should have Source \"compiler\"")
 						return true
 					}
 				}

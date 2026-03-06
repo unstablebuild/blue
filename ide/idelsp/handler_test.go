@@ -266,6 +266,95 @@ func TestCallbackHandler_PublishDiagnostics(t *testing.T) {
 			},
 			expectedPriority: textapi.LocationPriorityError,
 		},
+		{
+			name: "compiler inline diagnostic classified",
+			diagnostics: []semanticapi.Diagnostic{
+				{
+					Range: semanticapi.Range{
+						Start: semanticapi.Position{
+							Line: 10, Character: 0,
+						},
+						End: semanticapi.Position{
+							Line: 10, Character: 3,
+						},
+					},
+					Severity: semanticapi.DiagnosticSeverityInformation,
+					Source:   "compiler",
+					Message:  "can inline Add",
+				},
+			},
+			expectedLocations: []textapi.Location{
+				{
+					From:    term.Coordinates{X: 0, Y: 10},
+					To:      term.Coordinates{X: 3, Y: 10},
+					Message: "Inline: can inline Add",
+					Icon:    "⇒",
+					Attr: term.Attributes(tcell.Style{
+						Bg: tcell.ColorGreen,
+					}),
+				},
+			},
+			expectedPriority: textapi.LocationPriorityInfo,
+		},
+		{
+			name: "compiler escape diagnostic classified",
+			diagnostics: []semanticapi.Diagnostic{
+				{
+					Range: semanticapi.Range{
+						Start: semanticapi.Position{
+							Line: 5, Character: 2,
+						},
+						End: semanticapi.Position{
+							Line: 5, Character: 8,
+						},
+					},
+					Severity: semanticapi.DiagnosticSeverityInformation,
+					Source:   "compiler",
+					Message:  "a escapes to heap",
+				},
+			},
+			expectedLocations: []textapi.Location{
+				{
+					From:    term.Coordinates{X: 2, Y: 5},
+					To:      term.Coordinates{X: 8, Y: 5},
+					Message: "Escape: a escapes to heap",
+					Icon:    "↗",
+					Attr: term.Attributes(tcell.Style{
+						Bg: tcell.ColorYellow,
+					}),
+				},
+			},
+			expectedPriority: textapi.LocationPriorityInfo,
+		},
+		{
+			name: "compiler error severity not classified",
+			diagnostics: []semanticapi.Diagnostic{
+				{
+					Range: semanticapi.Range{
+						Start: semanticapi.Position{
+							Line: 1, Character: 0,
+						},
+						End: semanticapi.Position{
+							Line: 1, Character: 5,
+						},
+					},
+					Severity: semanticapi.DiagnosticSeverityError,
+					Source:   "compiler",
+					Message:  "cannot inline: too complex",
+				},
+			},
+			expectedLocations: []textapi.Location{
+				{
+					From:    term.Coordinates{X: 0, Y: 1},
+					To:      term.Coordinates{X: 5, Y: 1},
+					Message: "cannot inline: too complex",
+					Attr: term.Attributes(tcell.Style{
+						Bg: tcell.ColorRed,
+					}),
+				},
+			},
+			expectedPriority: textapi.LocationPriorityError,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -290,6 +379,76 @@ func TestCallbackHandler_PublishDiagnostics(t *testing.T) {
 			assert.Equal(t, "lsp-diagnostics", ed.locID)
 			assert.Equal(t, tt.expectedPriority, ed.locPriority)
 			assert.Equal(t, tt.expectedLocations, ed.locations)
+		})
+	}
+}
+
+func TestClassifyCompilerDiagnostic(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		msg      string
+		wantIcon string
+		wantMsg  string
+		wantAttr term.Attributes
+	}{
+		{
+			msg: "can inline Add", wantIcon: "⇒",
+			wantMsg:  "Inline: can inline Add",
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorGreen}),
+		},
+		{
+			msg: "inlining call to Add", wantIcon: "⇒",
+			wantMsg:  "Inline: inlining call to Add",
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorGreen}),
+		},
+		{
+			msg: "a escapes to heap", wantIcon: "↗",
+			wantMsg:  "Escape: a escapes to heap",
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorYellow}),
+		},
+		{
+			msg: "moved to heap: x", wantIcon: "↗",
+			wantMsg:  "Escape: moved to heap: x",
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorYellow}),
+		},
+		{
+			msg: "leaking param: x", wantIcon: "↗",
+			wantMsg:  "Escape: leaking param: x",
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorYellow}),
+		},
+		{
+			msg: "a does not escape", wantIcon: "↗",
+			wantMsg:  "Escape: a does not escape",
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorYellow}),
+		},
+		{
+			msg: "Found IsInBounds", wantIcon: "⊞",
+			wantMsg:  "Bounds: Found IsInBounds",
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorTeal}),
+		},
+		{
+			msg: "isInBounds", wantIcon: "⊞",
+			wantMsg:  "Bounds: isInBounds",
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorTeal}),
+		},
+		{
+			msg: "nilcheck", wantIcon: "∅",
+			wantMsg:  "Nilcheck: nilcheck",
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorPurple}),
+		},
+		{
+			msg: "unknown compiler message", wantIcon: "⚙",
+			wantMsg:  "unknown compiler message",
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorBlue}),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			t.Parallel()
+			icon, msg, attr := classifyCompilerDiagnostic(tt.msg)
+			assert.Equal(t, tt.wantIcon, icon)
+			assert.Equal(t, tt.wantMsg, msg)
+			assert.Equal(t, tt.wantAttr, attr)
 		})
 	}
 }
