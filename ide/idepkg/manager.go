@@ -717,7 +717,7 @@ func (m *Manager) promptConfigChange(
 	userDoc, pkgDoc *yaml.Node,
 ) error {
 	message := fmt.Sprintf(
-		"Extension %s (version %s) wants to *update* your configuration "+
+		"Extension %s (version %s) wants to **update** your configuration "+
 			"with the following settings:\n\n```yaml\n%s\n```\n\nDo you want to allow this?",
 		pkgID, pkgVersion, string(configYAML))
 
@@ -741,13 +741,17 @@ func (m *Manager) promptConfigChange(
 
 	prompt := handler.NewPrompt(handler.PromptConfig{
 		HighlightAttr: term.Attributes{
-			Attrs: tcell.AttrBold,
+			Attrs: tcell.AttrBold | tcell.AttrReverse,
 			Fg:    tcell.ColorBlue,
+		},
+		OptionAttr: term.Attributes{
+			Attrs: tcell.AttrBold | tcell.AttrReverse,
+			Fg:    tcell.ColorGray,
 		},
 		OptionBindings: []term.KeyComb{{Ch: 'a'}, {Ch: 'd'}},
 		PromptConfig: component.PromptConfig{
 			Message:    message,
-			Options:    []string{"Allow", "Deny"},
+			Options:    []string{" Allow ", "  Deny "},
 			Frame:      m.frameCharSet,
 			NewMessage: markdownOrFallback(m.parser, m.scheduleNextTick),
 		},
