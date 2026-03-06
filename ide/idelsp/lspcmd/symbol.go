@@ -38,20 +38,20 @@ import (
 	"github.com/unstablebuild/rune-go-sdk/iterator"
 )
 
-// SymbolMatch represents a resolved workspace symbol candidate.
-type SymbolMatch struct {
+// symbolMatch represents a resolved workspace symbol candidate.
+type symbolMatch struct {
 	URI     string
 	Pos     semanticapi.Position
 	Display string
 }
 
-// ResolveSymbol resolves a symbol name to one or more candidates by querying
+// resolveSymbol resolves a symbol name to one or more candidates by querying
 // the workspace symbol provider. Exact name matches are preferred and
 // deduplicated by URI. When multiple candidates remain, each gets a display
 // name that disambiguates by package.
-func ResolveSymbol(
+func resolveSymbol(
 	ctx context.Context, lsp semanticapi.LSP, name string,
-) ([]SymbolMatch, error) {
+) ([]symbolMatch, error) {
 	syms, err := lsp.WorkspaceSymbol(ctx, semanticapi.WorkspaceSymbolParams{
 		Query: name,
 	})
@@ -71,7 +71,7 @@ func ResolveSymbol(
 	if len(exact) == 0 {
 		// Fall back to the first result (best fuzzy match).
 		s := syms[0]
-		return []SymbolMatch{{
+		return []symbolMatch{{
 			URI:     s.Location.URI,
 			Pos:     s.Location.Range.Start,
 			Display: s.Name,
@@ -88,7 +88,7 @@ func ResolveSymbol(
 	}
 	if len(deduped) == 1 {
 		s := deduped[0]
-		return []SymbolMatch{{
+		return []symbolMatch{{
 			URI:     s.Location.URI,
 			Pos:     s.Location.Range.Start,
 			Display: s.Name,
@@ -100,12 +100,12 @@ func ResolveSymbol(
 // symbolDisplayNames computes display names for a set of symbols.
 // It uses <package>.<symbol> when the short package name is unique,
 // and the full package path when there are collisions.
-func symbolDisplayNames(syms []semanticapi.SymbolInformation) []SymbolMatch {
-	matches := make([]SymbolMatch, len(syms))
+func symbolDisplayNames(syms []semanticapi.SymbolInformation) []symbolMatch {
+	matches := make([]symbolMatch, len(syms))
 	pkgPaths := make([]string, len(syms))
 	shortPkgs := make([]string, len(syms))
 	for i, s := range syms {
-		matches[i] = SymbolMatch{
+		matches[i] = symbolMatch{
 			URI: s.Location.URI,
 			Pos: s.Location.Range.Start,
 		}
@@ -157,12 +157,12 @@ func resolveCommandSymbol(
 	fs workspaceapi.FileSystem,
 	scheduleNextTick func(func()) bool,
 	parser syntaxapi.Parser,
-	onPick func(SymbolMatch),
+	onPick func(symbolMatch),
 ) (proceed bool, err error) {
 	if len(cmd.Args) == 0 {
 		return cmd.Resource != nil, nil
 	}
-	matches, err := ResolveSymbol(ctx, lsp, strings.Join(cmd.Args, " "))
+	matches, err := resolveSymbol(ctx, lsp, strings.Join(cmd.Args, " "))
 	if err != nil {
 		return false, err
 	}
@@ -182,12 +182,12 @@ func resolveCommandSymbol(
 // for the given symbol matches. When the user selects a match, onPick is
 // called. It reuses the locationsFloatingHandler with a custom onSelect.
 func showSymbolPicker(
-	matches []SymbolMatch,
+	matches []symbolMatch,
 	wm browserapi.WindowManager,
 	fs workspaceapi.FileSystem,
 	scheduleNextTick func(func()) bool,
 	parser syntaxapi.Parser,
-	onPick func(SymbolMatch),
+	onPick func(symbolMatch),
 ) error {
 	entries := make([]locationEntry, len(matches))
 	for i, m := range matches {
@@ -214,50 +214,230 @@ func showSymbolPicker(
 	return nil
 }
 
-// CompleteSymbol returns symbol-name completions from the workspace symbol
-// provider. The arg is forwarded as the query to the workspace symbol request.
-func CompleteSymbol(
-	ctx context.Context, lsp semanticapi.LSP, arg string,
+
+
+// completeReferencedSymbol returns package-qualified symbol names
+// referenced across the workspace by running tree-sitter queries to
+// find imports and their usages (qualified types and selector
+// expressions). This provides a richer fallback than document symbols
+// for empty-query completion because it includes dependency symbols.
+//
+// All I/O runs in a background goroutine. The returned iterator
+// streams results through a channel so the calling goroutine never
+// blocks on parser queries.
+func completeReferencedSymbol(
+	ctx context.Context, parser syntaxapi.Parser,
 ) (iterator.Iterator[string], error) {
-	syms, err := lsp.WorkspaceSymbol(ctx, semanticapi.WorkspaceSymbolParams{
-		Query: arg,
-	})
+	ctx, cancel := context.WithCancel(ctx)
+	ch := make(chan string)
+	errc := make(chan error, 1)
+
+	go func() {
+		defer close(ch)
+		if err := produceReferencedSymbols(ctx, parser, ch); err != nil {
+			errc <- err
+		}
+	}()
+
+	seen := make(map[string]bool)
+	return iterator.FromFunc(func(ctx context.Context) (string, bool, error) {
+		for {
+			select {
+			case s, ok := <-ch:
+				if !ok {
+					select {
+					case err := <-errc:
+						return "", false, err
+					default:
+						return "", false, nil
+					}
+				}
+				if seen[s] {
+					continue
+				}
+				seen[s] = true
+				return s, true, nil
+			case <-ctx.Done():
+				return "", false, ctx.Err()
+			}
+		}
+	}, func() error {
+		cancel()
+		for range ch {
+		}
+		select {
+		case err := <-errc:
+			return err
+		default:
+			return nil
+		}
+	}), nil
+}
+
+// produceReferencedSymbols runs in a background goroutine. It first
+// reduces all imports into a lookup table, then streams qualified-type
+// and selector-expression matches to ch.
+func produceReferencedSymbols(
+	ctx context.Context, parser syntaxapi.Parser, ch chan<- string,
+) error {
+	imports, err := reduceImports(ctx, parser)
+	if err != nil {
+		return err
+	}
+
+	if err := searchPairs(ctx, parser,
+		`(qualified_type package: (package_identifier) @pkg name: (type_identifier) @type)`,
+		[]string{"pkg", "type"}, "go",
+		func(p [2]syntaxapi.Result) bool { return isExported(p[1].Text) },
+		ch,
+	); err != nil {
+		return err
+	}
+
+	return searchPairs(ctx, parser,
+		`(selector_expression operand: (identifier) @pkg field: (field_identifier) @symbol)`,
+		[]string{"pkg", "symbol"}, "go",
+		func(p [2]syntaxapi.Result) bool {
+			if !isExported(p[1].Text) {
+				return false
+			}
+			m := imports[p[0].File]
+			return m != nil && m[p[0].Text]
+		},
+		ch,
+	)
+}
+
+// searchPairs runs a two-capture tree-sitter search, pairs
+// consecutive captures, applies keep as a filter, and sends
+// the resulting "pkg.Name" strings to ch.
+func searchPairs(
+	ctx context.Context, parser syntaxapi.Parser,
+	query string, captures []string, lang string,
+	keep func([2]syntaxapi.Result) bool,
+	ch chan<- string,
+) error {
+	iter, err := parser.Search(query, captures, lang)
+	if err != nil {
+		return err
+	}
+	results := iterator.Map(
+		iterator.Filter(pairedResults(iter), keep),
+		func(p [2]syntaxapi.Result) string {
+			return p[0].Text + "." + p[1].Text
+		},
+	)
+	defer func() { _ = results.Close() }()
+	for {
+		s, ok := results.Next(ctx)
+		if !ok {
+			return results.Err()
+		}
+		select {
+		case ch <- s:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// reduceImports builds a per-file import alias lookup table by
+// reducing two tree-sitter queries: one for all import paths
+// (deriving the default alias) and one for explicit import names
+// (overriding the default).
+func reduceImports(
+	ctx context.Context, parser syntaxapi.Parser,
+) (map[workspaceapi.URI]map[string]bool, error) {
+	type fileImports = map[workspaceapi.URI]map[string]bool
+
+	pathIter, err := parser.Search(
+		`(import_spec path: (interpreted_string_literal) @path)`,
+		[]string{"path"}, "go",
+	)
 	if err != nil {
 		return nil, err
 	}
-	names := make([]string, len(syms))
-	for i, s := range syms {
-		names[i] = s.Name
-	}
-	return iterator.FromSlice(names), nil
-}
-
-// CompleteDocumentSymbol returns symbol-name completions from the document
-// symbol provider for the given URI. This is used as a fallback when the
-// workspace symbol query is empty, since gopls returns nothing for empty
-// workspace/symbol queries.
-func CompleteDocumentSymbol(
-	ctx context.Context, lsp semanticapi.LSP, uri workspaceapi.URI,
-) (iterator.Iterator[string], error) {
-	result, err := lsp.DocumentSymbol(ctx, semanticapi.DocumentSymbolParams{
-		TextDocument: TextDocID(uri),
-	})
+	imports, err := iterator.Reduce(ctx, pathIter,
+		func(m fileImports, r syntaxapi.Result) (fileImports, error) {
+			p := strings.Trim(r.Text, `"`)
+			alias := path.Base(p)
+			if alias == "." || alias == "_" {
+				return m, nil
+			}
+			if m == nil {
+				m = make(fileImports)
+			}
+			if m[r.File] == nil {
+				m[r.File] = make(map[string]bool)
+			}
+			m[r.File][alias] = true
+			return m, nil
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
-	var names []string
-	collectDocSymbolNames(&names, result.DocumentSymbols)
-	for _, s := range result.SymbolInformation {
-		names = append(names, normalizeMethodName(s.Name))
+
+	aliasIter, err := parser.Search(
+		`(import_spec name: (package_identifier) @alias path: (interpreted_string_literal) @path)`,
+		[]string{"alias", "path"}, "go",
+	)
+	if err != nil {
+		return nil, err
 	}
-	return iterator.FromSlice(names), nil
+	// Mutate imports in place; the Reduce accumulator is unused.
+	_, err = iterator.Reduce(ctx, pairedResults(aliasIter),
+		func(_ struct{}, p [2]syntaxapi.Result) (struct{}, error) {
+			alias := p[0].Text
+			if alias == "." || alias == "_" || imports == nil {
+				return struct{}{}, nil
+			}
+			defaultAlias := path.Base(strings.Trim(p[1].Text, `"`))
+			if fm := imports[p[0].File]; fm != nil {
+				delete(fm, defaultAlias)
+				fm[alias] = true
+			}
+			return struct{}{}, nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	if imports == nil {
+		imports = make(fileImports)
+	}
+	return imports, nil
 }
 
-func collectDocSymbolNames(names *[]string, syms []semanticapi.DocumentSymbol) {
-	for _, s := range syms {
-		*names = append(*names, normalizeMethodName(s.Name))
-		collectDocSymbolNames(names, s.Children)
-	}
+// pairedResults groups results from a two-capture tree-sitter query
+// into pairs. Because the gRPC stream may interleave results from
+// files processed concurrently, consecutive results are not
+// guaranteed to belong to the same match. This function buffers the
+// first capture per file and pairs it with the next result from the
+// same file.
+func pairedResults(
+	it iterator.Iterator[syntaxapi.Result],
+) iterator.Iterator[[2]syntaxapi.Result] {
+	pending := make(map[workspaceapi.URI]syntaxapi.Result)
+	return iterator.FromFunc(
+		func(ctx context.Context) ([2]syntaxapi.Result, bool, error) {
+			for {
+				r, ok := it.Next(ctx)
+				if !ok {
+					return [2]syntaxapi.Result{}, false, it.Err()
+				}
+				if first, exists := pending[r.File]; exists {
+					delete(pending, r.File)
+					return [2]syntaxapi.Result{first, r}, true, nil
+				}
+				pending[r.File] = r
+			}
+		}, it.Close,
+	)
+}
+
+func isExported(name string) bool {
+	return len(name) > 0 && name[0] >= 'A' && name[0] <= 'Z'
 }
 
 // normalizeMethodName converts gopls document-symbol receiver method

@@ -701,7 +701,7 @@ func TestE2ERename(t *testing.T) {
 			) (workspaceapi.File, error) {
 				return os.OpenFile(path, flag, mode)
 			},
-		}, cfg,
+		}, &mockParser{}, cfg,
 	)
 	require.NoError(t, err)
 
