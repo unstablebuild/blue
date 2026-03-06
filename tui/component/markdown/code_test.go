@@ -44,7 +44,7 @@ func (m *mockParser) Highlight(_ workspaceapi.URI, _ string) (
 	return iterator.FromSlice(m.highlights), nil
 }
 
-func (m *mockParser) Search(string, []string) (iterator.Iterator[syntaxapi.Result], error) {
+func (m *mockParser) Search(string, []string, ...string) (iterator.Iterator[syntaxapi.Result], error) {
 	return iterator.FromSlice[syntaxapi.Result](nil), nil
 }
 
@@ -301,7 +301,7 @@ func (p *blockingParser) Highlight(_ workspaceapi.URI, _ string) (
 	return p.iter, nil
 }
 
-func (p *blockingParser) Search(string, []string) (iterator.Iterator[syntaxapi.Result], error) {
+func (p *blockingParser) Search(string, []string, ...string) (iterator.Iterator[syntaxapi.Result], error) {
 	return iterator.FromSlice[syntaxapi.Result](nil), nil
 }
 

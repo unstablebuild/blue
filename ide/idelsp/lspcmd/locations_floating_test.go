@@ -351,7 +351,7 @@ type mockParser struct {
 	highlightFn func(workspaceapi.URI, string) (iterator.Iterator[textapi.Location], error)
 }
 
-func (m *mockParser) Search(_ string, _ []string) (iterator.Iterator[syntaxapi.Result], error) {
+func (m *mockParser) Search(_ string, _ []string, _ ...string) (iterator.Iterator[syntaxapi.Result], error) {
 	return iterator.Empty[syntaxapi.Result](), nil
 }
 func (m *mockParser) SearchNode(_ syntaxapi.NodeCaptureName) (iterator.Iterator[syntaxapi.Result], error) {
