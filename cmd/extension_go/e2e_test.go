@@ -1387,7 +1387,7 @@ type Config struct {
 		env := initGoplsFromDir(t, goplsBin, dir, []testFile{
 			{name: "main.go", content: mainContent},
 		})
-		handler, _, mn := newTestHandler(t, env)
+		handler, _, _ := newTestHandler(t, env)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1417,21 +1417,23 @@ type Config struct {
 
 		err = handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
-		require.Eventually(t, func() bool {
-			return mn.hasMessage("gopls.run_govulncheck")
-		}, 30*time.Second, 100*time.Millisecond)
+
+		// gopls.vulncheck is synchronous: the RPC blocks until the
+		// scan completes. gopls itself sends a window/showMessage
+		// notification with the result summary, so the handler does
+		// not post its own notification on success.
 
 		// Wait for gopls to publish vulnerability diagnostics on
 		// go.mod, confirming the scan found the known vulnerability.
 		select {
 		case diags := <-diagsCh:
-			var msgs []string
+			var diagMsgs []string
 			for _, d := range diags {
-				msgs = append(msgs, d.Message)
+				diagMsgs = append(diagMsgs, d.Message)
 			}
-			t.Logf("vulncheck diagnostics: %v", msgs)
+			t.Logf("vulncheck diagnostics: %v", diagMsgs)
 			found := false
-			for _, msg := range msgs {
+			for _, msg := range diagMsgs {
 				if strings.Contains(msg, "GO-2022-1059") ||
 					strings.Contains(msg, "golang.org/x/text") {
 					found = true
@@ -1439,7 +1441,7 @@ type Config struct {
 				}
 			}
 			assert.True(t, found,
-				"expected vulnerability diagnostic for golang.org/x/text, got: %v", msgs)
+				"expected vulnerability diagnostic for golang.org/x/text, got: %v", diagMsgs)
 		case <-time.After(30 * time.Second):
 			t.Fatal("timed out waiting for vulncheck diagnostics on go.mod")
 		}

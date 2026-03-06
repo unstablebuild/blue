@@ -54,19 +54,57 @@ func modCommandHandler(
 	}
 }
 
-// vulncheckHandler creates a handler for gopls.run_govulncheck which
-// expects VulncheckArgs {"URI": goModURI} rather than the {"URIs": [...]}
-// format used by tidy/vendor.
+// vulncheckHandler creates a handler for gopls.vulncheck (synchronous).
+// Unlike the deprecated gopls.run_govulncheck which returned only a
+// progress token, gopls.vulncheck blocks until the scan completes and
+// returns the actual vulnerability results. Progress is still reported
+// via $/progress notifications during execution.
 func vulncheckHandler(
 	lsp semanticapi.LSP,
 	notify browserapi.Notifications,
 ) textapi.CommandHandler {
-	return &modCmd{
-		lsp: lsp, notify: notify, goplsCommand: "gopls.run_govulncheck",
-		buildArgs: func(goModURI string) any {
-			return map[string]any{"URI": goModURI}
-		},
+	return &vulncheckCmd{lsp: lsp, notify: notify}
+}
+
+var _ textapi.CommandHandler = (*vulncheckCmd)(nil)
+
+type vulncheckCmd struct {
+	lsp    semanticapi.LSP
+	notify browserapi.Notifications
+}
+
+func (h *vulncheckCmd) HandleCommand(
+	ctx context.Context, cmd textapi.Command,
+) error {
+	if cmd.Resource == nil {
+		return nil
 	}
+
+	fileURI := lspcmd.URIToLSP(cmd.URI)
+	goModURI := findGoModURI(fileURI)
+
+	argsData, err := json.Marshal(map[string]any{"URI": goModURI})
+	if err != nil {
+		return fmt.Errorf("marshal args: %w", err)
+	}
+
+	go debug.CapturePanicReport(func() {
+		_, err := h.lsp.ExecuteCommand(ctx, semanticapi.ExecuteCommandParams{
+			Command:   "gopls.vulncheck",
+			Arguments: []json.RawMessage{argsData},
+		})
+		if err != nil {
+			_, _ = h.notify.Notify(browserapi.LevelError, "vulncheck: %s", err)
+			return
+		}
+	})
+	return nil
+}
+
+func (h *vulncheckCmd) Complete(
+	_ context.Context, _ string, _ []string,
+) (iterator.Iterator[string], error) {
+	return iterator.Empty[string](), nil
 }
 
 var _ textapi.CommandHandler = (*modCmd)(nil)
