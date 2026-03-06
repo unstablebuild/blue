@@ -363,7 +363,11 @@ func markdownOrFallback(
 		mcfg.Parser = parser
 		mkd, err := markdown.NewWithConfig(str, mcfg)
 		if err == nil {
-			return mkd
+			return component.NewSpan(mkd, component.SpanConfig{
+				PadHorizontal:    4,
+				PadVertical:      2,
+				ContentAlignment: component.AlignmentCentered,
+			})
 		}
 		cfg := component.StringResponsiveConfig{
 			NoSplitWords: true,
