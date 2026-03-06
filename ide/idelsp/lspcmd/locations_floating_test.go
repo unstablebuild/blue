@@ -349,9 +349,13 @@ func TestLocationsFloatingEnterNotifiesOnError(t *testing.T) {
 // mockParser implements syntaxapi.Parser for testing.
 type mockParser struct {
 	highlightFn func(workspaceapi.URI, string) (iterator.Iterator[textapi.Location], error)
+	searchFn    func(string, []string) (iterator.Iterator[syntaxapi.Result], error)
 }
 
-func (m *mockParser) Search(_ string, _ []string, _ ...string) (iterator.Iterator[syntaxapi.Result], error) {
+func (m *mockParser) Search(query string, captures []string, langs ...string) (iterator.Iterator[syntaxapi.Result], error) {
+	if m.searchFn != nil {
+		return m.searchFn(query, captures)
+	}
 	return iterator.Empty[syntaxapi.Result](), nil
 }
 func (m *mockParser) SearchNode(_ syntaxapi.NodeCaptureName) (iterator.Iterator[syntaxapi.Result], error) {

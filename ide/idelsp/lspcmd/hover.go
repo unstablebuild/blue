@@ -86,7 +86,7 @@ type hoverHandler struct {
 }
 
 func (h *hoverHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
-	proceed, err := resolveCommandSymbol(ctx, &cmd, h.lsp, h.wm, h.fs, h.scheduleNextTick, h.parser, func(m SymbolMatch) {
+	proceed, err := resolveCommandSymbol(ctx, &cmd, h.lsp, h.wm, h.fs, h.scheduleNextTick, h.parser, func(m symbolMatch) {
 		h.scheduleNextTick(func() {
 			wsURI, err := LspToURI(m.URI)
 			if err != nil {
@@ -149,17 +149,10 @@ func (h *hoverHandler) execute(
 	return nil
 }
 
-func (h *hoverHandler) Complete(ctx context.Context, _ string, args []string) (
+func (h *hoverHandler) Complete(ctx context.Context, _ string, _ []string) (
 	iterator.Iterator[string], error,
 ) {
-	if len(args) > 1 {
-		return iterator.Empty[string](), nil
-	}
-	var arg string
-	if len(args) == 1 {
-		arg = args[0]
-	}
-	return CompleteSymbol(ctx, h.lsp, arg)
+	return completeReferencedSymbol(ctx, h.parser)
 }
 
 func newHoverFloating(f component.Floating, wm browserapi.WindowManager) *hoverFloating {

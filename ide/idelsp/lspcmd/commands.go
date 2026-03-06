@@ -142,7 +142,7 @@ func AllHandler(
 	lsp semanticapi.LSP, editor textapi.Editor,
 	wm browserapi.WindowManager, opener browserapi.ResourceOpener,
 	notify browserapi.Notifications, fs workspaceapi.FileSystem,
-	cfg Config,
+	parser syntaxapi.Parser, cfg Config,
 ) (textapi.CommandHandler, error) {
 	if cfg.RootURI.String() == "" {
 		panic("lspcmd: Config.RootURI must be set")
@@ -157,10 +157,6 @@ func AllHandler(
 	}
 	r := &routerHandler{
 		lsp: lsp,
-		symbolComplete: map[string]bool{
-			"hover": true, "definition": true, "declaration": true,
-			"type-definition": true, "implementation": true, "references": true,
-		},
 	}
 	if err := editor.SubscribeEvents(
 		[]textapi.EventType{textapi.EventTypeFocus}, r,
@@ -204,10 +200,9 @@ var (
 )
 
 type routerHandler struct {
-	handlers       map[string]textapi.CommandHandler
-	symbolComplete map[string]bool
-	lsp            semanticapi.LSP
-	focusURI       workspaceapi.URI
+	handlers map[string]textapi.CommandHandler
+	lsp      semanticapi.LSP
+	focusURI workspaceapi.URI
 }
 
 func (r *routerHandler) Handle(_ context.Context, ev textapi.Event) bool {
@@ -251,13 +246,6 @@ func (r *routerHandler) Complete(
 	cmd = args[0]
 	args = args[1:]
 	if h, ok := r.handlers[cmd]; ok {
-		// For symbol-completing subcommands with an empty query,
-		// fall back to document symbols from the focused file
-		// because gopls returns nothing for empty workspace/symbol queries.
-		if r.symbolComplete[cmd] && r.focusURI.String() != "" &&
-			(len(args) == 0 || (len(args) == 1 && args[0] == "")) {
-			return CompleteDocumentSymbol(ctx, r.lsp, r.focusURI)
-		}
 		return h.Complete(ctx, cmd, args)
 	}
 	names := make([]string, 0, len(r.handlers))

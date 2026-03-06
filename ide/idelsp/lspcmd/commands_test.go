@@ -38,6 +38,7 @@ import (
 	idelsp "github.com/unstablebuild/blue/ide/idelsp"
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
+	"github.com/unstablebuild/rune-go-sdk/api/syntaxapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
 	"github.com/unstablebuild/rune-go-sdk/iterator"
@@ -61,31 +62,55 @@ func collectIter(t *testing.T, iter iterator.Iterator[string]) []string {
 func TestRouterCompleteSymbol(t *testing.T) {
 	t.Parallel()
 
-	symbols := []semanticapi.SymbolInformation{
-		{Name: "Alpha"},
-		{Name: "Beta"},
-		{Name: "MyFunc"},
-	}
-
 	rootURI, err := workspaceapi.ParseURI("file:///project")
 	require.NoError(t, err)
 
-	newRouter := func(t *testing.T, lsp *mockLSP) textapi.CommandHandler {
+	fileURI, err := workspaceapi.ParseURI("file:///project/main.go")
+	require.NoError(t, err)
+
+	parser := &mockParser{
+		searchFn: func(query string, _ []string) (iterator.Iterator[syntaxapi.Result], error) {
+			if strings.Contains(query, "import_spec") && !strings.Contains(query, "name:") {
+				return iterator.FromSlice([]syntaxapi.Result{
+					{File: fileURI, Text: `"fmt"`, CaptureName: "path"},
+				}), nil
+			}
+			if strings.Contains(query, "import_spec") && strings.Contains(query, "name:") {
+				return iterator.Empty[syntaxapi.Result](), nil
+			}
+			if strings.Contains(query, "qualified_type") {
+				return iterator.FromSlice([]syntaxapi.Result{
+					{File: fileURI, Text: "fmt", CaptureName: "pkg"},
+					{File: fileURI, Text: "Stringer", CaptureName: "type"},
+				}), nil
+			}
+			if strings.Contains(query, "selector_expression") {
+				return iterator.FromSlice([]syntaxapi.Result{
+					{File: fileURI, Text: "fmt", CaptureName: "pkg"},
+					{File: fileURI, Text: "Println", CaptureName: "symbol"},
+				}), nil
+			}
+			return iterator.Empty[syntaxapi.Result](), nil
+		},
+	}
+
+	newRouter := func(t *testing.T) textapi.CommandHandler {
 		t.Helper()
 		cfg := DefaultConfig()
 		cfg.RootURI = rootURI
 		cfg.ScheduleNextTick = syncTick
 		cfg.Interrupter = term.NopInterrupter()
+		cfg.Parser = parser
 		router, err := AllHandler(
-			lsp, &mockEditor{}, &mockWindowManager{},
+			&mockLSP{}, &mockEditor{}, &mockWindowManager{},
 			&mockResourceOpener{}, &mockNotifications{},
-			&mockFileSystem{}, cfg,
+			&mockFileSystem{}, parser, cfg,
 		)
 		require.NoError(t, err)
 		return router
 	}
 
-	// All subcommands that use CompleteSymbol.
+	// All subcommands that use completeReferencedSymbol.
 	subcommands := []string{
 		"hover", "definition", "declaration",
 		"type-definition", "implementation", "references",
@@ -95,82 +120,27 @@ func TestRouterCompleteSymbol(t *testing.T) {
 		t.Run(sub, func(t *testing.T) {
 			t.Parallel()
 
-			t.Run("trailing space completes with empty query", func(t *testing.T) {
+			t.Run("returns referenced symbols for any query", func(t *testing.T) {
 				t.Parallel()
-				lsp := &mockLSP{
-					workspaceSymbolFn: func(_ context.Context, p semanticapi.WorkspaceSymbolParams) ([]semanticapi.SymbolInformation, error) {
-						assert.Empty(t, p.Query)
-						return symbols, nil
-					},
-				}
-				router := newRouter(t, lsp)
-				// "lsp hover " → args = ["hover", ""]
-				iter, err := router.Complete(context.Background(), "lsp", []string{sub, ""})
+				router := newRouter(t)
+				iter, err := router.Complete(context.Background(), "lsp", []string{sub, "fmt"})
 				require.NoError(t, err)
-				assert.Equal(t, []string{"Alpha", "Beta", "MyFunc"}, collectIter(t, iter))
-			})
-
-			t.Run("no trailing space completes with empty query", func(t *testing.T) {
-				t.Parallel()
-				lsp := &mockLSP{
-					workspaceSymbolFn: func(_ context.Context, p semanticapi.WorkspaceSymbolParams) ([]semanticapi.SymbolInformation, error) {
-						assert.Empty(t, p.Query)
-						return symbols, nil
-					},
-				}
-				router := newRouter(t, lsp)
-				// "lsp hover" → args = ["hover"]
-				iter, err := router.Complete(context.Background(), "lsp", []string{sub})
-				require.NoError(t, err)
-				assert.Equal(t, []string{"Alpha", "Beta", "MyFunc"}, collectIter(t, iter))
-			})
-
-			t.Run("partial symbol completes with query", func(t *testing.T) {
-				t.Parallel()
-				lsp := &mockLSP{
-					workspaceSymbolFn: func(_ context.Context, p semanticapi.WorkspaceSymbolParams) ([]semanticapi.SymbolInformation, error) {
-						assert.Equal(t, "My", p.Query)
-						return []semanticapi.SymbolInformation{{Name: "MyFunc"}}, nil
-					},
-				}
-				router := newRouter(t, lsp)
-				// "lsp hover My" → args = ["hover", "My"]
-				iter, err := router.Complete(context.Background(), "lsp", []string{sub, "My"})
-				require.NoError(t, err)
-				assert.Equal(t, []string{"MyFunc"}, collectIter(t, iter))
-			})
-
-			t.Run("extra args returns empty", func(t *testing.T) {
-				t.Parallel()
-				lsp := &mockLSP{}
-				router := newRouter(t, lsp)
-				// "lsp hover MyFunc extra" → args = ["hover", "MyFunc", "extra"]
-				iter, err := router.Complete(context.Background(), "lsp", []string{sub, "MyFunc", "extra"})
-				require.NoError(t, err)
-				assert.Empty(t, collectIter(t, iter))
+				names := collectIter(t, iter)
+				assert.Contains(t, names, "fmt.Stringer")
+				assert.Contains(t, names, "fmt.Println")
 			})
 		})
 	}
 }
 
-func TestRouterCompleteDocumentSymbolFallback(t *testing.T) {
+func TestRouterCompleteReferencedSymbolFallback(t *testing.T) {
 	t.Parallel()
 
 	rootURI, err := workspaceapi.ParseURI("file:///project")
 	require.NoError(t, err)
 
-	docURI, err := workspaceapi.ParseURI("file:///project/main.go")
+	fileA, err := workspaceapi.ParseURI("file:///project/a.go")
 	require.NoError(t, err)
-
-	docSymbols := semanticapi.DocumentSymbolResult{
-		DocumentSymbols: []semanticapi.DocumentSymbol{
-			{Name: "main"},
-			{Name: "Greeter", Children: []semanticapi.DocumentSymbol{
-				{Name: "Greet"},
-			}},
-			{Name: "Add"},
-		},
-	}
 
 	subcommands := []string{
 		"hover", "definition", "declaration",
@@ -181,35 +151,46 @@ func TestRouterCompleteDocumentSymbolFallback(t *testing.T) {
 		t.Run(sub, func(t *testing.T) {
 			t.Parallel()
 
-			t.Run("empty query with focused file returns document symbols", func(t *testing.T) {
+			t.Run("parser fallback returns referenced symbols", func(t *testing.T) {
 				t.Parallel()
+				parser := &mockParser{
+					searchFn: func(query string, _ []string) (iterator.Iterator[syntaxapi.Result], error) {
+						switch {
+						case strings.Contains(query, "import_spec") && !strings.Contains(query, "name:"):
+							return iterator.FromSlice([]syntaxapi.Result{
+								{File: fileA, Text: `"fmt"`, CaptureName: "path"},
+							}), nil
+						case strings.Contains(query, "selector_expression"):
+							return iterator.FromSlice([]syntaxapi.Result{
+								{File: fileA, Text: "fmt", CaptureName: "pkg"},
+								{File: fileA, Text: "Println", CaptureName: "symbol"},
+							}), nil
+						}
+						return iterator.Empty[syntaxapi.Result](), nil
+					},
+				}
 				lsp := &mockLSP{
-					documentSymbolFn: func(_ context.Context, p semanticapi.DocumentSymbolParams) (semanticapi.DocumentSymbolResult, error) {
-						assert.Equal(t, "file:///project/main.go", p.TextDocument.URI)
-						return docSymbols, nil
+					// Document symbol should NOT be called when parser is available.
+					documentSymbolFn: func(_ context.Context, _ semanticapi.DocumentSymbolParams) (semanticapi.DocumentSymbolResult, error) {
+						t.Error("DocumentSymbol should not be called when parser is set")
+						return semanticapi.DocumentSymbolResult{}, nil
 					},
 				}
 				cfg := DefaultConfig()
 				cfg.RootURI = rootURI
 				cfg.ScheduleNextTick = syncTick
 				cfg.Interrupter = term.NopInterrupter()
+				cfg.Parser = parser
 				router, err := AllHandler(
 					lsp, &mockEditor{}, &mockWindowManager{},
 					&mockResourceOpener{}, &mockNotifications{},
-					&mockFileSystem{}, cfg,
+					&mockFileSystem{}, parser, cfg,
 				)
 				require.NoError(t, err)
 
-				// Simulate a focus event that sets the active URI.
-				router.(textapi.EventHandler).Handle(
-					context.Background(),
-					textapi.Event{Type: textapi.EventTypeFocus, URI: docURI},
-				)
-
-				// Now complete with empty query.
 				iter, err := router.Complete(context.Background(), "lsp", []string{sub, ""})
 				require.NoError(t, err)
-				assert.Equal(t, []string{"main", "Greeter", "Greet", "Add"}, collectIter(t, iter))
+				assert.Equal(t, []string{"fmt.Println"}, collectIter(t, iter))
 			})
 		})
 	}
@@ -308,7 +289,7 @@ func TestE2ECommands(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.RootURI = rootURI
 	cfg.ScheduleNextTick = syncTick
-	router, err := AllHandler(mgr, editor, wm, opener, notify, fs, cfg)
+	router, err := AllHandler(mgr, editor, wm, opener, notify, fs, &mockParser{}, cfg)
 	require.NoError(t, err)
 
 	makeCmd := func(name string, args []string, line, char int) textapi.Command {
@@ -646,12 +627,11 @@ func collectRawDocSymbolNames(names *[]string, syms []semanticapi.DocumentSymbol
 }
 
 // TestE2ECompleteNormalization exercises the full completion → resolve
-// round-trip through a real gopls instance. It focuses a file that
-// contains both pointer- and value-receiver methods, calls the router's
-// Complete method with an empty query (triggering the document-symbol
-// fallback), and then verifies that every returned method name:
+// round-trip through a real gopls instance. It calls CompleteDocumentSymbol
+// for files that contain both pointer- and value-receiver methods, and
+// verifies that every returned method name:
 //  1. Is normalized (no "(*Type).Method" or "(Type).Method" syntax).
-//  2. Can be resolved back via ResolveSymbol / workspace/symbol.
+//  2. Can be resolved back via resolveSymbol / workspace/symbol.
 func TestE2ECompleteNormalization(t *testing.T) {
 	t.Parallel()
 	goplsBin := findGopls(t)
@@ -706,36 +686,27 @@ func TestE2ECompleteNormalization(t *testing.T) {
 	waitReady(t, readyCh)
 	t.Cleanup(func() { _ = mgr.Close() })
 
-	editor := &mockEditor{
-		editorFn: func(uri workspaceapi.URI) (textapi.Handler, error) {
-			return &mockHandler{uri: uri}, nil
-		},
-	}
-	wm := &mockWindowManager{}
-	fs := &mockFileSystem{
-		openFileFn: func(path string, flag int, mode os.FileMode) (workspaceapi.File, error) {
-			return os.OpenFile(path, flag, mode)
-		},
-	}
-	cfg := DefaultConfig()
-	cfg.RootURI = rootURI
-	cfg.ScheduleNextTick = syncTick
-	router, err := AllHandler(mgr, editor, wm, &mockResourceOpener{}, &mockNotifications{}, fs, cfg)
-	require.NoError(t, err)
-
-	// Focus each file and verify completions for that file.
+	// Get document symbols for each file and verify that every
+	// returned name is normalized and resolvable.
 	for _, f := range files {
 		t.Run(f.rel, func(t *testing.T) {
-			// Simulate focus event so the router knows which file to query.
-			router.(textapi.EventHandler).Handle(ctx, textapi.Event{
-				Type: textapi.EventTypeFocus,
-				URI:  f.wsURI,
+			result, err := mgr.DocumentSymbol(ctx, semanticapi.DocumentSymbolParams{
+				TextDocument: TextDocID(f.wsURI),
 			})
-
-			// Empty-query completion triggers the document-symbol fallback.
-			iter, err := router.Complete(ctx, "lsp", []string{"hover", ""})
 			require.NoError(t, err)
-			names := collectIter(t, iter)
+
+			var names []string
+			var collect func([]semanticapi.DocumentSymbol)
+			collect = func(syms []semanticapi.DocumentSymbol) {
+				for _, s := range syms {
+					names = append(names, normalizeMethodName(s.Name))
+					collect(s.Children)
+				}
+			}
+			collect(result.DocumentSymbols)
+			for _, s := range result.SymbolInformation {
+				names = append(names, normalizeMethodName(s.Name))
+			}
 			require.NotEmpty(t, names, "expected completions for %s", f.rel)
 
 			for _, name := range names {
@@ -747,11 +718,11 @@ func TestE2ECompleteNormalization(t *testing.T) {
 
 				// 2. Every completion must resolve via workspace/symbol.
 				t.Run(name, func(t *testing.T) {
-					matches, err := ResolveSymbol(ctx, mgr, name)
+					matches, err := resolveSymbol(ctx, mgr, name)
 					require.NoError(t, err,
-						"ResolveSymbol failed for completion %q", name)
+						"resolveSymbol failed for completion %q", name)
 					assert.NotEmpty(t, matches,
-						"ResolveSymbol returned no matches for %q", name)
+						"resolveSymbol returned no matches for %q", name)
 				})
 			}
 		})
@@ -869,7 +840,7 @@ func TestE2ESignatureHelpAutoTrigger(t *testing.T) {
 			openFileFn: func(path string, flag int, mode os.FileMode) (workspaceapi.File, error) {
 				return os.OpenFile(path, flag, mode)
 			},
-		}, cfg)
+		}, &mockParser{}, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, capturedHandler, "SubscribeEvents should have been called")
 
