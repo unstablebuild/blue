@@ -34,7 +34,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/release"
+	"github.com/unstablebuild/blue/tui/component/markdown"
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
+	"github.com/unstablebuild/rune-go-sdk/api/syntaxapi"
 	"github.com/unstablebuild/rune-go-sdk/component"
 	"github.com/unstablebuild/rune-go-sdk/handler"
 	"github.com/unstablebuild/rune-go-sdk/term"
@@ -344,11 +346,38 @@ func (uc *UpdateChecker) filterPromptUpdates(ctx context.Context, updates []Upda
 
 func formatUpdateSummary(updates []Update) string {
 	var b strings.Builder
-	b.WriteString("Updates available:")
+	b.WriteString("## Updates available:")
 	for _, u := range updates {
-		fmt.Fprintf(&b, "\n  %s: %s → %s", u.Package, u.Current, u.Latest)
+		fmt.Fprintf(&b, "\n- %s %s → %s", u.Package, u.Current, u.Latest)
 	}
 	return b.String()
+}
+
+func markdownOrFallback(
+	parser syntaxapi.Parser, scheduleNextTick func(func()) bool,
+) func(string) component.Floating {
+	return func(str string) component.Floating {
+		mcfg := markdown.DefaultConfig()
+		mcfg.HeaderPrefix = false
+		mcfg.ScheduleNextTick = scheduleNextTick
+		mcfg.Parser = parser
+		mkd, err := markdown.NewWithConfig(str, mcfg)
+		if err == nil {
+			return mkd
+		}
+		cfg := component.StringResponsiveConfig{
+			NoSplitWords: true,
+			StringConfig: component.StringConfig{
+				PaddingVertical:   4,
+				PaddingHorizontal: 4,
+				Alignment:         component.AlignmentCentered,
+			},
+		}
+		messageResponsive := component.NewResponsiveString(str, cfg)
+
+		return component.NewAspectRatioFloatingResponsive(
+			messageResponsive, component.DefaultAspectRatio)
+	}
 }
 
 func (uc *UpdateChecker) showUpdatePrompt(ctx context.Context, updates []Update) {
@@ -361,9 +390,10 @@ func (uc *UpdateChecker) showUpdatePrompt(ctx context.Context, updates []Update)
 		},
 		OptionBindings: []term.KeyComb{{Ch: 'u'}, {Ch: 'r'}, {Ch: 's'}},
 		PromptConfig: component.PromptConfig{
-			Message: message,
-			Options: []string{"Upgrade All", "Remind Later", "Skip"},
-			Frame:   uc.m.frameCharSet,
+			Message:    message,
+			Options:    []string{"Upgrade All", "Remind Later", "Skip"},
+			Frame:      uc.m.frameCharSet,
+			NewMessage: markdownOrFallback(uc.m.parser, uc.m.scheduleNextTick),
 		},
 		PromptHandler: handler.FuncPromptHandler(func(idx int, _ string) {
 			switch idx {
