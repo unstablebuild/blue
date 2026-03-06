@@ -390,13 +390,16 @@ func (uc *UpdateChecker) showUpdatePrompt(ctx context.Context, updates []Update)
 	prompt := handler.NewPrompt(handler.PromptConfig{
 		HighlightAttr: term.Attributes{
 			Attrs: tcell.AttrBold,
-			Fg:    tcell.ColorBlue,
+			Bg:    tcell.ColorRed,
+		},
+		OptionAttr: term.Attributes{
+			Attrs: tcell.AttrBold,
+			Bg:    tcell.ColorGray,
 		},
 		OptionBindings: []term.KeyComb{{Ch: 'u'}, {Ch: 'r'}, {Ch: 's'}},
 		PromptConfig: component.PromptConfig{
 			Message:    message,
-			Options:    []string{"Upgrade All", "Remind Later", "Skip"},
-			Frame:      uc.m.frameCharSet,
+			Options:    []string{"   Upgrade All   ", "   Remind Late   r", "   Skip   "},
 			NewMessage: markdownOrFallback(uc.m.parser, uc.m.scheduleNextTick),
 		},
 		PromptHandler: handler.FuncPromptHandler(func(idx int, _ string) {

@@ -415,11 +415,19 @@ func (h *CallbackHandler) ShowMessageRequest(
 ) (*semanticapi.MessageActionItem, error) {
 	titles := make([]string, len(params.Actions))
 	for i, a := range params.Actions {
-		titles[i] = a.Title
+		titles[i] = fmt.Sprintf("   %s    ", a.Title)
 	}
 
 	ch := make(chan *semanticapi.MessageActionItem, 1)
 	prompt := handler.NewPrompt(handler.PromptConfig{
+		HighlightAttr: term.Attributes{
+			Attrs: tcell.AttrBold,
+			Bg:    tcell.ColorRed,
+		},
+		OptionAttr: term.Attributes{
+			Attrs: tcell.AttrBold,
+			Bg:    tcell.ColorGray,
+		},
 		PromptConfig: component.PromptConfig{
 			Message: params.Message,
 			Options: titles,

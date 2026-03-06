@@ -753,7 +753,6 @@ func (m *Manager) promptConfigChange(
 			Message:    message,
 			Options:    []string{"    Allow    ", "    Deny    "},
 			NewMessage: markdownOrFallback(m.parser, m.scheduleNextTick),
-			//Frame:      m.frameCharSet,
 		},
 		PromptHandler: handler.FuncPromptHandler(func(idx int, _ string) {
 			allowed := idx == 0
