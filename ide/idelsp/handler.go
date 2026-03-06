@@ -192,6 +192,16 @@ func (h *CallbackHandler) PublishDiagnostics(
 		if p > highest {
 			highest = p
 		}
+
+		msg := diag.Message
+		attr := diagnosticSeverityToAttr(diag.Severity)
+		icon := ""
+		if diag.Source == "compiler" &&
+			diag.Severity != semanticapi.DiagnosticSeverityError &&
+			diag.Severity != semanticapi.DiagnosticSeverityWarning {
+			icon, msg, attr = classifyCompilerDiagnostic(diag.Message)
+		}
+
 		locs = append(locs, textapi.Location{
 			From: term.Coordinates{
 				X: int(diag.Range.Start.Character),
@@ -201,8 +211,9 @@ func (h *CallbackHandler) PublishDiagnostics(
 				X: int(diag.Range.End.Character),
 				Y: int(diag.Range.End.Line),
 			},
-			Message: diag.Message,
-			Attr:    diagnosticSeverityToAttr(diag.Severity),
+			Message: msg,
+			Attr:    attr,
+			Icon:    icon,
 		})
 	}
 	ll := textapi.LocationSlice(locs)
@@ -677,6 +688,37 @@ func diagnosticSeverityToAttr(
 	default:
 		return term.Attributes(tcell.Style{
 			Bg: tcell.ColorGray,
+		})
+	}
+}
+
+// classifyCompilerDiagnostic categorizes a compiler optimization
+// diagnostic (gc_details) by its message content and returns a
+// descriptive icon, a prefixed message, and a category-specific color.
+func classifyCompilerDiagnostic(msg string) (icon, enhanced string, attr term.Attributes) {
+	switch {
+	case strings.Contains(msg, "inline") || strings.Contains(msg, "inlining"):
+		return "⇒", "Inline: " + msg, term.Attributes(tcell.Style{
+			Bg: tcell.ColorIndigo,
+		})
+	case strings.Contains(msg, "escape") ||
+		strings.Contains(msg, "heap") ||
+		strings.Contains(msg, "leaking"):
+		return "↗", "Escape: " + msg, term.Attributes(tcell.Style{
+			Bg: tcell.ColorDarkMagenta,
+		})
+	case strings.Contains(msg, "Bounds"):
+		return "⊞", "Bounds: " + msg, term.Attributes(tcell.Style{
+			Bg: tcell.ColorRebeccaPurple,
+		})
+	case strings.Contains(msg, "nilcheck") ||
+		strings.Contains(msg, "nil check"):
+		return "∅", "Nilcheck: " + msg, term.Attributes(tcell.Style{
+			Bg: tcell.ColorBlueViolet,
+		})
+	default:
+		return "⚙", msg, term.Attributes(tcell.Style{
+			Bg: tcell.ColorDarkSlateBlue,
 		})
 	}
 }
