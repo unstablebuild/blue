@@ -48,6 +48,7 @@ import (
 	"github.com/unstablebuild/blue/walkdir"
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/schemeapi"
+	"github.com/unstablebuild/rune-go-sdk/api/syntaxapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
 	"github.com/unstablebuild/rune-go-sdk/component"
 	"github.com/unstablebuild/rune-go-sdk/handler"
@@ -105,6 +106,7 @@ type Manager struct {
 	m                release.Manager
 	interrupter      term.Interrupter
 	wm               browserapi.WindowManager
+	parser           syntaxapi.Parser
 	frameCharSet     component.FrameCharSet
 	scheduleNextTick func(func()) bool
 	storage          document.Service
@@ -715,8 +717,8 @@ func (m *Manager) promptConfigChange(
 	userDoc, pkgDoc *yaml.Node,
 ) error {
 	message := fmt.Sprintf(
-		"Extension %s (version %s) wants to update your configuration "+
-			"with the following settings:\n\n%s\n\nDo you want to allow this?",
+		"Extension %s (version %s) wants to *update* your configuration "+
+			"with the following settings:\n\n```yaml\n%s\n```\n\nDo you want to allow this?",
 		pkgID, pkgVersion, string(configYAML))
 
 	apply := func() error {
@@ -744,9 +746,10 @@ func (m *Manager) promptConfigChange(
 		},
 		OptionBindings: []term.KeyComb{{Ch: 'a'}, {Ch: 'd'}},
 		PromptConfig: component.PromptConfig{
-			Message: message,
-			Options: []string{"Allow", "Deny"},
-			Frame:   m.frameCharSet,
+			Message:    message,
+			Options:    []string{"Allow", "Deny"},
+			Frame:      m.frameCharSet,
+			NewMessage: markdownOrFallback(m.parser, m.scheduleNextTick),
 		},
 		PromptHandler: handler.FuncPromptHandler(func(idx int, _ string) {
 			allowed := idx == 0

@@ -191,7 +191,7 @@ func TestStart(t *testing.T) {
 		var found bool
 		for _, noti := range active {
 			if noti.Level == browserapi.LevelInfo &&
-				assert.ObjectsAreEqual("Updates available:\n  go: 1 → 2", noti.Msg) {
+				assert.ObjectsAreEqual("## Updates available:\n- go 1 → 2", noti.Msg) {
 				found = true
 			}
 		}
@@ -515,6 +515,6 @@ func TestFormatUpdateSummary(t *testing.T) {
 		{Package: "go", Current: "1.21.0", Latest: "1.22.0"},
 		{Package: "rust", Current: "1.70.0", Latest: "1.72.0"},
 	}
-	expected := "Updates available:\n  go: 1.21.0 → 1.22.0\n  rust: 1.70.0 → 1.72.0"
+	expected := "## Updates available:\n- go 1.21.0 → 1.22.0\n- rust 1.70.0 → 1.72.0"
 	assert.Equal(t, expected, formatUpdateSummary(updates))
 }
