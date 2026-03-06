@@ -727,6 +727,7 @@ func TestE2E(t *testing.T) {
 								Arguments: []json.RawMessage{
 									json.RawMessage(
 										fmt.Sprintf(`{"URI":"%s","Tests":null,"Benchmarks":["BenchmarkAdd"]}`, testURI)),
+									json.RawMessage(`{"source":"codelens"}`),
 								},
 							},
 						},
@@ -741,6 +742,7 @@ func TestE2E(t *testing.T) {
 								Arguments: []json.RawMessage{
 									json.RawMessage(
 										fmt.Sprintf(`{"URI":"%s","Tests":["TestAdd"],"Benchmarks":null}`, testURI)),
+									json.RawMessage(`{"source":"codelens"}`),
 								},
 							},
 						},
@@ -755,6 +757,7 @@ func TestE2E(t *testing.T) {
 								Arguments: []json.RawMessage{
 									json.RawMessage(
 										fmt.Sprintf(`{"URI":"%s","Tests":null,"Benchmarks":["BenchmarkAdd"]}`, testURI)),
+									json.RawMessage(`{"source":"codelens"}`),
 								},
 							},
 						},

@@ -196,7 +196,7 @@ func (h *CallbackHandler) PublishDiagnostics(
 		msg := diag.Message
 		attr := diagnosticSeverityToAttr(diag.Severity)
 		icon := ""
-		if diag.Source == "compiler" &&
+		if (diag.Source == "compiler" || diag.Source == "optimizer details") &&
 			diag.Severity != semanticapi.DiagnosticSeverityError &&
 			diag.Severity != semanticapi.DiagnosticSeverityWarning {
 			icon, msg, attr = classifyCompilerDiagnostic(diag.Message)

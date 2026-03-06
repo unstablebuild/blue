@@ -1488,8 +1488,10 @@ type Config struct {
 						strings.Contains(d.Message, "inlining") ||
 						strings.Contains(d.Message, "escape")
 					if isCompilerOpt {
-						assert.Equal(t, "compiler", d.Source,
-							"gc_details diagnostics should have Source \"compiler\"")
+						assert.Contains(t,
+							[]string{"compiler", "optimizer details"},
+							d.Source,
+							"gc_details diagnostics should have Source \"compiler\" or \"optimizer details\"")
 						return true
 					}
 				}

@@ -290,7 +290,7 @@ func TestCallbackHandler_PublishDiagnostics(t *testing.T) {
 					Message: "Inline: can inline Add",
 					Icon:    "⇒",
 					Attr: term.Attributes(tcell.Style{
-						Bg: tcell.ColorGreen,
+						Bg: tcell.ColorIndigo,
 					}),
 				},
 			},
@@ -320,7 +320,7 @@ func TestCallbackHandler_PublishDiagnostics(t *testing.T) {
 					Message: "Escape: a escapes to heap",
 					Icon:    "↗",
 					Attr: term.Attributes(tcell.Style{
-						Bg: tcell.ColorYellow,
+						Bg: tcell.ColorDarkMagenta,
 					}),
 				},
 			},
@@ -394,52 +394,52 @@ func TestClassifyCompilerDiagnostic(t *testing.T) {
 		{
 			msg: "can inline Add", wantIcon: "⇒",
 			wantMsg:  "Inline: can inline Add",
-			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorGreen}),
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorIndigo}),
 		},
 		{
 			msg: "inlining call to Add", wantIcon: "⇒",
 			wantMsg:  "Inline: inlining call to Add",
-			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorGreen}),
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorIndigo}),
 		},
 		{
 			msg: "a escapes to heap", wantIcon: "↗",
 			wantMsg:  "Escape: a escapes to heap",
-			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorYellow}),
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorDarkMagenta}),
 		},
 		{
 			msg: "moved to heap: x", wantIcon: "↗",
 			wantMsg:  "Escape: moved to heap: x",
-			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorYellow}),
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorDarkMagenta}),
 		},
 		{
 			msg: "leaking param: x", wantIcon: "↗",
 			wantMsg:  "Escape: leaking param: x",
-			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorYellow}),
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorDarkMagenta}),
 		},
 		{
 			msg: "a does not escape", wantIcon: "↗",
 			wantMsg:  "Escape: a does not escape",
-			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorYellow}),
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorDarkMagenta}),
 		},
 		{
 			msg: "Found IsInBounds", wantIcon: "⊞",
 			wantMsg:  "Bounds: Found IsInBounds",
-			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorTeal}),
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorRebeccaPurple}),
 		},
 		{
 			msg: "isInBounds", wantIcon: "⊞",
 			wantMsg:  "Bounds: isInBounds",
-			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorTeal}),
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorRebeccaPurple}),
 		},
 		{
 			msg: "nilcheck", wantIcon: "∅",
 			wantMsg:  "Nilcheck: nilcheck",
-			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorPurple}),
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorBlueViolet}),
 		},
 		{
 			msg: "unknown compiler message", wantIcon: "⚙",
 			wantMsg:  "unknown compiler message",
-			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorBlue}),
+			wantAttr: term.Attributes(tcell.Style{Bg: tcell.ColorDarkSlateBlue}),
 		},
 	}
 	for _, tt := range tests {
