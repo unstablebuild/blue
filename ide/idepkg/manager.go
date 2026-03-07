@@ -220,11 +220,22 @@ func (m *Manager) InstallPackageVersion(
 	err = m.storage.Create(ctx, key, pkgVersionValue{Package: pkgID, Version: version})
 	if err != nil {
 		if errors.Is(err, document.ErrAlreadyExists) {
-			return fmt.Errorf("version %s of package %s has "+
-				"already been installed", version, pkgID)
+			var existing pkgVersionValue
+			if getErr := m.storage.Get(ctx, key, &existing); getErr == nil && !existing.Complete {
+				_ = m.storage.Delete(ctx, key)
+				_ = os.RemoveAll(makePackageVersionDirname(m.dataDir, pkgID, version))
+				_ = os.RemoveAll(makeStagingDirname(m.dataDir, pkgID, version))
+				err = m.storage.Create(ctx, key, pkgVersionValue{Package: pkgID, Version: version})
+			}
+			if err != nil {
+				m.cleanupFile(tarfile)
+				return fmt.Errorf("version %s of package %s has "+
+					"already been installed", version, pkgID)
+			}
+		} else {
+			m.cleanupFile(tarfile)
+			return fmt.Errorf("store package version: %w", err)
 		}
-		m.cleanupFile(tarfile)
-		return fmt.Errorf("store package version: %w", err)
 	}
 
 	notificationID, err := m.n.Notify(browserapi.LevelInfo,
@@ -362,7 +373,10 @@ func (m *Manager) ListInstalledPackages(ctx context.Context) (
 		return nil, err
 	}
 	it := iterator.FromDocumentIterator[pkgVersionValue](dit)
-	mapped := iterator.Map(it, func(p pkgVersionValue) string {
+	complete := iterator.Filter(it, func(p pkgVersionValue) bool {
+		return p.Complete
+	})
+	mapped := iterator.Map(complete, func(p pkgVersionValue) string {
 		return p.Package
 	})
 	seen := make(map[string]struct{})
@@ -387,6 +401,9 @@ func (m *Manager) ProcessInstalledSettings(ctx context.Context) (ret error) {
 		return err
 	}
 	for _, pkv := range slice {
+		if !pkv.Complete {
+			continue
+		}
 		_, _, isInUse, err := m.isPackageVersionInUse(pkv.Package, pkv.Version)
 		if err != nil {
 			err = fmt.Errorf("could not check if package %s version %s is in use: %v",
@@ -428,7 +445,10 @@ func (m *Manager) ListInstalledPackageVersions(ctx context.Context, pkgID string
 		return nil, err
 	}
 	it := iterator.FromDocumentIterator[pkgVersionValue](dit)
-	return iterator.Map(it, func(p pkgVersionValue) release.Version {
+	complete := iterator.Filter(it, func(p pkgVersionValue) bool {
+		return p.Complete
+	})
+	return iterator.Map(complete, func(p pkgVersionValue) release.Version {
 		return p.Version
 	}), nil
 }
@@ -448,6 +468,9 @@ func (m *Manager) UsePackageVersion(
 			return ErrNotInstalled
 		}
 		return err
+	}
+	if !val.Complete {
+		return ErrNotInstalled
 	}
 	_, _, isInUse, err := m.isPackageVersionInUse(pkgID, version)
 	if err != nil {
@@ -585,13 +608,26 @@ func (m *Manager) download(
 	}
 
 	m.log(log.TraceLevel, "extracting package %s version %s", pkgID, version)
-	// copy to pkg/<pkgID>/<version> for managing versions
+	// extract to staging dir then atomically rename to final dir
+	stagingDir := makeStagingDirname(m.dataDir, pkgID, version)
+	_ = os.RemoveAll(stagingDir)
 	pkgVersionDirname := makePackageVersionDirname(m.dataDir, pkgID, version)
-	configFile, executables, err := m.untar(tarfile, pkgVersionDirname)
+	_, executables, err := m.untar(tarfile, stagingDir)
 	if err != nil {
+		_ = os.RemoveAll(stagingDir)
 		m.abortDownload(err, pkgID, version, notificationID)
 		return
 	}
+
+	_ = os.RemoveAll(pkgVersionDirname)
+	if err := os.Rename(stagingDir, pkgVersionDirname); err != nil {
+		_ = os.RemoveAll(stagingDir)
+		err = fmt.Errorf("rename staging dir: %w", err)
+		m.abortDownload(err, pkgID, version, notificationID)
+		return
+	}
+
+	configFile := filepath.Join(pkgVersionDirname, "config.yaml")
 
 	err = m.processConfig(pkgID, version, configFile)
 	if err != nil {
@@ -607,7 +643,10 @@ func (m *Manager) download(
 		return
 	}
 
-	updates := []document.Update{{FieldPath: []string{"Executables"}, Value: executables}}
+	updates := []document.Update{
+		{FieldPath: []string{"Executables"}, Value: executables},
+		{FieldPath: []string{"Complete"}, Value: true},
+	}
 	if err := m.storage.Update(ctx, key, updates); err != nil {
 		err = fmt.Errorf("update storage field: %w", err)
 		_ = os.RemoveAll(pkgVersionDirname)
@@ -687,12 +726,16 @@ func (m *Manager) notifyError(
 func (m *Manager) linkLibVersion(pkgID string, version release.Version) error {
 	dirname := makePackageVersionDirname(m.dataDir, pkgID, version)
 	libdirname := makePackageLibDirname(m.dataDir, pkgID)
-	_ = os.RemoveAll(libdirname) // if it fails, error will be handled next
-	err := os.Symlink(dirname, libdirname)
-	if err != nil {
-		err = fmt.Errorf("symlink lib dir: %w", err)
+	tmpLink := libdirname + ".tmp"
+	_ = os.Remove(tmpLink)
+	if err := os.Symlink(dirname, tmpLink); err != nil {
+		return fmt.Errorf("symlink lib dir: %w", err)
 	}
-	return err
+	if err := os.Rename(tmpLink, libdirname); err != nil {
+		_ = os.Remove(tmpLink)
+		return fmt.Errorf("rename lib symlink: %w", err)
+	}
+	return nil
 }
 
 func (m *Manager) linkLibCopyBin(
@@ -1059,16 +1102,90 @@ func makePackageLibDirname(
 	return filepath.Join(dataDir, "lib", pkgID)
 }
 
+func makeStagingDirname(dataDir, pkgID string, version release.Version) string {
+	return filepath.Join(dataDir, "pkg", pkgID, ".staging-"+string(version))
+}
+
 type pkgVersionValue struct {
 	Package     string
 	Version     release.Version
 	Executables []*tar.Header
+	Complete    bool
 }
 
 func escapeString(val string) string {
 	val = url.PathEscape(val)
 	val = strings.ReplaceAll(val, ":", "_")
 	return val
+}
+
+// Reconcile cleans up incomplete installs left by a previous crash.
+// It should be called once at startup, before any new installs.
+func (m *Manager) Reconcile(ctx context.Context) error {
+	// Phase 1: Clean leftover staging directories.
+	pkgRoot := filepath.Join(m.dataDir, "pkg")
+	if entries, err := os.ReadDir(pkgRoot); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			pkgDir := filepath.Join(pkgRoot, entry.Name())
+			subEntries, err := os.ReadDir(pkgDir)
+			if err != nil {
+				continue
+			}
+			for _, sub := range subEntries {
+				if strings.HasPrefix(sub.Name(), ".staging-") {
+					_ = os.RemoveAll(filepath.Join(pkgDir, sub.Name()))
+				}
+			}
+		}
+	}
+
+	// Phase 2: Clean stale storage entries (Complete == false).
+	dit, err := m.storage.List(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("list storage entries: %w", err)
+	}
+	it := iterator.FromDocumentIterator[pkgVersionValue](dit)
+	entries, err := iterator.ToSlice(ctx, it)
+	if err != nil {
+		return fmt.Errorf("read storage entries: %w", err)
+	}
+	for _, pkv := range entries {
+		key := m.makeDownloadKey(pkv.Package, pkv.Version)
+		if !pkv.Complete {
+			_ = os.RemoveAll(makePackageVersionDirname(m.dataDir, pkv.Package, pkv.Version))
+			// Remove lib symlink if it points to the stale version.
+			libdirname := makePackageLibDirname(m.dataDir, pkv.Package)
+			if target, lerr := os.Readlink(libdirname); lerr == nil {
+				expected := makePackageVersionDirname(m.dataDir, pkv.Package, pkv.Version)
+				if target == expected {
+					_ = os.Remove(libdirname)
+					_ = removeExecutables(pkv.Executables, m.binDir)
+				}
+			}
+			_ = m.storage.Delete(ctx, key)
+			continue
+		}
+		// Phase 4: Verify complete entries — if dir is missing, delete storage.
+		dirname := makePackageVersionDirname(m.dataDir, pkv.Package, pkv.Version)
+		if _, serr := os.Stat(dirname); os.IsNotExist(serr) {
+			_ = m.storage.Delete(ctx, key)
+		}
+	}
+
+	// Phase 3: Clean stale .tmp symlinks in lib/.
+	libRoot := makeLibDirname(m.dataDir)
+	if libEntries, err := os.ReadDir(libRoot); err == nil {
+		for _, entry := range libEntries {
+			if strings.HasSuffix(entry.Name(), ".tmp") {
+				_ = os.Remove(filepath.Join(libRoot, entry.Name()))
+			}
+		}
+	}
+
+	return nil
 }
 
 type libDirIterator struct {
