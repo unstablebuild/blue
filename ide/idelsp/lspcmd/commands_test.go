@@ -289,7 +289,20 @@ func TestE2ECommands(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.RootURI = rootURI
 	cfg.ScheduleNextTick = syncTick
-	router, err := AllHandler(mgr, editor, wm, opener, notify, fs, &mockParser{}, cfg)
+	cfg.Parser = &mockParser{
+		searchFn: func(query string, _ []string) (iterator.Iterator[syntaxapi.Result], error) {
+			if strings.Contains(query, "selector_expression") {
+				return iterator.FromSlice([]syntaxapi.Result{
+					{File: mainWSURI, Text: "fmt", From: term.Coordinates{X: 9, Y: 34}, CaptureName: "pkg"},
+					{File: mainWSURI, Text: "Sprintf", From: term.Coordinates{X: 13, Y: 34}, CaptureName: "symbol"},
+					{File: mainWSURI, Text: "fmt", From: term.Coordinates{X: 1, Y: 44}, CaptureName: "pkg"},
+					{File: mainWSURI, Text: "Println", From: term.Coordinates{X: 5, Y: 44}, CaptureName: "symbol"},
+				}), nil
+			}
+			return iterator.Empty[syntaxapi.Result](), nil
+		},
+	}
+	router, err := AllHandler(mgr, editor, wm, opener, notify, fs, cfg.Parser, cfg)
 	require.NoError(t, err)
 
 	makeCmd := func(name string, args []string, line, char int) textapi.Command {
@@ -439,40 +452,6 @@ func TestE2ECommands(t *testing.T) {
 			require.NoError(t, err)
 		})
 
-		t.Run("by symbol name", func(t *testing.T) {
-			var gotFloating browserapi.Floating
-
-			wm.floatingFn = func(h browserapi.Floating, _ browserapi.FloatingConfig) (
-				browserapi.Window, error,
-			) {
-				gotFloating = h
-				return nil, nil
-			}
-			defer func() { wm.floatingFn = nil }()
-
-			// "lsp hover Add" should resolve via workspace/symbol
-			// and show hover info for the Add function.
-			cmd := textapi.Command{
-				Name:     "lsp",
-				Args:     []string{"hover", "Add"},
-				URI:      mainWSURI,
-				Resource: &mockHandler{uri: mainWSURI},
-			}
-			err := router.HandleCommand(ctx, cmd)
-			require.NoError(t, err)
-			require.NotNil(t, gotFloating, "Floating must be called for symbol name hover")
-
-			w, h := gotFloating.Dimensions()
-			gotFloating.Resize(w, h)
-			sw := term.NewStringWriter(w, h)
-			gotFloating.Draw(sw)
-			require.NoError(t, sw.Flush())
-			rendered := sw.String()
-
-			assert.Contains(t, rendered, "Add",
-				"hover result should contain the Add function")
-		})
-
 		t.Run("by qualified symbol name", func(t *testing.T) {
 			var gotFloating browserapi.Floating
 
@@ -484,11 +463,11 @@ func TestE2ECommands(t *testing.T) {
 			}
 			defer func() { wm.floatingFn = nil }()
 
-			// "lsp hover mylib.MyType" should resolve the qualified
-			// symbol via workspace/symbol and show hover info.
+			// "lsp hover fmt.Println" resolves via tree-sitter
+			// and shows hover info for fmt.Println.
 			cmd := textapi.Command{
 				Name:     "lsp",
-				Args:     []string{"hover", "mylib.MyType"},
+				Args:     []string{"hover", "fmt.Println"},
 				URI:      mainWSURI,
 				Resource: &mockHandler{uri: mainWSURI},
 			}
@@ -503,8 +482,8 @@ func TestE2ECommands(t *testing.T) {
 			require.NoError(t, sw.Flush())
 			rendered := sw.String()
 
-			assert.Contains(t, rendered, "MyType",
-				"hover result should contain MyType")
+			assert.Contains(t, rendered, "Println",
+				"hover result should contain Println")
 		})
 	})
 }
@@ -710,20 +689,11 @@ func TestE2ECompleteNormalization(t *testing.T) {
 			require.NotEmpty(t, names, "expected completions for %s", f.rel)
 
 			for _, name := range names {
-				// 1. No gopls receiver-method syntax should survive.
+				// No gopls receiver-method syntax should survive.
 				assert.NotContains(t, name, "(*",
 					"completion %q still has pointer-receiver syntax", name)
 				assert.NotRegexp(t, `^\(`, name,
 					"completion %q still has value-receiver paren prefix", name)
-
-				// 2. Every completion must resolve via workspace/symbol.
-				t.Run(name, func(t *testing.T) {
-					matches, err := resolveSymbol(ctx, mgr, name)
-					require.NoError(t, err,
-						"resolveSymbol failed for completion %q", name)
-					assert.NotEmpty(t, matches,
-						"resolveSymbol returned no matches for %q", name)
-				})
 			}
 		})
 	}

@@ -25,7 +25,6 @@ package lspcmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -42,152 +41,117 @@ import (
 func TestResolveSymbol(t *testing.T) {
 	t.Parallel()
 
+	fileA, err := workspaceapi.ParseURI("file:///project/pkg/a.go")
+	require.NoError(t, err)
+	fileB, err := workspaceapi.ParseURI("file:///project/pkg/b.go")
+	require.NoError(t, err)
+	fileC, err := workspaceapi.ParseURI("file:///project/other/c.go")
+	require.NoError(t, err)
+
 	tests := []struct {
 		name        string
 		query       string
-		symbols     []semanticapi.SymbolInformation
-		lspErr      error
+		types       []syntaxapi.Result
+		selectors   []syntaxapi.Result
 		wantMatches []symbolMatch
 		wantErr     bool
 	}{
 		{
-			name:  "exact match",
-			query: "MyFunc",
-			symbols: []semanticapi.SymbolInformation{
-				{
-					Name: "MyFuncHelper",
-					Location: semanticapi.Location{
-						URI:   "file:///project/helper.go",
-						Range: semanticapi.Range{Start: semanticapi.Position{Line: 5, Character: 0}},
-					},
-				},
-				{
-					Name: "MyFunc",
-					Location: semanticapi.Location{
-						URI:   "file:///project/main.go",
-						Range: semanticapi.Range{Start: semanticapi.Position{Line: 10, Character: 5}},
-					},
-				},
+			name:  "qualified type found",
+			query: "context.Context",
+			types: []syntaxapi.Result{
+				{File: fileA, Text: "context", From: term.Coordinates{X: 5, Y: 10}, CaptureName: "pkg"},
+				{File: fileA, Text: "Context", From: term.Coordinates{X: 13, Y: 10}, CaptureName: "type"},
 			},
 			wantMatches: []symbolMatch{{
-				URI:     "file:///project/main.go",
-				Pos:     semanticapi.Position{Line: 10, Character: 5},
-				Display: "MyFunc",
+				URI:     fileA.String(),
+				Pos:     semanticapi.Position{Line: 10, Character: 13},
+				Display: "context.Context",
 			}},
 		},
 		{
-			name:  "fuzzy fallback",
-			query: "MyFunc",
-			symbols: []semanticapi.SymbolInformation{
-				{
-					Name: "MyFuncHelper",
-					Location: semanticapi.Location{
-						URI:   "file:///project/helper.go",
-						Range: semanticapi.Range{Start: semanticapi.Position{Line: 3, Character: 0}},
-					},
-				},
+			name:  "selector expression found",
+			query: "fmt.Println",
+			selectors: []syntaxapi.Result{
+				{File: fileA, Text: "fmt", From: term.Coordinates{X: 1, Y: 20}, CaptureName: "pkg"},
+				{File: fileA, Text: "Println", From: term.Coordinates{X: 5, Y: 20}, CaptureName: "symbol"},
 			},
 			wantMatches: []symbolMatch{{
-				URI:     "file:///project/helper.go",
-				Pos:     semanticapi.Position{Line: 3, Character: 0},
-				Display: "MyFuncHelper",
+				URI:     fileA.String(),
+				Pos:     semanticapi.Position{Line: 20, Character: 5},
+				Display: "fmt.Println",
 			}},
 		},
 		{
-			name:    "no results",
-			query:   "Missing",
-			symbols: nil,
+			name:    "no dot in name errors",
+			query:   "NoDot",
 			wantErr: true,
 		},
 		{
-			name:    "lsp error",
-			query:   "Err",
-			lspErr:  errors.New("workspace symbol failed"),
+			name:    "no results errors",
+			query:   "missing.Symbol",
 			wantErr: true,
 		},
 		{
-			name:  "multiple exact matches different packages",
-			query: "Buffer",
-			symbols: []semanticapi.SymbolInformation{
-				{
-					Name: "Buffer",
-					Location: semanticapi.Location{
-						URI:   "file:///project/bytes/buffer.go",
-						Range: semanticapi.Range{Start: semanticapi.Position{Line: 10}},
-					},
-				},
-				{
-					Name: "Buffer",
-					Location: semanticapi.Location{
-						URI:   "file:///project/cell/buffer.go",
-						Range: semanticapi.Range{Start: semanticapi.Position{Line: 20}},
-					},
-				},
+			name:  "multiple files show picker with display names",
+			query: "fmt.Println",
+			selectors: []syntaxapi.Result{
+				{File: fileA, Text: "fmt", From: term.Coordinates{X: 1, Y: 5}, CaptureName: "pkg"},
+				{File: fileA, Text: "Println", From: term.Coordinates{X: 5, Y: 5}, CaptureName: "symbol"},
+				{File: fileC, Text: "fmt", From: term.Coordinates{X: 1, Y: 10}, CaptureName: "pkg"},
+				{File: fileC, Text: "Println", From: term.Coordinates{X: 5, Y: 10}, CaptureName: "symbol"},
 			},
 			wantMatches: []symbolMatch{
-				{URI: "file:///project/bytes/buffer.go", Pos: semanticapi.Position{Line: 10}, Display: "bytes.Buffer"},
-				{URI: "file:///project/cell/buffer.go", Pos: semanticapi.Position{Line: 20}, Display: "cell.Buffer"},
-			},
-		},
-		{
-			name:  "multiple exact matches same short package disambiguated",
-			query: "Buffer",
-			symbols: []semanticapi.SymbolInformation{
-				{
-					Name: "Buffer",
-					Location: semanticapi.Location{
-						URI:   "file:///project/pkgA/cell/buffer.go",
-						Range: semanticapi.Range{Start: semanticapi.Position{Line: 10}},
-					},
-				},
-				{
-					Name: "Buffer",
-					Location: semanticapi.Location{
-						URI:   "file:///project/pkgB/cell/buffer.go",
-						Range: semanticapi.Range{Start: semanticapi.Position{Line: 20}},
-					},
-				},
-			},
-			wantMatches: []symbolMatch{
-				{URI: "file:///project/pkgA/cell/buffer.go", Pos: semanticapi.Position{Line: 10}, Display: "/project/pkgA/cell.Buffer"},
-				{URI: "file:///project/pkgB/cell/buffer.go", Pos: semanticapi.Position{Line: 20}, Display: "/project/pkgB/cell.Buffer"},
+				{URI: fileA.String(), Pos: semanticapi.Position{Line: 5, Character: 5}, Display: "pkg: fmt.Println"},
+				{URI: fileC.String(), Pos: semanticapi.Position{Line: 10, Character: 5}, Display: "other: fmt.Println"},
 			},
 		},
 		{
 			name:  "duplicate URIs deduplicated",
-			query: "Buffer",
-			symbols: []semanticapi.SymbolInformation{
-				{
-					Name: "Buffer",
-					Location: semanticapi.Location{
-						URI:   "file:///project/cell/buffer.go",
-						Range: semanticapi.Range{Start: semanticapi.Position{Line: 10}},
-					},
-				},
-				{
-					Name: "Buffer",
-					Location: semanticapi.Location{
-						URI:   "file:///project/cell/buffer.go",
-						Range: semanticapi.Range{Start: semanticapi.Position{Line: 10}},
-					},
-				},
+			query: "context.Context",
+			types: []syntaxapi.Result{
+				{File: fileA, Text: "context", From: term.Coordinates{X: 5, Y: 10}, CaptureName: "pkg"},
+				{File: fileA, Text: "Context", From: term.Coordinates{X: 13, Y: 10}, CaptureName: "type"},
+				{File: fileA, Text: "context", From: term.Coordinates{X: 5, Y: 20}, CaptureName: "pkg"},
+				{File: fileA, Text: "Context", From: term.Coordinates{X: 13, Y: 20}, CaptureName: "type"},
 			},
 			wantMatches: []symbolMatch{{
-				URI:     "file:///project/cell/buffer.go",
-				Pos:     semanticapi.Position{Line: 10},
-				Display: "Buffer",
+				URI:     fileA.String(),
+				Pos:     semanticapi.Position{Line: 10, Character: 13},
+				Display: "context.Context",
+			}},
+		},
+		{
+			name:  "non-matching pairs skipped",
+			query: "fmt.Println",
+			selectors: []syntaxapi.Result{
+				{File: fileA, Text: "os", From: term.Coordinates{X: 1, Y: 5}, CaptureName: "pkg"},
+				{File: fileA, Text: "Exit", From: term.Coordinates{X: 4, Y: 5}, CaptureName: "symbol"},
+				{File: fileB, Text: "fmt", From: term.Coordinates{X: 1, Y: 8}, CaptureName: "pkg"},
+				{File: fileB, Text: "Println", From: term.Coordinates{X: 5, Y: 8}, CaptureName: "symbol"},
+			},
+			wantMatches: []symbolMatch{{
+				URI:     fileB.String(),
+				Pos:     semanticapi.Position{Line: 8, Character: 5},
+				Display: "fmt.Println",
 			}},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			lsp := &mockLSP{
-				workspaceSymbolFn: func(_ context.Context, _ semanticapi.WorkspaceSymbolParams) ([]semanticapi.SymbolInformation, error) {
-					return tt.symbols, tt.lspErr
+			parser := &mockParser{
+				searchFn: func(query string, _ []string) (iterator.Iterator[syntaxapi.Result], error) {
+					if strings.Contains(query, "qualified_type") {
+						return iterator.FromSlice(tt.types), nil
+					}
+					if strings.Contains(query, "selector_expression") {
+						return iterator.FromSlice(tt.selectors), nil
+					}
+					return iterator.Empty[syntaxapi.Result](), nil
 				},
 			}
-			matches, err := resolveSymbol(context.Background(), lsp, tt.query)
+			matches, err := resolveSymbol(context.Background(), parser, tt.query)
 			if tt.wantErr {
 				require.Error(t, err)
 				return

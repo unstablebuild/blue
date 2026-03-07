@@ -45,85 +45,96 @@ type symbolMatch struct {
 	Display string
 }
 
-// resolveSymbol resolves a symbol name to one or more candidates by querying
-// the workspace symbol provider. Exact name matches are preferred and
-// deduplicated by URI. When multiple candidates remain, each gets a display
-// name that disambiguates by package.
+// resolveSymbol resolves a package-qualified symbol name (e.g.
+// "fmt.Println") to one or more reference locations by searching the
+// workspace with tree-sitter. Results are deduplicated by file URI.
+// When multiple files reference the symbol, each gets a display name
+// that disambiguates by package path.
 func resolveSymbol(
-	ctx context.Context, lsp semanticapi.LSP, name string,
+	ctx context.Context, parser syntaxapi.Parser, name string,
 ) ([]symbolMatch, error) {
-	syms, err := lsp.WorkspaceSymbol(ctx, semanticapi.WorkspaceSymbolParams{
-		Query: name,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(syms) == 0 {
+	pkg, sym, hasDot := strings.Cut(name, ".")
+	if !hasDot {
 		return nil, fmt.Errorf("no symbols found for %q", name)
 	}
-	// Prefer exact name matches.
-	var exact []semanticapi.SymbolInformation
-	for _, s := range syms {
-		if s.Name == name {
-			exact = append(exact, s)
-		}
-	}
-	if len(exact) == 0 {
-		// Fall back to the first result (best fuzzy match).
-		s := syms[0]
-		return []symbolMatch{{
-			URI:     s.Location.URI,
-			Pos:     s.Location.Range.Start,
-			Display: s.Name,
-		}}, nil
-	}
-	// Deduplicate exact matches by URI.
+
 	seen := make(map[string]bool)
-	var deduped []semanticapi.SymbolInformation
-	for _, s := range exact {
-		if !seen[s.Location.URI] {
-			seen[s.Location.URI] = true
-			deduped = append(deduped, s)
+	var matches []symbolMatch
+
+	collect := func(query string, captures []string) error {
+		iter, err := parser.Search(query, captures, "go")
+		if err != nil {
+			return err
+		}
+		pairs := pairedResults(iter)
+		defer func() { _ = pairs.Close() }()
+		for {
+			p, ok := pairs.Next(ctx)
+			if !ok {
+				return pairs.Err()
+			}
+			if p[0].Text != pkg || p[1].Text != sym {
+				continue
+			}
+			uri := p[0].File.String()
+			if seen[uri] {
+				continue
+			}
+			seen[uri] = true
+			matches = append(matches, symbolMatch{
+				URI: uri,
+				Pos: semanticapi.Position{
+					Line:      uint32(p[1].From.Y),
+					Character: uint32(p[1].From.X),
+				},
+				Display: name,
+			})
 		}
 	}
-	if len(deduped) == 1 {
-		s := deduped[0]
-		return []symbolMatch{{
-			URI:     s.Location.URI,
-			Pos:     s.Location.Range.Start,
-			Display: s.Name,
-		}}, nil
+
+	if err := collect(
+		`(qualified_type package: (package_identifier) @pkg name: (type_identifier) @type)`,
+		[]string{"pkg", "type"},
+	); err != nil {
+		return nil, err
 	}
-	return symbolDisplayNames(deduped), nil
+	if err := collect(
+		`(selector_expression operand: (identifier) @pkg field: (field_identifier) @symbol)`,
+		[]string{"pkg", "symbol"},
+	); err != nil {
+		return nil, err
+	}
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no symbols found for %q", name)
+	}
+	if len(matches) > 1 {
+		disambiguateDisplayNames(matches, name)
+	}
+	return matches, nil
 }
 
-// symbolDisplayNames computes display names for a set of symbols.
-// It uses <package>.<symbol> when the short package name is unique,
-// and the full package path when there are collisions.
-func symbolDisplayNames(syms []semanticapi.SymbolInformation) []symbolMatch {
-	matches := make([]symbolMatch, len(syms))
-	pkgPaths := make([]string, len(syms))
-	shortPkgs := make([]string, len(syms))
-	for i, s := range syms {
-		matches[i] = symbolMatch{
-			URI: s.Location.URI,
-			Pos: s.Location.Range.Start,
-		}
-		pkgPaths[i] = packagePathFromURI(s.Location.URI)
+// disambiguateDisplayNames sets display names that differentiate
+// matches from different files. It uses the short package directory
+// when unique, or the full package path when there are collisions.
+func disambiguateDisplayNames(matches []symbolMatch, name string) {
+	pkgPaths := make([]string, len(matches))
+	shortPkgs := make([]string, len(matches))
+	for i, m := range matches {
+		pkgPaths[i] = packagePathFromURI(m.URI)
 		shortPkgs[i] = path.Base(pkgPaths[i])
 	}
 	shortCount := make(map[string]int)
 	for _, sp := range shortPkgs {
 		shortCount[sp]++
 	}
-	for i, s := range syms {
+	for i := range matches {
 		if shortCount[shortPkgs[i]] > 1 {
-			matches[i].Display = pkgPaths[i] + "." + s.Name
+			matches[i].Display = pkgPaths[i] + ": " + name
 		} else {
-			matches[i].Display = shortPkgs[i] + "." + s.Name
+			matches[i].Display = shortPkgs[i] + ": " + name
 		}
 	}
-	return matches
 }
 
 // packagePathFromURI extracts a Go-style package path from a file:// URI.
@@ -153,7 +164,7 @@ func packagePathFromURI(uri string) string {
 // proceed=false is returned.
 func resolveCommandSymbol(
 	ctx context.Context, cmd *textapi.Command,
-	lsp semanticapi.LSP, wm browserapi.WindowManager,
+	wm browserapi.WindowManager,
 	fs workspaceapi.FileSystem,
 	scheduleNextTick func(func()) bool,
 	parser syntaxapi.Parser,
@@ -162,7 +173,7 @@ func resolveCommandSymbol(
 	if len(cmd.Args) == 0 {
 		return cmd.Resource != nil, nil
 	}
-	matches, err := resolveSymbol(ctx, lsp, strings.Join(cmd.Args, " "))
+	matches, err := resolveSymbol(ctx, parser, strings.Join(cmd.Args, " "))
 	if err != nil {
 		return false, err
 	}

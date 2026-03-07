@@ -86,7 +86,7 @@ type hoverHandler struct {
 }
 
 func (h *hoverHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
-	proceed, err := resolveCommandSymbol(ctx, &cmd, h.lsp, h.wm, h.fs, h.scheduleNextTick, h.parser, func(m symbolMatch) {
+	proceed, err := resolveCommandSymbol(ctx, &cmd, h.wm, h.fs, h.scheduleNextTick, h.parser, func(m symbolMatch) {
 		h.scheduleNextTick(func() {
 			wsURI, err := LspToURI(m.URI)
 			if err != nil {

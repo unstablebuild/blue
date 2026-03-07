@@ -25,14 +25,18 @@ package lspcmd
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
+	"github.com/unstablebuild/rune-go-sdk/api/syntaxapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
+	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
 	"github.com/unstablebuild/rune-go-sdk/component"
+	"github.com/unstablebuild/rune-go-sdk/iterator"
 	"github.com/unstablebuild/rune-go-sdk/term"
 )
 
@@ -52,24 +56,12 @@ func TestHoverFloatingHandle(t *testing.T) {
 func TestHoverHandlerSymbolName(t *testing.T) {
 	t.Parallel()
 
+	fileTypes, err := workspaceapi.ParseURI("file:///project/types.go")
+	require.NoError(t, err)
+
 	var hoveredPos semanticapi.Position
-	lsp := &mockLSP{
-		workspaceSymbolFn: func(_ context.Context, _ semanticapi.WorkspaceSymbolParams) ([]semanticapi.SymbolInformation, error) {
-			return []semanticapi.SymbolInformation{
-				{
-					Name: "MyType",
-					Location: semanticapi.Location{
-						URI: "file:///project/types.go",
-						Range: semanticapi.Range{
-							Start: semanticapi.Position{Line: 7, Character: 5},
-						},
-					},
-				},
-			}, nil
-		},
-	}
+	lsp := &mockLSP{}
 	lsp.stubLSP = stubLSP{}
-	// Override Hover to capture the position and return content.
 	hoverFn := func(_ context.Context, params semanticapi.HoverParams) (*semanticapi.Hover, error) {
 		hoveredPos = params.Position
 		return &semanticapi.Hover{
@@ -79,10 +71,19 @@ func TestHoverHandlerSymbolName(t *testing.T) {
 			},
 		}, nil
 	}
-
-	// We need a custom mock since mockLSP doesn't have hoverFn.
-	// Instead, use a wrapper that intercepts Hover.
 	wrapper := &hoverMockLSP{mockLSP: lsp, hoverFn: hoverFn}
+
+	parser := &mockParser{
+		searchFn: func(query string, _ []string) (iterator.Iterator[syntaxapi.Result], error) {
+			if strings.Contains(query, "qualified_type") {
+				return iterator.FromSlice([]syntaxapi.Result{
+					{File: fileTypes, Text: "mylib", From: term.Coordinates{X: 5, Y: 7}, CaptureName: "pkg"},
+					{File: fileTypes, Text: "MyType", From: term.Coordinates{X: 11, Y: 7}, CaptureName: "type"},
+				}), nil
+			}
+			return iterator.Empty[syntaxapi.Result](), nil
+		},
+	}
 
 	var floated bool
 	wm := &mockWindowManager{
@@ -92,17 +93,16 @@ func TestHoverHandlerSymbolName(t *testing.T) {
 		},
 	}
 
-	h := HoverHandler(wrapper, wm, &mockNotifications{}, &mockFileSystem{}, syncTick, nil, DefaultHoverConfig())
+	h := HoverHandler(wrapper, wm, &mockNotifications{}, &mockFileSystem{}, syncTick, parser, DefaultHoverConfig())
 
-	// No resource, but args provided — should still work.
 	cmd := textapi.Command{
 		Name: "hover",
-		Args: []string{"MyType"},
+		Args: []string{"mylib.MyType"},
 	}
-	err := h.HandleCommand(context.Background(), cmd)
+	err = h.HandleCommand(context.Background(), cmd)
 	require.NoError(t, err)
 	assert.True(t, floated, "hover floating should be shown")
-	assert.Equal(t, semanticapi.Position{Line: 7, Character: 5}, hoveredPos)
+	assert.Equal(t, semanticapi.Position{Line: 7, Character: 11}, hoveredPos)
 }
 
 // hoverMockLSP wraps mockLSP and overrides Hover.

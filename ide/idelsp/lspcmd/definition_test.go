@@ -27,12 +27,16 @@ import (
 	"context"
 	"testing"
 
+	"strings"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
+	"github.com/unstablebuild/rune-go-sdk/api/syntaxapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
+	"github.com/unstablebuild/rune-go-sdk/iterator"
 	"github.com/unstablebuild/rune-go-sdk/term"
 )
 
@@ -42,15 +46,18 @@ func TestDefinitionHandler(t *testing.T) {
 	rootURI, err := workspaceapi.ParseURI("file:///project")
 	require.NoError(t, err)
 
+	fileB, err := workspaceapi.ParseURI("file:///project/b.go")
+	require.NoError(t, err)
+
 	tests := []struct {
-		name            string
-		result          semanticapi.LocationResult
-		nilResource     bool
-		args            []string
-		workspaceSymbol []semanticapi.SymbolInformation
-		wantFloat       bool
-		wantNavigate    bool
-		wantEntries     int
+		name         string
+		result       semanticapi.LocationResult
+		nilResource  bool
+		args         []string
+		parser       *mockParser
+		wantFloat    bool
+		wantNavigate bool
+		wantEntries  int
 	}{
 		{
 			name: "single definition navigates directly",
@@ -81,24 +88,24 @@ func TestDefinitionHandler(t *testing.T) {
 		{
 			name:        "definition via symbol name",
 			nilResource: true,
-			args:        []string{"MyFunc"},
-			workspaceSymbol: []semanticapi.SymbolInformation{
-				{
-					Name: "MyFunc",
-					Location: semanticapi.Location{
-						URI: "file:///project/b.go",
-						Range: semanticapi.Range{
-							Start: semanticapi.Position{Line: 42, Character: 4},
-						},
-					},
+			args:        []string{"mylib.MyFunc"},
+			parser: &mockParser{
+				searchFn: func(query string, _ []string) (iterator.Iterator[syntaxapi.Result], error) {
+					if strings.Contains(query, "selector_expression") {
+						return iterator.FromSlice([]syntaxapi.Result{
+							{File: fileB, Text: "mylib", From: term.Coordinates{X: 1, Y: 42}, CaptureName: "pkg"},
+							{File: fileB, Text: "MyFunc", From: term.Coordinates{X: 7, Y: 42}, CaptureName: "symbol"},
+						}), nil
+					}
+					return iterator.Empty[syntaxapi.Result](), nil
 				},
 			},
 			result: semanticapi.LocationResult{
 				Location: &semanticapi.Location{
 					URI: "file:///project/b.go",
 					Range: semanticapi.Range{
-						Start: semanticapi.Position{Line: 42, Character: 4},
-						End:   semanticapi.Position{Line: 42, Character: 10},
+						Start: semanticapi.Position{Line: 42, Character: 7},
+						End:   semanticapi.Position{Line: 42, Character: 13},
 					},
 				},
 			},
@@ -110,9 +117,6 @@ func TestDefinitionHandler(t *testing.T) {
 			lsp := &mockLSP{
 				definitionFn: func(_ context.Context, _ semanticapi.DefinitionParams) (semanticapi.LocationResult, error) {
 					return tt.result, nil
-				},
-				workspaceSymbolFn: func(_ context.Context, _ semanticapi.WorkspaceSymbolParams) ([]semanticapi.SymbolInformation, error) {
-					return tt.workspaceSymbol, nil
 				},
 			}
 			var navigated bool
@@ -134,7 +138,7 @@ func TestDefinitionHandler(t *testing.T) {
 			}
 			h := DefinitionHandler(
 				lsp, editor, wm, &mockResourceOpener{}, &mockNotifications{}, &mockFileSystem{},
-				syncTick, nil, DefinitionConfig{RootURI: rootURI},
+				syncTick, tt.parser, DefinitionConfig{RootURI: rootURI},
 			)
 
 			uri, _ := workspaceapi.ParseURI("file:///project/a.go")
