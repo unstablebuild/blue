@@ -1412,6 +1412,579 @@ func TestInstallConfigPromptDeny(t *testing.T) {
 	})
 }
 
+// --- Test helpers for crash-safe download tests ---
+
+func createStaleEntry(
+	t *testing.T, s document.Service, pkgID string, version release.Version,
+) {
+	t.Helper()
+	key := fmt.Sprintf("%s:%s", pkgID, version)
+	err := s.Create(context.Background(), key, pkgVersionValue{
+		Package: pkgID, Version: version,
+	})
+	require.NoError(t, err)
+}
+
+func createCompleteEntry(
+	t *testing.T, s document.Service, pkgID string, version release.Version,
+) {
+	t.Helper()
+	key := fmt.Sprintf("%s:%s", pkgID, version)
+	err := s.Create(context.Background(), key, pkgVersionValue{
+		Package: pkgID, Version: version, Complete: true,
+	})
+	require.NoError(t, err)
+}
+
+func assertStorageEntryComplete(
+	t *testing.T, s document.Service, pkgID string, version release.Version,
+) {
+	t.Helper()
+	key := fmt.Sprintf("%s:%s", pkgID, version)
+	var val pkgVersionValue
+	err := s.Get(context.Background(), key, &val)
+	require.NoError(t, err, "storage entry should exist")
+	assert.True(t, val.Complete, "storage entry should be complete")
+}
+
+func assertStorageEntryNotExists(
+	t *testing.T, s document.Service, pkgID string, version release.Version,
+) {
+	t.Helper()
+	key := fmt.Sprintf("%s:%s", pkgID, version)
+	var val pkgVersionValue
+	err := s.Get(context.Background(), key, &val)
+	assert.True(t, errors.Is(err, document.ErrNotFound),
+		"storage entry should not exist, got: %v", err)
+}
+
+// newTestManagerWithStorage is like newTestManager but returns the storage service too.
+func newTestManagerWithStorage(
+	t *testing.T,
+	packages map[string]release.Package,
+	versions map[string][]release.Bundle,
+) (*Manager, *idepkgtest.Notifications, *idepkgtest.ReleaseManager, string, document.Service) {
+	temp, err := os.MkdirTemp("", "")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = os.RemoveAll(temp)
+	})
+	configPath := filepath.Join(temp, "config.yaml")
+	n := idepkgtest.NewNotifications(t)
+	m := idepkgtest.NewReleaseManager(packages, versions)
+	fileScheme := newLocalScheme(temp)
+	wm := &mockWindowManager{
+		floatingFn: func(h browserapi.Floating, _ browserapi.FloatingConfig) (browserapi.Window, error) {
+			h.Resize(70, 20)
+			h.Handle(term.Event{Type: term.EventKey, Key: term.KeyEnter})
+			return &mockWindow{}, nil
+		},
+	}
+	storage := document.NewInMemoryService()
+	manager := NewManager(n, m, storage,
+		fileScheme, temp, configPath, wm, syncTick, term.NopInterrupter())
+	return manager, n, m, temp, storage
+}
+
+// --- Reconcile tests ---
+
+func TestReconcile(t *testing.T) {
+	t.Parallel()
+
+	t.Run("crash_after_storage_create_before_download", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles()
+		m, _, _, datadir, storage := newTestManagerWithStorage(t, pkgs, versions)
+		require.NoError(t, makePkgDirs(datadir))
+
+		createStaleEntry(t, storage, "go", "1")
+
+		err := m.Reconcile(context.Background())
+		require.NoError(t, err)
+
+		assertStorageEntryNotExists(t, storage, "go", "1")
+		_, serr := os.Stat(makePackageVersionDirname(datadir, "go", "1"))
+		assert.True(t, os.IsNotExist(serr))
+	})
+
+	t.Run("crash_during_extraction", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles()
+		m, _, _, datadir, storage := newTestManagerWithStorage(t, pkgs, versions)
+		require.NoError(t, makePkgDirs(datadir))
+
+		createStaleEntry(t, storage, "go", "1")
+		// Create partial pkg dir
+		pkgDir := makePackageVersionDirname(datadir, "go", "1")
+		require.NoError(t, os.MkdirAll(pkgDir, 0777))
+		require.NoError(t, os.WriteFile(filepath.Join(pkgDir, "partial.txt"), []byte("x"), 0644))
+
+		err := m.Reconcile(context.Background())
+		require.NoError(t, err)
+
+		assertStorageEntryNotExists(t, storage, "go", "1")
+		_, serr := os.Stat(pkgDir)
+		assert.True(t, os.IsNotExist(serr))
+	})
+
+	t.Run("crash_after_extraction_before_storage_update", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles()
+		m, _, _, datadir, storage := newTestManagerWithStorage(t, pkgs, versions)
+		require.NoError(t, makePkgDirs(datadir))
+
+		createStaleEntry(t, storage, "go", "1")
+		pkgDir := makePackageVersionDirname(datadir, "go", "1")
+		require.NoError(t, os.MkdirAll(pkgDir, 0777))
+
+		err := m.Reconcile(context.Background())
+		require.NoError(t, err)
+
+		assertStorageEntryNotExists(t, storage, "go", "1")
+		_, serr := os.Stat(pkgDir)
+		assert.True(t, os.IsNotExist(serr))
+	})
+
+	t.Run("crash_during_link_lib_copy_bin", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles()
+		m, _, _, datadir, storage := newTestManagerWithStorage(t, pkgs, versions)
+		require.NoError(t, makePkgDirs(datadir))
+
+		createStaleEntry(t, storage, "go", "1")
+		pkgDir := makePackageVersionDirname(datadir, "go", "1")
+		require.NoError(t, os.MkdirAll(pkgDir, 0777))
+		libLink := makePackageLibDirname(datadir, "go")
+		require.NoError(t, os.Symlink(pkgDir, libLink))
+
+		err := m.Reconcile(context.Background())
+		require.NoError(t, err)
+
+		assertStorageEntryNotExists(t, storage, "go", "1")
+		_, serr := os.Stat(pkgDir)
+		assert.True(t, os.IsNotExist(serr))
+		_, serr = os.Lstat(libLink)
+		assert.True(t, os.IsNotExist(serr))
+	})
+
+	t.Run("staging_dir_leftover", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles()
+		m, _, _, datadir, storage := newTestManagerWithStorage(t, pkgs, versions)
+		require.NoError(t, makePkgDirs(datadir))
+
+		createStaleEntry(t, storage, "go", "1")
+		stagingDir := makeStagingDirname(datadir, "go", "1")
+		require.NoError(t, os.MkdirAll(stagingDir, 0777))
+
+		err := m.Reconcile(context.Background())
+		require.NoError(t, err)
+
+		_, serr := os.Stat(stagingDir)
+		assert.True(t, os.IsNotExist(serr))
+		assertStorageEntryNotExists(t, storage, "go", "1")
+	})
+
+	t.Run("stale_tmp_symlink", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles()
+		m, _, _, datadir, _ := newTestManagerWithStorage(t, pkgs, versions)
+		require.NoError(t, makePkgDirs(datadir))
+
+		tmpLink := filepath.Join(datadir, "lib", "go.tmp")
+		require.NoError(t, os.Symlink("/nonexistent", tmpLink))
+
+		err := m.Reconcile(context.Background())
+		require.NoError(t, err)
+
+		_, serr := os.Lstat(tmpLink)
+		assert.True(t, os.IsNotExist(serr))
+	})
+
+	t.Run("multiple_packages_one_stale", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
+		m, n, _, _, storage := newTestManagerWithStorage(t, pkgs, versions)
+
+		// Install "go:1" fully
+		n.SetWg(1)
+		err := m.InstallPackageVersion(context.Background(), "go", "1")
+		require.NoError(t, err)
+		n.Wait()
+		n.RequireNoErrorNotification()
+
+		// Create stale "testpkg:1"
+		createStaleEntry(t, storage, "testpkg", "1")
+
+		err = m.Reconcile(context.Background())
+		require.NoError(t, err)
+
+		assertStorageEntryComplete(t, storage, "go", "1")
+		assertStorageEntryNotExists(t, storage, "testpkg", "1")
+	})
+
+	t.Run("no_incomplete_installs", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
+		m, n, _, _, storage := newTestManagerWithStorage(t, pkgs, versions)
+
+		n.SetWg(1)
+		err := m.InstallPackageVersion(context.Background(), "go", "1")
+		require.NoError(t, err)
+		n.Wait()
+
+		err = m.Reconcile(context.Background())
+		require.NoError(t, err)
+
+		assertStorageEntryComplete(t, storage, "go", "1")
+	})
+
+	t.Run("empty_storage", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles()
+		m, _, _, _, _ := newTestManagerWithStorage(t, pkgs, versions)
+
+		err := m.Reconcile(context.Background())
+		require.NoError(t, err)
+	})
+
+	t.Run("all_entries_stale", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles()
+		m, _, _, datadir, storage := newTestManagerWithStorage(t, pkgs, versions)
+		require.NoError(t, makePkgDirs(datadir))
+
+		createStaleEntry(t, storage, "go", "1")
+		createStaleEntry(t, storage, "testpkg", "1")
+
+		err := m.Reconcile(context.Background())
+		require.NoError(t, err)
+
+		assertStorageEntryNotExists(t, storage, "go", "1")
+		assertStorageEntryNotExists(t, storage, "testpkg", "1")
+	})
+
+	t.Run("complete_entry_missing_dir", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles()
+		m, _, _, datadir, storage := newTestManagerWithStorage(t, pkgs, versions)
+		require.NoError(t, makePkgDirs(datadir))
+
+		createCompleteEntry(t, storage, "go", "1")
+		// Don't create the pkg dir — simulates dir deletion
+
+		err := m.Reconcile(context.Background())
+		require.NoError(t, err)
+
+		assertStorageEntryNotExists(t, storage, "go", "1")
+	})
+
+	t.Run("then_install_succeeds", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
+		m, n, _, datadir, storage := newTestManagerWithStorage(t, pkgs, versions)
+		require.NoError(t, makePkgDirs(datadir))
+
+		createStaleEntry(t, storage, "go", "1")
+
+		err := m.Reconcile(context.Background())
+		require.NoError(t, err)
+
+		n.SetWg(1)
+		err = m.InstallPackageVersion(context.Background(), "go", "1")
+		require.NoError(t, err)
+		n.Wait()
+		n.RequireNoErrorNotification()
+
+		assertStorageEntryComplete(t, storage, "go", "1")
+		assertDataDirExists(t, datadir, "go")
+	})
+
+	t.Run("then_delete_returns_not_installed", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles()
+		m, _, _, datadir, storage := newTestManagerWithStorage(t, pkgs, versions)
+		require.NoError(t, makePkgDirs(datadir))
+
+		createStaleEntry(t, storage, "go", "1")
+
+		err := m.Reconcile(context.Background())
+		require.NoError(t, err)
+
+		err = m.DeletePackageVersion(context.Background(), "go", "1", false)
+		require.Equal(t, ErrNotInstalled, err)
+	})
+
+	t.Run("then_list_excludes_recovered", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles()
+		m, _, _, datadir, storage := newTestManagerWithStorage(t, pkgs, versions)
+		require.NoError(t, makePkgDirs(datadir))
+
+		createStaleEntry(t, storage, "testpkg", "1")
+
+		err := m.Reconcile(context.Background())
+		require.NoError(t, err)
+
+		it, err := m.ListInstalledPackages(context.Background())
+		require.NoError(t, err)
+		installed, err := iterator.ToSlice(context.Background(), it)
+		require.NoError(t, err)
+		assert.Empty(t, installed)
+	})
+}
+
+// --- Install stale entry handling tests ---
+
+func TestInstallStaleEntry(t *testing.T) {
+	t.Parallel()
+
+	t.Run("detects_and_cleans_stale_entry", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
+		m, n, _, datadir, storage := newTestManagerWithStorage(t, pkgs, versions)
+
+		createStaleEntry(t, storage, "go", "1")
+
+		n.SetWg(1)
+		err := m.InstallPackageVersion(context.Background(), "go", "1")
+		require.NoError(t, err)
+		n.Wait()
+		n.RequireNoErrorNotification()
+
+		assertStorageEntryComplete(t, storage, "go", "1")
+		assertDataDirExists(t, datadir, "go")
+	})
+
+	t.Run("stale_entry_with_partial_files", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
+		m, n, _, datadir, storage := newTestManagerWithStorage(t, pkgs, versions)
+		require.NoError(t, makePkgDirs(datadir))
+
+		createStaleEntry(t, storage, "go", "1")
+		pkgDir := makePackageVersionDirname(datadir, "go", "1")
+		require.NoError(t, os.MkdirAll(pkgDir, 0777))
+		require.NoError(t, os.WriteFile(filepath.Join(pkgDir, "partial.txt"), []byte("x"), 0644))
+
+		n.SetWg(1)
+		err := m.InstallPackageVersion(context.Background(), "go", "1")
+		require.NoError(t, err)
+		n.Wait()
+		n.RequireNoErrorNotification()
+
+		assertStorageEntryComplete(t, storage, "go", "1")
+		assertDataDirExists(t, datadir, "go")
+	})
+
+	t.Run("completed_entry_rejects_reinstall", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
+		m, n, _, _, _ := newTestManagerWithStorage(t, pkgs, versions)
+
+		n.SetWg(1)
+		err := m.InstallPackageVersion(context.Background(), "go", "1")
+		require.NoError(t, err)
+		n.Wait()
+
+		err = m.InstallPackageVersion(context.Background(), "go", "1")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "already been installed")
+	})
+
+	t.Run("stale_entry_with_staging_dir", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
+		m, n, _, datadir, storage := newTestManagerWithStorage(t, pkgs, versions)
+		require.NoError(t, makePkgDirs(datadir))
+
+		createStaleEntry(t, storage, "go", "1")
+		stagingDir := makeStagingDirname(datadir, "go", "1")
+		require.NoError(t, os.MkdirAll(stagingDir, 0777))
+
+		n.SetWg(1)
+		err := m.InstallPackageVersion(context.Background(), "go", "1")
+		require.NoError(t, err)
+		n.Wait()
+		n.RequireNoErrorNotification()
+
+		assertStorageEntryComplete(t, storage, "go", "1")
+		_, serr := os.Stat(stagingDir)
+		assert.True(t, os.IsNotExist(serr))
+	})
+}
+
+// --- Listing methods filter incomplete tests ---
+
+func TestListInstalledPackagesExcludesStale(t *testing.T) {
+	t.Parallel()
+
+	t.Run("excludes_stale", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
+		m, n, _, _, storage := newTestManagerWithStorage(t, pkgs, versions)
+
+		// Install "go:1" fully
+		n.SetWg(1)
+		err := m.InstallPackageVersion(context.Background(), "go", "1")
+		require.NoError(t, err)
+		n.Wait()
+
+		// Create stale "testpkg:1"
+		createStaleEntry(t, storage, "testpkg", "1")
+
+		it, err := m.ListInstalledPackages(context.Background())
+		require.NoError(t, err)
+		installed, err := iterator.ToSlice(context.Background(), it)
+		require.NoError(t, err)
+
+		assert.Equal(t, []string{"go"}, installed)
+	})
+}
+
+func TestListInstalledPackageVersionsExcludesStale(t *testing.T) {
+	t.Parallel()
+
+	t.Run("excludes_stale", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles(
+			[]release.Bundle{
+				{Package: "go", Version: "1"},
+				{Package: "go", Version: "2"},
+			},
+		)
+		m, n, _, _, storage := newTestManagerWithStorage(t, pkgs, versions)
+
+		// Install "go:1" fully
+		n.SetWg(1)
+		err := m.InstallPackageVersion(context.Background(), "go", "1")
+		require.NoError(t, err)
+		n.Wait()
+
+		// Create stale "go:2"
+		createStaleEntry(t, storage, "go", "2")
+
+		it, err := m.ListInstalledPackageVersions(context.Background(), "go")
+		require.NoError(t, err)
+		installed, err := iterator.ToSlice(context.Background(), it)
+		require.NoError(t, err)
+
+		assert.Equal(t, []release.Version{"1"}, installed)
+	})
+}
+
+func TestUsePackageVersionRejectsIncomplete(t *testing.T) {
+	t.Parallel()
+
+	t.Run("rejects_incomplete", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles(
+			[]release.Bundle{
+				{Package: "go", Version: "1"},
+				{Package: "go", Version: "2"},
+			},
+		)
+		m, n, _, _, storage := newTestManagerWithStorage(t, pkgs, versions)
+
+		// Install "go:1" fully
+		n.SetWg(1)
+		err := m.InstallPackageVersion(context.Background(), "go", "1")
+		require.NoError(t, err)
+		n.Wait()
+
+		// Create stale "go:2"
+		createStaleEntry(t, storage, "go", "2")
+
+		err = m.UsePackageVersion(context.Background(), "go", "2")
+		require.Equal(t, ErrNotInstalled, err)
+	})
+}
+
+func TestProcessInstalledSettingsSkipsIncomplete(t *testing.T) {
+	t.Parallel()
+
+	t.Run("skips_incomplete", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "configpkg", Version: "1"}})
+		m, n, _, datadir, storage := newTestManagerWithStorage(t, pkgs, versions)
+
+		configPath := filepath.Join(datadir, "config.yaml")
+		require.NoError(t, os.WriteFile(configPath, []byte("{}\n"), 0644))
+
+		// Install "configpkg:1" fully
+		n.SetWg(2)
+		err := m.InstallPackageVersion(context.Background(), "configpkg", "1")
+		require.NoError(t, err)
+		n.Wait()
+		n.RequireNoErrorNotification()
+
+		// Create stale "configpkg:2" — processInstalledSettings should skip it
+		createStaleEntry(t, storage, "configpkg", "2")
+
+		n.ClearWg()
+		err = m.ProcessInstalledSettings(context.Background())
+		require.NoError(t, err)
+	})
+}
+
+// --- Atomic operation tests ---
+
+func TestInstallAtomicOperations(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no_staging_dir_after_success", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
+		m, n, _, datadir, _ := newTestManagerWithStorage(t, pkgs, versions)
+
+		n.SetWg(1)
+		err := m.InstallPackageVersion(context.Background(), "go", "1")
+		require.NoError(t, err)
+		n.Wait()
+
+		stagingDir := makeStagingDirname(datadir, "go", "1")
+		_, serr := os.Stat(stagingDir)
+		assert.True(t, os.IsNotExist(serr), "staging dir should not exist after success")
+	})
+
+	t.Run("storage_entry_is_complete_after_success", func(t *testing.T) {
+		t.Parallel()
+		pkgs := idepkgtest.MakePackages()
+		versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
+		m, n, _, _, storage := newTestManagerWithStorage(t, pkgs, versions)
+
+		n.SetWg(1)
+		err := m.InstallPackageVersion(context.Background(), "go", "1")
+		require.NoError(t, err)
+		n.Wait()
+
+		assertStorageEntryComplete(t, storage, "go", "1")
+	})
+}
+
 func TestProcessConfigSkipsPromptWhenAlreadyMerged(t *testing.T) {
 	t.Parallel()
 	t.Run("no prompt shown when config is already merged", func(t *testing.T) {
