@@ -25,9 +25,9 @@ package lspcmd
 
 import (
 	"context"
-	"testing"
-
 	"strings"
+	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -119,6 +119,7 @@ func TestDefinitionHandler(t *testing.T) {
 					return tt.result, nil
 				},
 			}
+			done := make(chan struct{}, 1)
 			var navigated bool
 			editor := &mockEditor{
 				editorFn: func(u workspaceapi.URI) (textapi.Handler, error) {
@@ -126,6 +127,10 @@ func TestDefinitionHandler(t *testing.T) {
 				},
 				setCursorFn: func(_ textapi.Handler, _ term.Coordinates) error {
 					navigated = true
+					select {
+					case done <- struct{}{}:
+					default:
+					}
 					return nil
 				},
 			}
@@ -133,6 +138,10 @@ func TestDefinitionHandler(t *testing.T) {
 			wm := &mockWindowManager{
 				floatingFn: func(h browserapi.Floating, _ browserapi.FloatingConfig) (browserapi.Window, error) {
 					fh = h
+					select {
+					case done <- struct{}{}:
+					default:
+					}
 					return nil, nil
 				},
 			}
@@ -150,6 +159,13 @@ func TestDefinitionHandler(t *testing.T) {
 
 			err := h.HandleCommand(context.Background(), cmd)
 			require.NoError(t, err)
+			if len(tt.args) > 0 && (tt.wantNavigate || tt.wantFloat) {
+				select {
+				case <-done:
+				case <-time.After(5 * time.Second):
+					t.Fatal("timed out waiting for async resolution")
+				}
+			}
 			assert.Equal(t, tt.wantFloat, fh != nil)
 			assert.Equal(t, tt.wantNavigate, navigated)
 			if tt.wantEntries > 0 {

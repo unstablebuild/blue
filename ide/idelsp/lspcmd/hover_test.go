@@ -27,6 +27,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -85,10 +86,15 @@ func TestHoverHandlerSymbolName(t *testing.T) {
 		},
 	}
 
+	done := make(chan struct{}, 1)
 	var floated bool
 	wm := &mockWindowManager{
 		floatingFn: func(_ browserapi.Floating, _ browserapi.FloatingConfig) (browserapi.Window, error) {
 			floated = true
+			select {
+			case done <- struct{}{}:
+			default:
+			}
 			return nil, nil
 		},
 	}
@@ -101,6 +107,11 @@ func TestHoverHandlerSymbolName(t *testing.T) {
 	}
 	err = h.HandleCommand(context.Background(), cmd)
 	require.NoError(t, err)
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for async resolution")
+	}
 	assert.True(t, floated, "hover floating should be shown")
 	assert.Equal(t, semanticapi.Position{Line: 7, Character: 11}, hoveredPos)
 }

@@ -78,7 +78,7 @@ type referencesHandler struct {
 }
 
 func (h *referencesHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
-	proceed, err := resolveCommandSymbol(ctx, &cmd, h.wm, h.fs, h.scheduleNextTick, h.parser, func(m symbolMatch) {
+	proceed, err := resolveCommandSymbol(ctx, &cmd, h.wm, h.fs, h.notify, h.scheduleNextTick, h.parser, func(m symbolMatch) {
 		h.scheduleNextTick(func() {
 			wsURI, err := LspToURI(m.URI)
 			if err != nil {
