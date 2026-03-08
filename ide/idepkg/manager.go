@@ -1061,8 +1061,8 @@ func removeExecutables(files []*tar.Header, targetdirname string) error {
 		name := filepath.Clean(executable.Name)
 		target := filepath.Join(targetdirname, filepath.Base(name))
 		err := os.Remove(target)
-		if err != nil {
-			ret = multierror.Append(ret, fmt.Errorf("create executable %s: %w", target, err))
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			ret = multierror.Append(ret, fmt.Errorf("remove executable %s: %w", target, err))
 			continue
 		}
 	}
@@ -1154,13 +1154,13 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	}
 	for _, pkv := range entries {
 		key := m.makeDownloadKey(pkv.Package, pkv.Version)
+		dirname := makePackageVersionDirname(m.dataDir, pkv.Package, pkv.Version)
 		if !pkv.Complete {
-			_ = os.RemoveAll(makePackageVersionDirname(m.dataDir, pkv.Package, pkv.Version))
+			_ = os.RemoveAll(dirname)
 			// Remove lib symlink if it points to the stale version.
 			libdirname := makePackageLibDirname(m.dataDir, pkv.Package)
 			if target, lerr := os.Readlink(libdirname); lerr == nil {
-				expected := makePackageVersionDirname(m.dataDir, pkv.Package, pkv.Version)
-				if target == expected {
+				if target == dirname {
 					_ = os.Remove(libdirname)
 					_ = removeExecutables(pkv.Executables, m.binDir)
 				}
@@ -1169,7 +1169,6 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 			continue
 		}
 		// Phase 4: Verify complete entries — if dir is missing, delete storage.
-		dirname := makePackageVersionDirname(m.dataDir, pkv.Package, pkv.Version)
 		if _, serr := os.Stat(dirname); os.IsNotExist(serr) {
 			_ = m.storage.Delete(ctx, key)
 		}
