@@ -35,6 +35,7 @@ import (
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
 	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
 	"github.com/unstablebuild/rune-go-sdk/component"
+	"github.com/unstablebuild/rune-go-sdk/debug"
 	"github.com/unstablebuild/rune-go-sdk/iterator"
 )
 
@@ -157,36 +158,49 @@ func packagePathFromURI(uri string) string {
 }
 
 // resolveCommandSymbol handles the common symbol-resolution pattern for
-// command handlers. If cmd has args, it resolves the symbol name. When
-// exactly one match is found, cmd.URI and cmd.Cursor.Content are set and
-// proceed=true is returned. When multiple matches are found, a picker is
-// shown and proceed=false is returned. When cmd has no args and no resource,
-// proceed=false is returned.
+// command handlers. If cmd has no args and a resource, proceed=true is
+// returned so the handler can use the cursor position. If cmd has args,
+// the symbol is resolved asynchronously: a progress notification is
+// shown, resolution runs in a background goroutine, and onResolve is
+// called on the main thread (via scheduleNextTick) when a single match
+// is found. When multiple matches exist a picker is shown instead.
+// In the async case proceed=false is always returned.
 func resolveCommandSymbol(
-	ctx context.Context, cmd *textapi.Command,
+	_ context.Context, cmd *textapi.Command,
 	wm browserapi.WindowManager,
 	fs workspaceapi.FileSystem,
+	notify browserapi.Notifications,
 	scheduleNextTick func(func()) bool,
 	parser syntaxapi.Parser,
-	onPick func(symbolMatch),
+	onResolve func(symbolMatch),
 ) (proceed bool, err error) {
 	if len(cmd.Args) == 0 {
 		return cmd.Resource != nil, nil
 	}
-	matches, err := resolveSymbol(ctx, parser, strings.Join(cmd.Args, " "))
-	if err != nil {
-		return false, err
-	}
-	if len(matches) > 1 {
-		return false, showSymbolPicker(matches, wm, fs, scheduleNextTick, parser, onPick)
-	}
-	wsURI, err := LspToURI(matches[0].URI)
-	if err != nil {
-		return false, err
-	}
-	cmd.URI = wsURI
-	cmd.Cursor.Content = PosToCoord(matches[0].Pos)
-	return true, nil
+	name := strings.Join(cmd.Args, " ")
+
+	id, _ := notify.Notify(browserapi.LevelInfo, "Resolving %s…", name)
+	_ = notify.UpdateNotificationProgress(id, "", 0, 1)
+
+	go debug.CapturePanicReport(func() {
+		matches, err := resolveSymbol(context.Background(), parser, name)
+		scheduleNextTick(func() {
+			_ = notify.UpdateNotificationProgress(id, "", 1, 1)
+			if err != nil {
+				_, _ = notify.Notify(browserapi.LevelError, "%s", err)
+				return
+			}
+			if len(matches) == 1 {
+				onResolve(matches[0])
+				return
+			}
+			if err := showSymbolPicker(matches, wm, fs, scheduleNextTick, parser, onResolve); err != nil {
+				_, _ = notify.Notify(browserapi.LevelError, "%s", err)
+			}
+		})
+	})
+
+	return false, nil
 }
 
 // showSymbolPicker displays a floating locations picker with file preview
@@ -224,8 +238,6 @@ func showSymbolPicker(
 	handler.win = win
 	return nil
 }
-
-
 
 // completeReferencedSymbol returns package-qualified symbol names
 // referenced across the workspace by running tree-sitter queries to

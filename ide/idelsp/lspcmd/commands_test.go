@@ -453,12 +453,17 @@ func TestE2ECommands(t *testing.T) {
 		})
 
 		t.Run("by qualified symbol name", func(t *testing.T) {
+			done := make(chan struct{}, 1)
 			var gotFloating browserapi.Floating
 
 			wm.floatingFn = func(h browserapi.Floating, _ browserapi.FloatingConfig) (
 				browserapi.Window, error,
 			) {
 				gotFloating = h
+				select {
+				case done <- struct{}{}:
+				default:
+				}
 				return nil, nil
 			}
 			defer func() { wm.floatingFn = nil }()
@@ -473,6 +478,11 @@ func TestE2ECommands(t *testing.T) {
 			}
 			err := router.HandleCommand(ctx, cmd)
 			require.NoError(t, err)
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("timed out waiting for async symbol resolution")
+			}
 			require.NotNil(t, gotFloating, "Floating must be called for qualified symbol hover")
 
 			w, h := gotFloating.Dimensions()
