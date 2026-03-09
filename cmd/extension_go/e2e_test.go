@@ -365,7 +365,7 @@ func TestE2E(t *testing.T) {
 		env := initGopls(t, goplsBin, []testFile{
 			{name: "main.go", content: unusedImportSrc},
 		})
-		handler, me, _ := newTestHandler(t, env)
+		handler, me, _ := newTestHandler(t, env, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -400,7 +400,7 @@ func TestE2E(t *testing.T) {
 		env := initGopls(t, goplsBin, []testFile{
 			{name: "main.go", content: mainSrc},
 		})
-		handler, me, mn := newTestHandler(t, env)
+		handler, me, mn := newTestHandler(t, env, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -430,7 +430,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: fillStructSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -483,7 +483,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: extractFuncSrc},
 		})
-		handler, me, _ := newTestHandler(t, env.testEnv)
+		handler, me, _ := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -583,7 +583,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: extractFuncSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -619,7 +619,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: invertIfSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -647,7 +647,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: inlineCallSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -677,7 +677,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: extractMethodSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -714,7 +714,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: extractVarAllSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -750,7 +750,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: extractConstantSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -782,7 +782,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: extractConstantSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -815,7 +815,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: extractToNewFileSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -850,7 +850,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: inlineVariableSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -879,7 +879,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: removeUnusedParamSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -907,7 +907,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: moveParamSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -935,7 +935,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: moveParamSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -988,7 +988,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: splitLinesSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1014,7 +1014,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: joinLinesSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1066,7 +1066,7 @@ func TestE2E(t *testing.T) {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: addTagsSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1101,7 +1101,7 @@ type Config struct {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: taggedSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1129,7 +1129,7 @@ type Config struct {
 			{name: "main.go", content: mainSrc},
 			{name: "main_test.go", content: testFileSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1166,7 +1166,7 @@ type Config struct {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: addTestSrc},
 		})
-		handler, me, _ := newTestHandler(t, env.testEnv)
+		handler, me, _ := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1217,7 +1217,7 @@ type Config struct {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: mainSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1241,7 +1241,7 @@ type Config struct {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: mainSrc},
 		})
-		handler, me, mn := newTestHandler(t, env.testEnv)
+		handler, me, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1266,7 +1266,8 @@ type Config struct {
 			{name: "main.go", content: mainSrc},
 			{name: "main_test.go", content: testFileSrc},
 		})
-		handler, _, mn := newTestHandler(t, env)
+		scheme := newTestScheme()
+		handler, _, mn := newTestHandler(t, env, scheme)
 
 		uri := parseTestURI(t, env.fileURIs["main_test.go"])
 		resource := &stubResource{uri: uri}
@@ -1276,10 +1277,14 @@ type Config struct {
 		err := handler.HandleCommand(t.Context(), cmd)
 		require.NoError(t, err)
 		require.Eventually(t, func() bool {
-			return mn.hasMessage("Executed: run test")
+			return mn.hasMessage("passed")
 		}, 30*time.Second, 100*time.Millisecond)
-		assert.Len(t, mn.getMessages(), 1)
-		assert.Equal(t, browserapi.LevelInfo, mn.getMessages()[0].Level)
+		msgs := mn.getMessages()
+		// Expect 2 notifications: the initial progress and the final result.
+		require.GreaterOrEqual(t, len(msgs), 2)
+		last := msgs[len(msgs)-1]
+		assert.Equal(t, browserapi.LevelSuccess, last.Level)
+		assert.Contains(t, last.Message, "passed")
 	})
 
 	t.Run("CodeLens/Generate", func(t *testing.T) {
@@ -1287,7 +1292,7 @@ type Config struct {
 		env := initGopls(t, goplsBin, []testFile{
 			{name: "main.go", content: generateSrc},
 		})
-		handler, _, mn := newTestHandler(t, env)
+		handler, _, mn := newTestHandler(t, env, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1312,7 +1317,7 @@ type Config struct {
 		env := initGopls(t, goplsBin, []testFile{
 			{name: "main.go", content: "package main\n\nfunc main() {}\n"},
 		})
-		handler, _, mn := newTestHandler(t, env)
+		handler, _, mn := newTestHandler(t, env, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1346,7 +1351,7 @@ type Config struct {
 			{name: "dep/lib.go", content: "package dep\n\nfunc Hello() string { return \"hello\" }\n"},
 			{name: "main.go", content: vendorMain},
 		})
-		handler, _, _ := newTestHandler(t, env)
+		handler, _, _ := newTestHandler(t, env, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1387,7 +1392,7 @@ type Config struct {
 		env := initGoplsFromDir(t, goplsBin, dir, []testFile{
 			{name: "main.go", content: mainContent},
 		})
-		handler, _, _ := newTestHandler(t, env)
+		handler, _, _ := newTestHandler(t, env, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1452,7 +1457,7 @@ type Config struct {
 		env := initGopls(t, goplsBin, []testFile{
 			{name: "main.go", content: mainSrc},
 		})
-		handler, me, mn := newTestHandler(t, env)
+		handler, me, mn := newTestHandler(t, env, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1529,7 +1534,7 @@ type Config struct {
 		env := initGoplsFromDir(t, goplsBin, dir, []testFile{
 			{name: "main.go", content: mainContent},
 		})
-		handler, _, mn := newTestHandler(t, env)
+		handler, _, mn := newTestHandler(t, env, nil)
 
 		// Register diagnostics hook BEFORE executing the command.
 		// check_upgrades annotates go.mod with diagnostics showing
@@ -1594,7 +1599,7 @@ type Config struct {
 		env := initGopls(t, goplsBin, []testFile{
 			{name: "main.go", content: cgoSrc},
 		})
-		handler, _, mn := newTestHandler(t, env)
+		handler, _, mn := newTestHandler(t, env, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1622,7 +1627,7 @@ type Config struct {
 		env := initGopls(t, goplsBin, []testFile{
 			{name: "main.go", content: simpleSrc},
 		})
-		handler, _, mn := newTestHandler(t, env)
+		handler, _, mn := newTestHandler(t, env, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1651,7 +1656,7 @@ type Config struct {
 		env := initGoplsWithApplyEdit(t, goplsBin, []testFile{
 			{name: "main.go", content: src},
 		})
-		handler, _, mn := newTestHandler(t, env.testEnv)
+		handler, _, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1691,7 +1696,7 @@ type Config struct {
 		env := initGoplsWithAutoInitParams(t, goplsBin, []testFile{
 			{name: "main.go", content: src},
 		})
-		handler, _, mn := newTestHandler(t, env.testEnv)
+		handler, _, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
@@ -1734,7 +1739,7 @@ type Config struct {
 			{name: "main.go", content: src},
 		})
 
-		handler, _, mn := newTestHandler(t, env.testEnv)
+		handler, _, mn := newTestHandler(t, env.testEnv, nil)
 
 		uri := parseTestURI(t, env.fileURIs["main.go"])
 		resource := &stubResource{uri: uri}
