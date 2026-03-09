@@ -54,6 +54,7 @@ func NewExtension() (extensionapi.WorkspaceExtension, extensionapi.Metadata) {
 			extensionapi.PermissionExecute,
 			extensionapi.PermissionFileSystem,
 			extensionapi.PermissionBrowserResourceOpener,
+			extensionapi.PermissionSyntaxTree,
 		),
 	}
 	return ext, meta
@@ -89,7 +90,9 @@ func (e *goExtension) ExtendWorkspace(
 	}
 	slog.Info("go extension: gopls initialized")
 
-	manual, handler, err := newGoHandler(lsp, editor, wm, notify)
+	parser := w.Parser(ctx)
+	executor := w.Executor(ctx)
+	manual, handler, err := newGoHandler(lsp, editor, wm, notify, parser, executor)
 	if err != nil {
 		return fmt.Errorf("go extension: create handler: %w", err)
 	}

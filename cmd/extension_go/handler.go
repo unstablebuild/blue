@@ -31,7 +31,9 @@ import (
 	"github.com/unstablebuild/blue/ide/idelsp/lspcmd"
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
+	"github.com/unstablebuild/rune-go-sdk/api/syntaxapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
+	"github.com/unstablebuild/rune-go-sdk/api/workspaceapi"
 	"github.com/unstablebuild/rune-go-sdk/iterator"
 )
 
@@ -40,6 +42,7 @@ const cmdName = "go"
 func newGoHandler(
 	lsp semanticapi.LSP, editor textapi.Editor,
 	wm browserapi.WindowManager, notify browserapi.Notifications,
+	parser syntaxapi.Parser, executor workspaceapi.Executor,
 ) (textapi.CommandManual, textapi.CommandHandler, error) {
 	sel := lspcmd.NewSelectionTracker()
 	evs := []textapi.EventType{textapi.EventTypeSelection, textapi.EventTypeCursor}
@@ -109,7 +112,7 @@ func newGoHandler(
 			"Place cursor on a dot import to qualify all references with the package name"),
 
 		// Code lens commands.
-		"test":     codeLensHandler(lsp, notify, "gopls.run_tests"),
+		"test":     testHandler(lsp, notify, parser, executor),
 		"generate":       codeLensHandler(lsp, notify, "gopls.generate"),
 		"regenerate-cgo": codeLensHandler(lsp, notify, "gopls.regenerate_cgo"),
 

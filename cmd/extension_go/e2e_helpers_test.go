@@ -484,6 +484,7 @@ func (p *stubPkgManager) LibDir(
 type testCallback struct {
 	mu            sync.Mutex
 	onShowMessage func(params semanticapi.ShowMessageParams)
+	onLogMessage  func(params semanticapi.LogMessageParams)
 	onProgress    func(semanticapi.ProgressParams)
 	onApplyEdit   func(semanticapi.ApplyWorkspaceEditParams)
 	onDiagnostics func(semanticapi.PublishDiagnosticsParams)
@@ -504,8 +505,14 @@ func (c *testCallback) ShowMessage(
 }
 
 func (c *testCallback) LogMessage(
-	_ context.Context, _ semanticapi.LogMessageParams,
+	_ context.Context, params semanticapi.LogMessageParams,
 ) error {
+	c.mu.Lock()
+	cb := c.onLogMessage
+	c.mu.Unlock()
+	if cb != nil {
+		cb(params)
+	}
 	return nil
 }
 
@@ -618,8 +625,8 @@ func (c *testCallback) DiagnosticRefresh(_ context.Context) error {
 	return nil
 }
 
-// localScheme implements schemeapi.FileSystem and schemeapi.Executor
-// using the local OS for e2e testing.
+// localScheme implements schemeapi.FileSystem, schemeapi.Executor,
+// and workspaceapi.Executor using the local OS for e2e testing.
 type localScheme struct {
 	mu      sync.Mutex
 	procs   map[workspaceapi.Pid]*os.Process
@@ -683,6 +690,10 @@ func (s *localScheme) ReadDir(path string) ([]os.DirEntry, error) {
 
 func (s *localScheme) MkdirAll(filename string, perm os.FileMode) error {
 	return os.MkdirAll(filename, perm)
+}
+
+func (s *localScheme) Start(ctx context.Context, cmd workspaceapi.Cmd) (workspaceapi.Pid, error) {
+	return s.StartCommand(ctx, cmd)
 }
 
 func (s *localScheme) StartCommand(ctx context.Context, cmd workspaceapi.Cmd) (workspaceapi.Pid, error) {
@@ -812,14 +823,15 @@ func parseTestURI(t *testing.T, fileURI string) workspaceapi.URI {
 }
 
 // newTestHandler creates a go handler wired to the given testEnv's LSP
-// manager with mock editor and notifications.
+// manager with mock editor and notifications. The executor is optional;
+// pass nil for tests that don't exercise test execution.
 func newTestHandler(
-	t *testing.T, env *testEnv,
+	t *testing.T, env *testEnv, executor workspaceapi.Executor,
 ) (textapi.CommandHandler, *mockEditor, *mockNotifications) {
 	t.Helper()
 	me := newMockEditor()
 	mn := &mockNotifications{}
-	_, handler, err := newGoHandler(env.mgr, me, nil, mn)
+	_, handler, err := newGoHandler(env.mgr, me, nil, mn, nil, executor)
 	require.NoError(t, err)
 	return handler, me, mn
 }
@@ -847,7 +859,7 @@ func newTestHandlerWithEditorEvents(
 		})
 	}
 	mn := &mockNotifications{}
-	_, handler, err := newGoHandler(env.mgr, me, nil, mn)
+	_, handler, err := newGoHandler(env.mgr, me, nil, mn, nil, nil)
 	require.NoError(t, err)
 	return handler, me, mn
 }
