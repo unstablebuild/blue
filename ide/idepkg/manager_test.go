@@ -36,6 +36,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
+	"github.com/unstablebuild/blue/document/docmarshal/docbson"
+	"github.com/unstablebuild/blue/document/docmarshal/doctoml"
 	"github.com/unstablebuild/blue/ide/idepkg/idepkgtest"
 	"github.com/unstablebuild/blue/iterator"
 	"github.com/unstablebuild/blue/release"
@@ -143,6 +145,81 @@ func TestLibDir(t *testing.T) {
 
 		_, err := m.LibDir(context.Background(), "go")
 		require.Equal(t, ErrNotInstalled, err)
+	})
+	t.Run("survives manager restart with reconcile", func(t *testing.T) {
+		t.Parallel()
+		type storageFactory struct {
+			name string
+			make func() document.Service
+		}
+		factories := []storageFactory{
+			{"bson", func() document.Service {
+				return document.NewInMemoryServiceWithMarshaler(docbson.Marshaler())
+			}},
+			{"toml", func() document.Service {
+				return document.NewInMemoryServiceWithMarshaler(doctoml.Marshaler())
+			}},
+			{"toml_partitioned", func() document.Service {
+				return document.WithPartition(
+					document.NewInMemoryServiceWithMarshaler(doctoml.Marshaler()), "idepkg")
+			}},
+		}
+		for _, sf := range factories {
+			t.Run(sf.name, func(t *testing.T) {
+				t.Parallel()
+				pkgs := idepkgtest.MakePackages()
+				versions := idepkgtest.MakeBundles([]release.Bundle{{Package: "go", Version: "1"}})
+
+				temp, err := os.MkdirTemp("", "")
+				require.NoError(t, err)
+				t.Cleanup(func() { _ = os.RemoveAll(temp) })
+
+				configPath := filepath.Join(temp, "config.yaml")
+				storage := sf.make()
+				fileScheme := newLocalScheme(temp)
+				wm := &mockWindowManager{
+					floatingFn: func(h browserapi.Floating, _ browserapi.FloatingConfig) (browserapi.Window, error) {
+						h.Resize(70, 20)
+						h.Handle(term.Event{Type: term.EventKey, Key: term.KeyEnter})
+						return &mockWindow{}, nil
+					},
+				}
+
+				// First Manager: install a package.
+				n1 := idepkgtest.NewNotifications(t)
+				rm := idepkgtest.NewReleaseManager(pkgs, versions)
+				m1 := NewManager(n1, rm, storage,
+					fileScheme, temp, configPath, wm, syncTick, term.NopInterrupter())
+
+				n1.SetWg(1)
+				err = m1.InstallPackageVersion(context.Background(), "go", "1")
+				require.NoError(t, err)
+				n1.Wait()
+				n1.RequireNoErrorNotification()
+
+				// Sanity: LibDir works on the first manager.
+				it, err := m1.LibDir(context.Background(), "go")
+				require.NoError(t, err)
+				files, err := iterator.ToSlice(context.Background(), it)
+				require.NoError(t, err)
+				require.NotEmpty(t, files)
+
+				// Second Manager: same storage and dataDir, simulating a restart.
+				n2 := idepkgtest.NewNotifications(t)
+				m2 := NewManager(n2, rm, storage,
+					fileScheme, temp, configPath, wm, syncTick, term.NopInterrupter())
+
+				err = m2.Reconcile(context.Background())
+				require.NoError(t, err)
+
+				// LibDir must still work after restart + reconcile.
+				it, err = m2.LibDir(context.Background(), "go")
+				require.NoError(t, err)
+				files, err = iterator.ToSlice(context.Background(), it)
+				require.NoError(t, err)
+				require.NotEmpty(t, files)
+			})
+		}
 	})
 }
 

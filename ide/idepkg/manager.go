@@ -1153,6 +1153,9 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 		return fmt.Errorf("read storage entries: %w", err)
 	}
 	for _, pkv := range entries {
+		if pkv.Package == "" || pkv.Version == "" {
+			continue
+		}
 		key := m.makeDownloadKey(pkv.Package, pkv.Version)
 		dirname := makePackageVersionDirname(m.dataDir, pkv.Package, pkv.Version)
 		if !pkv.Complete {
