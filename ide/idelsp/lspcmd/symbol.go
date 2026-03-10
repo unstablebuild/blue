@@ -46,17 +46,29 @@ type symbolMatch struct {
 	Display string
 }
 
+// symbolProgress reports resolution progress. msg describes the
+// current phase, found is the number of candidate matches so far,
+// and step/total drive the progress bar.
+type symbolProgress func(msg string, found int, step, total int64)
+
 // resolveSymbol resolves a package-qualified symbol name (e.g.
 // "fmt.Println") to one or more reference locations by searching the
-// workspace with tree-sitter. Results are deduplicated by file URI.
-// When multiple files reference the symbol, each gets a display name
-// that disambiguates by package path.
+// workspace with tree-sitter. Results are first deduplicated by file
+// URI, then further collapsed by import path so that references to
+// the same package produce a single match. When multiple distinct
+// packages remain, each gets a display name that disambiguates by
+// package path. If progress is non-nil it is called at each phase.
 func resolveSymbol(
 	ctx context.Context, parser syntaxapi.Parser, name string,
+	progress symbolProgress,
 ) ([]symbolMatch, error) {
 	pkg, sym, hasDot := strings.Cut(name, ".")
 	if !hasDot {
 		return nil, fmt.Errorf("no symbols found for %q", name)
+	}
+
+	if progress == nil {
+		progress = func(string, int, int64, int64) {}
 	}
 
 	seen := make(map[string]bool)
@@ -93,12 +105,14 @@ func resolveSymbol(
 		}
 	}
 
+	progress("Searching types…", 0, 0, 3)
 	if err := collect(
 		`(qualified_type package: (package_identifier) @pkg name: (type_identifier) @type)`,
 		[]string{"pkg", "type"},
 	); err != nil {
 		return nil, err
 	}
+	progress("Searching expressions…", len(matches), 1, 3)
 	if err := collect(
 		`(selector_expression operand: (identifier) @pkg field: (field_identifier) @symbol)`,
 		[]string{"pkg", "symbol"},
@@ -108,6 +122,10 @@ func resolveSymbol(
 
 	if len(matches) == 0 {
 		return nil, fmt.Errorf("no symbols found for %q", name)
+	}
+	if len(matches) > 1 {
+		progress("Resolving imports…", len(matches), 2, 3)
+		matches = deduplicateByImport(ctx, parser, matches, pkg)
 	}
 	if len(matches) > 1 {
 		disambiguateDisplayNames(matches, name)
@@ -157,6 +175,104 @@ func packagePathFromURI(uri string) string {
 	return dir
 }
 
+// resolveImportPaths builds a per-file alias→import-path lookup
+// table by scanning all import declarations in the workspace.
+func resolveImportPaths(
+	ctx context.Context, parser syntaxapi.Parser,
+) (map[workspaceapi.URI]map[string]string, error) {
+	type fileImports = map[workspaceapi.URI]map[string]string
+
+	pathIter, err := parser.Search(
+		`(import_spec path: (interpreted_string_literal) @path)`,
+		[]string{"path"}, "go",
+	)
+	if err != nil {
+		return nil, err
+	}
+	imports, err := iterator.Reduce(ctx, pathIter,
+		func(m fileImports, r syntaxapi.Result) (fileImports, error) {
+			p := strings.Trim(r.Text, `"`)
+			alias := path.Base(p)
+			if alias == "." || alias == "_" {
+				return m, nil
+			}
+			if m == nil {
+				m = make(fileImports)
+			}
+			if m[r.File] == nil {
+				m[r.File] = make(map[string]string)
+			}
+			m[r.File][alias] = p
+			return m, nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	aliasIter, err := parser.Search(
+		`(import_spec name: (package_identifier) @alias path: (interpreted_string_literal) @path)`,
+		[]string{"alias", "path"}, "go",
+	)
+	if err != nil {
+		return nil, err
+	}
+	_, err = iterator.Reduce(ctx, pairedResults(aliasIter),
+		func(_ struct{}, p [2]syntaxapi.Result) (struct{}, error) {
+			alias := p[0].Text
+			if alias == "." || alias == "_" || imports == nil {
+				return struct{}{}, nil
+			}
+			importPath := strings.Trim(p[1].Text, `"`)
+			defaultAlias := path.Base(importPath)
+			if fm := imports[p[0].File]; fm != nil {
+				delete(fm, defaultAlias)
+				fm[alias] = importPath
+			}
+			return struct{}{}, nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	if imports == nil {
+		imports = make(fileImports)
+	}
+	return imports, nil
+}
+
+// deduplicateByImport collapses matches that reference the same
+// import path for the given alias into a single match.
+func deduplicateByImport(
+	ctx context.Context, parser syntaxapi.Parser,
+	matches []symbolMatch, alias string,
+) []symbolMatch {
+	importPaths, err := resolveImportPaths(ctx, parser)
+	if err != nil {
+		return matches
+	}
+	lookup := make(map[string]map[string]string, len(importPaths))
+	for uri, aliases := range importPaths {
+		lookup[uri.String()] = aliases
+	}
+	seen := make(map[string]bool)
+	result := matches[:0]
+	for _, m := range matches {
+		key := m.URI
+		if fileImports := lookup[m.URI]; fileImports != nil {
+			if importPath, ok := fileImports[alias]; ok {
+				key = importPath
+			}
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, m)
+	}
+	return result
+}
+
 // resolveCommandSymbol handles the common symbol-resolution pattern for
 // command handlers. If cmd has no args and a resource, proceed=true is
 // returned so the handler can use the cursor position. If cmd has args,
@@ -180,12 +296,18 @@ func resolveCommandSymbol(
 	name := strings.Join(cmd.Args, " ")
 
 	id, _ := notify.Notify(browserapi.LevelInfo, "Resolving %s…", name)
-	_ = notify.UpdateNotificationProgress(id, "", 0, 1)
+	_ = notify.UpdateNotificationProgress(id, "", 0, 3)
 
 	go debug.CapturePanicReport(func() {
-		matches, err := resolveSymbol(context.Background(), parser, name)
+		progress := func(msg string, found int, step, total int64) {
+			if found > 0 {
+				msg = fmt.Sprintf("%s (%d found)", msg, found)
+			}
+			_ = notify.UpdateNotificationProgress(id, msg, step, total)
+		}
+		matches, err := resolveSymbol(context.Background(), parser, name, progress)
 		scheduleNextTick(func() {
-			_ = notify.UpdateNotificationProgress(id, "", 1, 1)
+			_ = notify.UpdateNotificationProgress(id, "", 3, 3)
 			if err != nil {
 				_, _ = notify.Notify(browserapi.LevelError, "%s", err)
 				return

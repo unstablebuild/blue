@@ -51,6 +51,8 @@ func TestResolveSymbol(t *testing.T) {
 	tests := []struct {
 		name        string
 		query       string
+		imports     []syntaxapi.Result
+		aliases     []syntaxapi.Result
 		types       []syntaxapi.Result
 		selectors   []syntaxapi.Result
 		wantMatches []symbolMatch
@@ -93,17 +95,40 @@ func TestResolveSymbol(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:  "multiple files show picker with display names",
+			name:  "same import path deduplicates to single match",
 			query: "fmt.Println",
+			imports: []syntaxapi.Result{
+				{File: fileA, Text: `"fmt"`, CaptureName: "path"},
+				{File: fileC, Text: `"fmt"`, CaptureName: "path"},
+			},
 			selectors: []syntaxapi.Result{
 				{File: fileA, Text: "fmt", From: term.Coordinates{X: 1, Y: 5}, CaptureName: "pkg"},
 				{File: fileA, Text: "Println", From: term.Coordinates{X: 5, Y: 5}, CaptureName: "symbol"},
 				{File: fileC, Text: "fmt", From: term.Coordinates{X: 1, Y: 10}, CaptureName: "pkg"},
 				{File: fileC, Text: "Println", From: term.Coordinates{X: 5, Y: 10}, CaptureName: "symbol"},
 			},
+			wantMatches: []symbolMatch{{
+				URI:     fileA.String(),
+				Pos:     semanticapi.Position{Line: 5, Character: 5},
+				Display: "fmt.Println",
+			}},
+		},
+		{
+			name:  "different import paths show picker with display names",
+			query: "log.Info",
+			imports: []syntaxapi.Result{
+				{File: fileA, Text: `"github.com/pkg/log"`, CaptureName: "path"},
+				{File: fileC, Text: `"github.com/other/log"`, CaptureName: "path"},
+			},
+			selectors: []syntaxapi.Result{
+				{File: fileA, Text: "log", From: term.Coordinates{X: 1, Y: 5}, CaptureName: "pkg"},
+				{File: fileA, Text: "Info", From: term.Coordinates{X: 5, Y: 5}, CaptureName: "symbol"},
+				{File: fileC, Text: "log", From: term.Coordinates{X: 1, Y: 10}, CaptureName: "pkg"},
+				{File: fileC, Text: "Info", From: term.Coordinates{X: 5, Y: 10}, CaptureName: "symbol"},
+			},
 			wantMatches: []symbolMatch{
-				{URI: fileA.String(), Pos: semanticapi.Position{Line: 5, Character: 5}, Display: "pkg: fmt.Println"},
-				{URI: fileC.String(), Pos: semanticapi.Position{Line: 10, Character: 5}, Display: "other: fmt.Println"},
+				{URI: fileA.String(), Pos: semanticapi.Position{Line: 5, Character: 5}, Display: "pkg: log.Info"},
+				{URI: fileC.String(), Pos: semanticapi.Position{Line: 10, Character: 5}, Display: "other: log.Info"},
 			},
 		},
 		{
@@ -142,16 +167,20 @@ func TestResolveSymbol(t *testing.T) {
 			t.Parallel()
 			parser := &mockParser{
 				searchFn: func(query string, _ []string) (iterator.Iterator[syntaxapi.Result], error) {
-					if strings.Contains(query, "qualified_type") {
+					switch {
+					case strings.Contains(query, "import_spec") && !strings.Contains(query, "name:"):
+						return iterator.FromSlice(tt.imports), nil
+					case strings.Contains(query, "import_spec") && strings.Contains(query, "name:"):
+						return iterator.FromSlice(tt.aliases), nil
+					case strings.Contains(query, "qualified_type"):
 						return iterator.FromSlice(tt.types), nil
-					}
-					if strings.Contains(query, "selector_expression") {
+					case strings.Contains(query, "selector_expression"):
 						return iterator.FromSlice(tt.selectors), nil
 					}
 					return iterator.Empty[syntaxapi.Result](), nil
 				},
 			}
-			matches, err := resolveSymbol(context.Background(), parser, tt.query)
+			matches, err := resolveSymbol(context.Background(), parser, tt.query, nil)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
