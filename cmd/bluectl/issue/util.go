@@ -49,7 +49,7 @@ func getDefaultAuthor() string {
 	return fmt.Sprintf("%s@%s", u.Username, h)
 }
 
-func tempIssue(ret issue.Report) (issue.Report, error) {
+func tempIssue(ret issue.Report, interactive bool) (issue.Report, error) {
 	f, err := os.CreateTemp("", "blue-issue")
 	if err != nil {
 		err = fmt.Errorf("create temp file: %v", err)
@@ -77,6 +77,22 @@ func tempIssue(ret issue.Report) (issue.Report, error) {
 	// reset report so deleted fields are reset, for instance
 	// in case this is an edit
 	ret = issue.Report{}
+
+	if !interactive {
+		data, err := os.ReadFile(f.Name())
+		if err != nil {
+			return issue.Report{}, fmt.Errorf("read data from temp file: %v", err)
+		}
+		if err := yaml.Unmarshal(data, &ret); err != nil {
+			return issue.Report{}, fmt.Errorf("unmarshal yaml from temp file: %v", err)
+		}
+		if ret.Package == "" || ret.Subject == "" || ret.Author == "" {
+			return issue.Report{}, fmt.Errorf("missing one or more mandatory fields: " +
+				"package, subject or author")
+		}
+		_ = f.Close()
+		return ret, nil
+	}
 
 	for {
 		err = editor.Edit(f)

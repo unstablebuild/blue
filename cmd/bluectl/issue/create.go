@@ -37,6 +37,7 @@ type issueCreate struct {
 	t        issue.Tracker
 	fs       *cli.FlagSet
 	filePath string
+	noEdit   bool
 	author   string
 }
 
@@ -47,6 +48,7 @@ func newReportCreateCLI(t issue.Tracker, author string) cli.CLI {
 	}
 	c.fs = cli.NewFlagSet("create")
 	c.fs.StringVar(&c.filePath, "f", "", "Create an issue from a file report.")
+	c.fs.BoolVar(&c.noEdit, "y", false, "Do not prompt user to edit the issue.")
 	return c
 }
 
@@ -84,7 +86,7 @@ func (s *issueCreate) Run(ctx context.Context, args []string) error {
 	}
 	template.Author = s.getAuthor()
 
-	r, err := tempIssue(template)
+	r, err := tempIssue(template, !s.noEdit)
 	if err != nil {
 		return err
 	}
