@@ -57,7 +57,26 @@ Ask: Which package does this relate to?
 If unclear, try to infer from the current working directory or ask
 the user to name it.
 
-### Step 3 - Repositories
+### Step 3 - Duplicate check
+
+Before proceeding, check whether a similar issue already exists.
+
+Run `bluectl issue list <package>` and scan the output for issues
+with a similar subject. If any look like potential duplicates,
+present them to the user:
+
+> I found these existing issues for **<package>**:
+> - **<ID>**: <subject>
+> - ...
+>
+> Do any of these already cover your feedback?
+
+- If the user confirms a duplicate, stop and point them to the
+  existing issue ID.
+- If no duplicates or the user says none match, continue.
+- If the list is empty, continue.
+
+### Step 4 - Repositories
 
 Ask: Which repositories should be looked at for this?
 
@@ -65,14 +84,14 @@ The current working directory is the default. If the work spans
 other repos or the relevant code lives elsewhere, collect the
 absolute paths. Accept one or more paths.
 
-### Step 4 - Subject
+### Step 5 - Subject
 
 Ask the user for a short one-line summary of the issue.
 
 If the user gave a long description, distill it into a concise subject
 and confirm with them.
 
-### Step 5 - Details
+### Step 6 - Details
 
 Depending on the category:
 
@@ -90,13 +109,27 @@ Depending on the category:
 **General feedback** - ask for:
 - A description of the improvement or observation
 
-### Step 6 - Version (optional)
+### Step 7 - Version (optional)
 
 Ask: Do you know which version or commit this applies to?
 
 Accept a version tag, commit hash, or "latest" / empty.
 
-### Step 7 - Research
+### Step 8 - Dependencies
+
+Ask: Does this issue depend on any other issues being completed first?
+
+If the user says no, skip to the next step.
+
+If yes, collect the issue IDs. Then **verify each one exists** by
+running `bluectl issue get <id>` for each ID. If any ID does not
+exist, tell the user and ask them to correct it. Only accept IDs
+that resolve to real issues.
+
+Once validated, these will be stored as a comma-separated list in
+the `depends` metadata field (e.g. `depends: "ISSUE-1, ISSUE-2"`).
+
+### Step 9 - Research
 
 Before producing the plan, use the Explore agent to research the
 relevant repositories. The goal is to identify the key files,
@@ -109,7 +142,7 @@ Spawn an Explore agent with a prompt that:
 - Identifies entry points, relevant types, and existing patterns
 - Returns a list of key files and symbols
 
-### Step 8 - Confirm and produce the plan
+### Step 10 - Confirm and produce the plan
 
 Present a summary of the collected information **and** the research
 findings to the user and ask for confirmation. Then produce the
@@ -148,6 +181,7 @@ notes: |-
 metadata:
     <label>: ""
     ready: "true"
+    depends: "<ID-1>, <ID-2>"  # only if dependencies were collected
 ~~~
 
 Then output:
