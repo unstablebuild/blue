@@ -39,27 +39,34 @@ metadata:
 
 ## Conversation flow
 
-Ask questions **one at a time**. Wait for each answer before proceeding.
+Ask questions in **batches** where possible, grouping short
+questions together to reduce round-trips. Wait for answers
+before proceeding to the next batch.
 
-### Step 1 - Category
+### Step 1 - Initial questions (ask all at once)
 
-Ask: What kind of feedback is this?
-- Bug report
-- Feature request
-- General feedback / improvement idea
+Ask these questions together in a single message:
 
-This determines the metadata label(s) to apply.
+1. **Category** — What kind of feedback is this?
+   - Bug report
+   - Feature request
+   - General feedback / improvement idea
+2. **Package** — Which package does this relate to?
+   (If you can infer from the current working directory, suggest it.)
+3. **Subject** — A short one-line summary of the issue.
+4. **Repositories** — Which repositories should be looked at?
+   (Default: current working directory. Only ask if the work might
+   span other repos.)
+5. **Dependencies** — Does this issue depend on any other issues
+   being completed first? (If none, skip.)
 
-### Step 2 - Package
+If the category is **bug report**, also ask:
+6. **Version** — Which version or commit does this apply to?
+   (Accept a tag, commit hash, or "latest" / empty.)
 
-Ask: Which package does this relate to?
+### Step 2 - Duplicate check
 
-If unclear, try to infer from the current working directory or ask
-the user to name it.
-
-### Step 3 - Duplicate check
-
-Before proceeding, check whether a similar issue already exists.
+Once you know the package, check whether a similar issue already exists.
 
 Run `bluectl issue list <package>` and scan the output for issues
 with a similar subject. If any look like potential duplicates,
@@ -76,22 +83,17 @@ present them to the user:
 - If no duplicates or the user says none match, continue.
 - If the list is empty, continue.
 
-### Step 4 - Repositories
+### Step 3 - Validate dependencies
 
-Ask: Which repositories should be looked at for this?
+If the user provided dependency issue IDs, **verify each one exists**
+by running `bluectl issue get <id>` for each ID. If any ID does not
+exist, tell the user and ask them to correct it. Only accept IDs
+that resolve to real issues.
 
-The current working directory is the default. If the work spans
-other repos or the relevant code lives elsewhere, collect the
-absolute paths. Accept one or more paths.
+Once validated, these will be stored as a comma-separated list in
+the `depends` metadata field (e.g. `depends: "ISSUE-1, ISSUE-2"`).
 
-### Step 5 - Subject
-
-Ask the user for a short one-line summary of the issue.
-
-If the user gave a long description, distill it into a concise subject
-and confirm with them.
-
-### Step 6 - Details
+### Step 4 - Details
 
 Depending on the category:
 
@@ -109,27 +111,7 @@ Depending on the category:
 **General feedback** - ask for:
 - A description of the improvement or observation
 
-### Step 7 - Version (optional)
-
-Ask: Do you know which version or commit this applies to?
-
-Accept a version tag, commit hash, or "latest" / empty.
-
-### Step 8 - Dependencies
-
-Ask: Does this issue depend on any other issues being completed first?
-
-If the user says no, skip to the next step.
-
-If yes, collect the issue IDs. Then **verify each one exists** by
-running `bluectl issue get <id>` for each ID. If any ID does not
-exist, tell the user and ask them to correct it. Only accept IDs
-that resolve to real issues.
-
-Once validated, these will be stored as a comma-separated list in
-the `depends` metadata field (e.g. `depends: "ISSUE-1, ISSUE-2"`).
-
-### Step 9 - Research
+### Step 5 - Research
 
 Before producing the plan, use the Explore agent to research the
 relevant repositories. The goal is to identify the key files,
@@ -142,7 +124,7 @@ Spawn an Explore agent with a prompt that:
 - Identifies entry points, relevant types, and existing patterns
 - Returns a list of key files and symbols
 
-### Step 10 - Confirm and produce the plan
+### Step 6 - Confirm and produce the plan
 
 Present a summary of the collected information **and** the research
 findings to the user and ask for confirmation. Then produce the
@@ -166,7 +148,7 @@ by the filing steps:
 
 ~~~yaml
 package: "<package>"
-version: "<version>"
+version: "<version>"  # only include if bug report and version was provided
 subject: "<subject>"
 notes: |-
     <user's description>
@@ -196,7 +178,7 @@ Then output:
 
 ## Rules
 
-- Be concise. Ask one question at a time.
+- Be concise. Batch short questions together to reduce round-trips.
 - Do NOT create the issue yourself. Only produce the plan.
 - If the user provides all information upfront, skip to confirmation.
 - Always confirm the final summary before producing the plan.
