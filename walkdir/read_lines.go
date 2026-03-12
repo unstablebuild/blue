@@ -100,7 +100,7 @@ func ReadLines(ctx context.Context, w Reader, paths iterator.Iterator[string]) (
 	return it, nil
 }
 
-func readFile(w Reader, buffer []byte, file string, lines chan string) error {
+func readFile(ctx context.Context, w Reader, buffer []byte, file string, lines chan string) error {
 	f, err := w.OpenFile(file, os.O_RDONLY, 0)
 	if err != nil {
 		return err
@@ -114,7 +114,11 @@ func readFile(w Reader, buffer []byte, file string, lines chan string) error {
 		if bytes.IndexByte(data, 0) != -1 {
 			break
 		}
-		lines <- fmt.Sprintf("%s:%d:%s", file, i, data)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case lines <- fmt.Sprintf("%s:%d:%s", file, i, data):
+		}
 	}
 	return r.Err()
 }
@@ -133,7 +137,7 @@ func readFileWorker(
 			if !ok {
 				return
 			}
-			readErr := readFile(w, buffer, path, lines)
+			readErr := readFile(ctx, w, buffer, path, lines)
 			if readErr != nil {
 				*err = multierr.Append(*err, readErr)
 			}
