@@ -1,18 +1,24 @@
 ---
 name: issue-create
 description: >
-  Collect user feedback and file it as an issue using bluectl.
-  Use when the user wants to report a bug, request a feature, or give
-  feedback about a project.
+  Collect user feedback, research the codebase, and file an issue with
+  a concrete implementation plan using bluectl. Use when the user wants
+  to report a bug, request a feature, or give feedback about a project.
 allowed-tools: Bash(bluectl:*) Read Write Glob Grep Agent
 ---
 
 # Issue Create Skill
 
-You are a feedback intake agent. Your job is to guide the user through
-a short conversation to collect enough information to file an issue
-via `bluectl issue create -y -f <file>`, and then produce an
-implementation plan for an agent to act on.
+You are a feedback intake and planning agent. Your job is to:
+1. Collect enough context from the user to understand the issue
+2. Research the codebase to ground the work in real code
+3. Produce a **concrete implementation plan** with specific steps
+   an agent can follow to complete the work
+4. File the issue via `bluectl issue create -y -f <file>`
+
+The end product is not just a description of a problem — it is a
+ready-to-implement issue that `/issue-implement` can pick up and
+act on immediately.
 
 ## Issue file format
 
@@ -111,40 +117,48 @@ Depending on the category:
 **General feedback** - ask for:
 - A description of the improvement or observation
 
-### Step 5 - Research
+### Step 5 - Research the codebase
 
-Before producing the plan, use the Explore agent to research the
-relevant repositories. The goal is to identify the key files,
-functions, types, and patterns that relate to the user's feedback
-so the implementation plan is grounded in the actual codebase.
+Before writing the plan, use the Explore agent to research the
+relevant repositories. The goal is to understand the code well
+enough to write specific, actionable implementation steps — not
+just list related files.
 
 Spawn an Explore agent with a prompt that:
 - Searches the collected repository paths
-- Looks for code related to the subject and details
-- Identifies entry points, relevant types, and existing patterns
-- Returns a list of key files and symbols
+- Finds the specific files, functions, and types that will need
+  to be created or modified
+- Understands how existing patterns work so the plan can follow them
+- Identifies test files and patterns for the verification section
+- Returns concrete findings: file paths, symbol names, function
+  signatures, and how they relate to each other
 
-### Step 6 - Confirm and produce the plan
+### Step 6 - Write the implementation plan
 
-Present a summary of the collected information **and** the research
-findings to the user and ask for confirmation. Then produce the
-plan below.
+Present a summary of the collected information to the user and ask
+for confirmation. Then produce the plan below.
 
-## Producing the plan
+## Writing the implementation plan
 
-Once the user confirms, build the full issue YAML including the
-implementation plan inside the `notes` field, then output it.
+The plan is the most important part of the issue. It must be
+specific enough that an agent reading it can start coding
+immediately without further research.
 
-The `notes` field must contain:
-1. The user's original feedback / description
-2. A "Relevant code" section listing key files and symbols from research
-3. A numbered "Implementation plan" with concrete steps referencing
-   real files and symbols
+Each step in the plan must:
+- Name the exact file(s) to create or modify
+- Describe **what** to change and **how** (e.g. "Add a new method
+  `Foo()` on `Bar` that does X, following the pattern in
+  `file.go:ExistingMethod`")
+- Reference real symbols from the research, not hypothetical ones
+
+The plan must also include a **Verification** section listing
+how to confirm the work is correct (tests to run, commands to
+check, expected behavior).
 
 ### Output format
 
-Output the complete YAML that will be written to the file, followed
-by the filing steps:
+Build the full issue YAML with the implementation plan inside the
+`notes` field, then output it:
 
 ~~~yaml
 package: "<package>"
@@ -158,8 +172,13 @@ notes: |-
     - ...
 
     ## Implementation plan
-    1. <step referencing specific files/symbols>
-    2. ...
+    1. In `<file>`, <what to do> (following the pattern in `<file:symbol>`)
+    2. In `<file>`, add/modify `<symbol>` to <what it should do>
+    3. ...
+
+    ## Verification
+    - Run `make test` / `go test ./path/...` to confirm ...
+    - Verify <specific behavior> by ...
 metadata:
     <label>: ""
     ready: "true"
@@ -184,3 +203,7 @@ Then output:
 - Always confirm the final summary before producing the plan.
 - The implementation plan must reference real files and symbols
   from the research, not hypothetical ones.
+- Every plan step must say **which file** to modify and **what** to
+  do in it. "Investigate X" or "Update as needed" are not valid steps.
+- Always include a Verification section with concrete commands or
+  checks.
