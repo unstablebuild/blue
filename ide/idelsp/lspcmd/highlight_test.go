@@ -452,7 +452,7 @@ func TestSubscribeHighlight(t *testing.T) {
 
 	err := SubscribeHighlight(
 		&mockLSP{}, editor, syncTick,
-		DefaultHighlightConfig(),
+		DefaultHighlightConfig(), nil,
 	)
 	require.NoError(t, err)
 

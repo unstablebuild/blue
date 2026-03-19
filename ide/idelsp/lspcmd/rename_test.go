@@ -26,6 +26,7 @@ package lspcmd
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,6 +63,7 @@ func newTestRenameFloating(
 		position: semanticapi.Position{Line: 5, Character: 4},
 		ctx:      ctx,
 		cancel:   cancel,
+		log:      slog.Default(),
 	}
 }
 
@@ -349,7 +351,7 @@ func TestApplyEditsOpensUnopenedFile(t *testing.T) {
 		},
 	}
 
-	err := ApplyWorkspaceEdit(context.Background(), editor, opener, edit)
+	err := ApplyWorkspaceEdit(context.Background(), editor, opener, edit, nil)
 	require.NoError(t, err)
 	assert.True(t, opened["file:///unopened.go"],
 		"opener should be called for files not already open")
@@ -366,7 +368,7 @@ func TestRenameHandlerPrepareRenameNil(t *testing.T) {
 		},
 	}
 
-	h := RenameHandler(lsp, &mockEditor{}, &mockWindowManager{}, nil)
+	h := RenameHandler(lsp, &mockEditor{}, &mockWindowManager{}, nil, nil)
 	uri := testURI(t, "file:///test.go")
 	err := h.HandleCommand(context.Background(), textapi.Command{
 		Name:     "rename",
@@ -388,7 +390,7 @@ func TestRenameHandlerPrepareRenameError(t *testing.T) {
 		},
 	}
 
-	h := RenameHandler(lsp, &mockEditor{}, &mockWindowManager{}, nil)
+	h := RenameHandler(lsp, &mockEditor{}, &mockWindowManager{}, nil, nil)
 	uri := testURI(t, "file:///test.go")
 	err := h.HandleCommand(context.Background(), textapi.Command{
 		Name:     "rename",
@@ -428,7 +430,7 @@ func TestRenameHandlerSuccess(t *testing.T) {
 		},
 	}
 
-	h := RenameHandler(lsp, &mockEditor{}, wm, nil)
+	h := RenameHandler(lsp, &mockEditor{}, wm, nil, nil)
 	uri := testURI(t, "file:///test.go")
 	cmd := textapi.Command{
 		Name:     "rename",
@@ -514,7 +516,7 @@ func TestApplyWorkspaceEditDocumentChanges(t *testing.T) {
 		},
 	}
 
-	err := ApplyWorkspaceEdit(context.Background(), editor, nil, edit)
+	err := ApplyWorkspaceEdit(context.Background(), editor, nil, edit, nil)
 	require.NoError(t, err)
 	require.Len(t, calls, 1, "only DocumentChanges edits should be applied")
 	assert.Equal(t, "file:///correct.go", calls[0].uri)
@@ -569,7 +571,7 @@ func TestApplyWorkspaceEdit(t *testing.T) {
 		},
 	}
 
-	err := ApplyWorkspaceEdit(context.Background(), editor, nil, edit)
+	err := ApplyWorkspaceEdit(context.Background(), editor, nil, edit, nil)
 	require.NoError(t, err)
 	require.Len(t, calls, 1)
 	assert.Equal(t, "file:///foo.go", calls[0].uri)

@@ -25,6 +25,7 @@ package lspcmd
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
@@ -55,11 +56,13 @@ func DeclarationHandler(
 	notify browserapi.Notifications, fs workspaceapi.FileSystem,
 	scheduleNextTick func(func()) bool,
 	parser syntaxapi.Parser, cfg DeclarationConfig,
+	log *slog.Logger,
 ) textapi.CommandHandler {
 	return &declarationHandler{
 		lsp: lsp, editor: editor, wm: wm, opener: opener,
 		notify: notify, fs: fs,
 		scheduleNextTick: scheduleNextTick, parser: parser, cfg: cfg,
+		log: log,
 	}
 }
 
@@ -73,6 +76,7 @@ type declarationHandler struct {
 	scheduleNextTick func(func()) bool
 	parser           syntaxapi.Parser
 	cfg              DeclarationConfig
+	log              *slog.Logger
 }
 
 func (h *declarationHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
@@ -116,7 +120,7 @@ func (h *declarationHandler) execute(
 	}
 	handler := newLocationsFloatingHandler(
 		entries, h.opener, h.wm, h.editor, h.notify, h.fs,
-		h.scheduleNextTick, h.parser, h.cfg.ListConfig,
+		h.scheduleNextTick, h.parser, h.cfg.ListConfig, h.log,
 	)
 	win, err := h.wm.Floating(handler, browserapi.FloatingConfig{Alignment: component.AlignmentCentered})
 	if err != nil {

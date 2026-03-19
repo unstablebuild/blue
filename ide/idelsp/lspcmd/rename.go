@@ -46,12 +46,17 @@ import (
 func RenameHandler(
 	lsp semanticapi.LSP, editor textapi.Editor, wm browserapi.WindowManager,
 	opener browserapi.ResourceOpener,
+	log *slog.Logger,
 ) textapi.CommandHandler {
+	if log == nil {
+		log = slog.Default()
+	}
 	return &renameHandler{
 		lsp:    lsp,
 		editor: editor,
 		wm:     wm,
 		opener: opener,
+		log:    log,
 	}
 }
 
@@ -62,6 +67,7 @@ type renameHandler struct {
 	editor textapi.Editor
 	wm     browserapi.WindowManager
 	opener browserapi.ResourceOpener
+	log    *slog.Logger
 }
 
 func (h *renameHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
@@ -97,6 +103,7 @@ func (h *renameHandler) HandleCommand(ctx context.Context, cmd textapi.Command) 
 		position: pos,
 		ctx:      ctx,
 		cancel:   cancel,
+		log:      h.log,
 	}
 
 	win, err := h.wm.Floating(floating, browserapi.FloatingConfig{
@@ -135,6 +142,7 @@ type renameFloatingHandler struct {
 	position semanticapi.Position
 	ctx      context.Context
 	cancel   context.CancelFunc
+	log      *slog.Logger
 }
 
 func (r *renameFloatingHandler) Handle(ev term.Event) (bool, bool) {
@@ -158,16 +166,16 @@ func (r *renameFloatingHandler) Handle(ev term.Event) (bool, bool) {
 		NewName:      newName,
 	})
 	if err != nil {
-		slog.Warn("rename", "err", err)
+		r.log.Warn("rename", "err", err)
 		return true, true
 	}
 	if edit == nil {
 		return true, true
 	}
 
-	err = ApplyWorkspaceEdit(r.ctx, r.editor, r.opener, edit)
+	err = ApplyWorkspaceEdit(r.ctx, r.editor, r.opener, edit, r.log)
 	if err != nil {
-		slog.Warn("rename apply", "err", err)
+		r.log.Warn("rename apply", "err", err)
 		return true, true
 	}
 	return true, true
@@ -210,7 +218,11 @@ func ApplyWorkspaceEdit(
 	ctx context.Context, editor textapi.Editor,
 	opener browserapi.ResourceOpener,
 	edit *semanticapi.WorkspaceEdit,
+	log *slog.Logger,
 ) error {
+	if log == nil {
+		log = slog.Default()
+	}
 	if len(edit.DocumentChanges) > 0 {
 		for _, dc := range edit.DocumentChanges {
 			switch {
@@ -222,13 +234,13 @@ func ApplyWorkspaceEdit(
 					return err
 				}
 			case dc.CreateFile != nil:
-				slog.Warn("rename: create file not supported", "uri", dc.CreateFile.URI)
+				log.Warn("rename: create file not supported", "uri", dc.CreateFile.URI)
 			case dc.RenameFile != nil:
-				slog.Warn("rename: file rename not supported",
+				log.Warn("rename: file rename not supported",
 					"old", dc.RenameFile.OldURI,
 					"new", dc.RenameFile.NewURI)
 			case dc.DeleteFile != nil:
-				slog.Warn("rename: delete file not supported",					"uri", dc.DeleteFile.URI)
+				log.Warn("rename: delete file not supported", "uri", dc.DeleteFile.URI)
 			}
 		}
 		return nil

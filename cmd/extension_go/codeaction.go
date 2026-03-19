@@ -135,7 +135,7 @@ func (h *codeActionCmd) HandleCommand(
 
 func (h *codeActionCmd) applyAction(ctx context.Context, action semanticapi.CodeAction) error {
 	if action.Edit != nil {
-		err := lspcmd.ApplyWorkspaceEdit(ctx, h.editor, nil, action.Edit)
+		err := lspcmd.ApplyWorkspaceEdit(ctx, h.editor, nil, action.Edit, nil)
 		if err != nil {
 			return err
 		}

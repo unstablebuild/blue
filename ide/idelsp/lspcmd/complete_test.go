@@ -631,7 +631,7 @@ func TestCompleteHandlerCommandAsync(t *testing.T) {
 	}
 
 	cfg := DefaultCompleteConfig()
-	h := CompleteHandler(lsp, &mockEditor{}, wm, cfg, term.NopInterrupter())
+	h := CompleteHandler(lsp, &mockEditor{}, wm, cfg, term.NopInterrupter(), nil)
 
 	cmd := textapi.Command{Resource: &mockHandler{}}
 	err := h.HandleCommand(context.Background(), cmd)
@@ -704,7 +704,7 @@ func TestCompleteHandlerCommand(t *testing.T) {
 				},
 			}
 			cfg := DefaultCompleteConfig()
-			h := CompleteHandler(lsp, &mockEditor{}, wm, cfg, term.NopInterrupter())
+			h := CompleteHandler(lsp, &mockEditor{}, wm, cfg, term.NopInterrupter(), nil)
 			cmd := textapi.Command{Resource: &mockHandler{}}
 			err := h.HandleCommand(context.Background(), cmd)
 			require.NoError(t, err)

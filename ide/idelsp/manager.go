@@ -127,7 +127,7 @@ func New(
 	ctx, cancel := context.WithCancel(context.Background())
 	ret := &Manager{
 		cfg:           cfg,
-		log:           slog.With("struct", "idelsp.Manager"),
+		log:           slog.With("struct", "idelsp.Manager", "workspace", convertURI(uri)),
 		rootURI:       convertURI(uri),
 		fileSystem:    fileSystem,
 		executor:      executor,
@@ -462,7 +462,7 @@ func (m *Manager) initializeServer(
 
 	srv := newLangServer(
 		m.ctx, lang, binPath, m.executor, m.rootURI,
-		newCallbackAdapter(m.callback, lang.id),
+		newCallbackAdapter(m.callback, lang.id, m.rootURI),
 		params,
 	)
 
@@ -599,7 +599,7 @@ func (m *Manager) watchServer(
 			m.log.Debug("restarting lsp server", "language", lang.id)
 			srv := newLangServer(
 				m.ctx, srv.cfg, srv.binPath, m.executor, m.rootURI,
-				newCallbackAdapter(m.callback, lang.id),
+				newCallbackAdapter(m.callback, lang.id, m.rootURI),
 				srv.params,
 			)
 

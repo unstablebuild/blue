@@ -73,6 +73,7 @@ func DefaultHighlightConfig() HighlightConfig {
 func SubscribeHighlight(
 	lsp semanticapi.LSP, editor textapi.Editor,
 	scheduleNextTick func(func()) bool, cfg HighlightConfig,
+	log *slog.Logger,
 ) error {
 	defaults := DefaultHighlightConfig()
 	if cfg.Delay == 0 {
@@ -90,12 +91,16 @@ func SubscribeHighlight(
 			return true
 		}
 	}
+	if log == nil {
+		log = slog.Default()
+	}
 	h := &highlightHandler{
 		lsp:    lsp,
 		editor: editor,
 		sched:  scheduleNextTick,
 		delay:  cfg.Delay,
 		cfg:    cfg,
+		log:    log,
 	}
 	return editor.SubscribeEvents(
 		[]textapi.EventType{textapi.EventTypeCursor, textapi.EventTypeEdit},
@@ -120,6 +125,7 @@ type highlightHandler struct {
 	sched  func(func()) bool
 	delay  time.Duration
 	cfg    HighlightConfig
+	log    *slog.Logger
 }
 
 // Handle implements textapi.EventHandler.
@@ -173,7 +179,7 @@ func (h *highlightHandler) onEdit(ev textapi.Event) {
 
 	h.sched(func() {
 		if err := h.setLocations(ev.URI, nil); err != nil {
-			slog.Warn("clear highlights on edit", "err", err)
+			h.log.Warn("clear highlights on edit", "err", err)
 		}
 	})
 }
@@ -194,7 +200,7 @@ func (h *highlightHandler) fetch(wsURI workspaceapi.URI, uri string, pos semanti
 	highlights, err := h.lsp.DocumentHighlight(ctx, req)
 	if err != nil {
 		if ctx.Err() == nil {
-			slog.Warn("document highlight", "err", err)
+			h.log.Warn("document highlight", "err", err)
 		}
 		return
 	}
@@ -208,7 +214,7 @@ func (h *highlightHandler) fetch(wsURI workspaceapi.URI, uri string, pos semanti
 
 	h.sched(func() {
 		if err := h.applyHighlights(wsURI, highlights); err != nil {
-			slog.Warn("apply highlights", "uri", wsURI, "err", err)
+			h.log.Warn("apply highlights", "uri", wsURI, "err", err)
 		}
 	})
 }

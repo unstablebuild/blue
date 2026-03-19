@@ -77,7 +77,7 @@ func TestReferencesEnrichedDisplay(t *testing.T) {
 	}
 	h := ReferencesHandler(
 		lsp, editor, wm, &mockResourceOpener{}, &mockNotifications{}, &mockFileSystem{},
-		rootURI, syncTick, nil, DefaultReferencesConfig(),
+		rootURI, syncTick, nil, DefaultReferencesConfig(), nil,
 	)
 
 	uri, _ := workspaceapi.ParseURI("file:///project/a.go")
@@ -138,7 +138,7 @@ func TestReferencesRelativePaths(t *testing.T) {
 	}
 	h := ReferencesHandler(
 		lsp, editor, wm, &mockResourceOpener{}, &mockNotifications{}, &mockFileSystem{},
-		rootURI, syncTick, nil, ReferencesConfig{ListConfig: DefaultLocationsConfig()},
+		rootURI, syncTick, nil, ReferencesConfig{ListConfig: DefaultLocationsConfig()}, nil,
 	)
 
 	uri, _ := workspaceapi.ParseURI("file:///workspace/src/pkg/handler.go")
@@ -193,7 +193,7 @@ func TestReferencesZeroRootURI(t *testing.T) {
 	// Zero RootURI (not set) — paths should fall back to absolute.
 	h := ReferencesHandler(
 		lsp, editor, wm, &mockResourceOpener{}, &mockNotifications{}, &mockFileSystem{},
-		workspaceapi.URI{}, syncTick, nil, DefaultReferencesConfig(),
+		workspaceapi.URI{}, syncTick, nil, DefaultReferencesConfig(), nil,
 	)
 
 	uri, _ := workspaceapi.ParseURI("file:///workspace/pkg/foo.go")
@@ -285,7 +285,7 @@ func TestReferencesHandler(t *testing.T) {
 			}
 			h := ReferencesHandler(
 				lsp, editor, wm, &mockResourceOpener{}, &mockNotifications{}, &mockFileSystem{},
-				rootURI, syncTick, nil, DefaultReferencesConfig(),
+				rootURI, syncTick, nil, DefaultReferencesConfig(), nil,
 			)
 
 			uri, _ := workspaceapi.ParseURI("file:///project/a.go")

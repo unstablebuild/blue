@@ -103,7 +103,7 @@ func TestDeclarationHandler(t *testing.T) {
 			}
 			h := DeclarationHandler(
 				lsp, editor, wm, &mockResourceOpener{}, &mockNotifications{}, &mockFileSystem{},
-				syncTick, nil, DeclarationConfig{RootURI: rootURI},
+				syncTick, nil, DeclarationConfig{RootURI: rootURI}, nil,
 			)
 
 			uri, _ := workspaceapi.ParseURI("file:///project/a.go")
