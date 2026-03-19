@@ -26,6 +26,7 @@ package lspcmd
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 
 	"github.com/unstablebuild/rune-go-sdk/api/browserapi"
@@ -147,11 +148,12 @@ func AllHandler(
 	if cfg.RootURI.String() == "" {
 		panic("lspcmd: Config.RootURI must be set")
 	}
+	wsLog := slog.With("workspace", cfg.RootURI.String())
 	formatH, err := FormatHandler(lsp, editor)
 	if err != nil {
 		return nil, err
 	}
-	err = SubscribeHighlight(lsp, editor, cfg.ScheduleNextTick, cfg.Highlight)
+	err = SubscribeHighlight(lsp, editor, cfg.ScheduleNextTick, cfg.Highlight, wsLog)
 	if err != nil {
 		return nil, err
 	}
@@ -166,30 +168,30 @@ func AllHandler(
 	r.handlers = map[string]textapi.CommandHandler{
 		"format":   formatH,
 		"hover":    HoverHandler(lsp, wm, notify, fs, cfg.ScheduleNextTick, cfg.Parser, cfg.Hover),
-		"complete": CompleteHandler(lsp, editor, wm, cfg.Complete, cfg.Interrupter),
+		"complete": CompleteHandler(lsp, editor, wm, cfg.Complete, cfg.Interrupter, wsLog),
 		"definition": DefinitionHandler(
 			lsp, editor, wm, opener, notify, fs,
-			cfg.ScheduleNextTick, cfg.Parser, cfg.Definition,
+			cfg.ScheduleNextTick, cfg.Parser, cfg.Definition, wsLog,
 		),
 		"declaration": DeclarationHandler(
 			lsp, editor, wm, opener, notify, fs,
-			cfg.ScheduleNextTick, cfg.Parser, cfg.Declaration,
+			cfg.ScheduleNextTick, cfg.Parser, cfg.Declaration, wsLog,
 		),
 		"type-definition": TypeDefinitionHandler(
 			lsp, editor, wm, opener, notify, fs,
-			cfg.ScheduleNextTick, cfg.Parser, cfg.TypeDefinition,
+			cfg.ScheduleNextTick, cfg.Parser, cfg.TypeDefinition, wsLog,
 		),
 		"implementation": ImplementationHandler(
 			lsp, editor, wm, opener, notify, fs,
-			cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.Implementation,
+			cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.Implementation, wsLog,
 		),
 		"references": ReferencesHandler(
 			lsp, editor, wm, opener, notify, fs,
-			cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.References,
+			cfg.RootURI, cfg.ScheduleNextTick, cfg.Parser, cfg.References, wsLog,
 		),
 		"signature-help": SignatureHelpHandler(lsp, editor, wm,
-			cfg.ScheduleNextTick, cfg.SignatureHelp),
-		"rename": RenameHandler(lsp, editor, wm, opener),
+			cfg.ScheduleNextTick, cfg.SignatureHelp, wsLog),
+		"rename": RenameHandler(lsp, editor, wm, opener, wsLog),
 	}
 	return r, nil
 }

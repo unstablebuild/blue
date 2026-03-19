@@ -81,13 +81,18 @@ func SignatureHelpHandler(
 	wm browserapi.WindowManager,
 	scheduleNextTick func(func()) bool,
 	cfg SignatureHelpConfig,
+	log *slog.Logger,
 ) textapi.CommandHandler {
+	if log == nil {
+		log = slog.Default()
+	}
 	h := &signatureHelpHandler{
 		lsp:    lsp,
 		editor: editor,
 		wm:     wm,
 		cfg:    cfg,
 		sched:  scheduleNextTick,
+		log:    log,
 	}
 	if !cfg.AutoTrigger || len(cfg.TriggerCharacters) == 0 {
 		return h
@@ -101,7 +106,7 @@ func SignatureHelpHandler(
 		[]textapi.EventType{textapi.EventTypeEdit, textapi.EventTypeCursor}, h,
 	)
 	if err != nil {
-		slog.Warn("signature help subscribe events", "err", err)
+		h.log.Warn("signature help subscribe events", "err", err)
 	}
 	return h
 }
@@ -124,6 +129,7 @@ type signatureHelpHandler struct {
 	cfg        SignatureHelpConfig
 	triggerSet map[string]struct{}
 	sched      func(func()) bool
+	log        *slog.Logger
 }
 
 // Handle implements textapi.EventHandler.
@@ -145,10 +151,10 @@ func (h *signatureHelpHandler) onEdit(ev textapi.Event) {
 	if ev.Content == "" {
 		return
 	}
-	slog.Debug("signature help: onEdit", "content", len(ev.Content))
+	h.log.Debug("signature help: onEdit", "content", len(ev.Content))
 	lastRune, _ := utf8.DecodeLastRuneInString(ev.Content)
 	if lastRune == utf8.RuneError {
-		slog.Debug("signature help: last rune error")
+		h.log.Debug("signature help: last rune error")
 		return
 	}
 
@@ -158,7 +164,7 @@ func (h *signatureHelpHandler) onEdit(ev textapi.Event) {
 	h.editSeen = true
 	if !isTrigger && !h.active {
 		h.mu.Unlock()
-		slog.Debug("signature help: not a trigger and not active", "rune", string(lastRune))
+		h.log.Debug("signature help: not a trigger and not active", "rune", string(lastRune))
 		return
 	}
 	if h.cancel != nil {
@@ -193,7 +199,7 @@ func (h *signatureHelpHandler) onCursor(ev textapi.Event) {
 }
 
 func (h *signatureHelpHandler) fetch(ev textapi.Event) {
-	slog.Debug("signature help: fetching")
+	h.log.Debug("signature help: fetching")
 	ctx, cancel := context.WithCancel(context.Background())
 
 	h.mu.Lock()
@@ -209,14 +215,14 @@ func (h *signatureHelpHandler) fetch(ev textapi.Event) {
 	result, err := h.lsp.SignatureHelp(ctx, params)
 	if err != nil {
 		if ctx.Err() == nil {
-			slog.Warn("signature help auto-trigger", "err", err)
+			h.log.Warn("signature help auto-trigger", "err", err)
 		} else {
-			slog.Debug("signature help auto-trigger", "err", err)
+			h.log.Debug("signature help auto-trigger", "err", err)
 		}
 		return
 	}
 	if result == nil || len(result.Signatures) == 0 {
-		slog.Debug("signature help: no signatures")
+		h.log.Debug("signature help: no signatures")
 		h.mu.Lock()
 		h.active = false
 		h.mu.Unlock()
@@ -233,7 +239,7 @@ func (h *signatureHelpHandler) fetch(ev textapi.Event) {
 		To:      to,
 		Message: msg,
 	}
-	slog.Debug("setting signature help", "location", loc)
+	h.log.Debug("setting signature help", "location", loc)
 
 	h.mu.Lock()
 	h.active = true
@@ -247,12 +253,12 @@ func (h *signatureHelpHandler) fetch(ev textapi.Event) {
 func (h *signatureHelpHandler) setLocation(wsURI workspaceapi.URI, list textapi.LocationList) {
 	eh, err := h.editor.Editor(wsURI)
 	if err != nil {
-		slog.Warn("signature help editor", "err", err)
+		h.log.Warn("signature help editor", "err", err)
 		return
 	}
 	if err := h.editor.SetLocationList(eh, textapi.LocationPriorityInfo,
 		signatureHelpLocationID, list); err != nil {
-		slog.Warn("signature help set location list", "err", err)
+		h.log.Warn("signature help set location list", "err", err)
 	}
 }
 

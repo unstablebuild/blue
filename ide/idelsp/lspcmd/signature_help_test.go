@@ -325,7 +325,7 @@ func TestSignatureHelpHandlerCommand(t *testing.T) {
 			return &mockWindow{id: 1}, nil
 		},
 	}
-	h := SignatureHelpHandler(lsp, &mockEditor{}, wm, nil, DefaultSignatureHelpConfig())
+	h := SignatureHelpHandler(lsp, &mockEditor{}, wm, nil, DefaultSignatureHelpConfig(), nil)
 	cmd := textapi.Command{Resource: &mockHandler{}}
 	err := h.HandleCommand(context.Background(), cmd)
 	require.NoError(t, err)
@@ -350,7 +350,7 @@ func TestSignatureHelpHandlerNilResult(t *testing.T) {
 			return &mockWindow{id: 1}, nil
 		},
 	}
-	h := SignatureHelpHandler(lsp, &mockEditor{}, wm, nil, DefaultSignatureHelpConfig())
+	h := SignatureHelpHandler(lsp, &mockEditor{}, wm, nil, DefaultSignatureHelpConfig(), nil)
 	cmd := textapi.Command{Resource: &mockHandler{}}
 	err := h.HandleCommand(context.Background(), cmd)
 	require.NoError(t, err)
@@ -375,7 +375,7 @@ func TestSignatureHelpHandlerEmptySignatures(t *testing.T) {
 			return &mockWindow{id: 1}, nil
 		},
 	}
-	h := SignatureHelpHandler(lsp, &mockEditor{}, wm, nil, DefaultSignatureHelpConfig())
+	h := SignatureHelpHandler(lsp, &mockEditor{}, wm, nil, DefaultSignatureHelpConfig(), nil)
 	cmd := textapi.Command{Resource: &mockHandler{}}
 	err := h.HandleCommand(context.Background(), cmd)
 	require.NoError(t, err)
@@ -396,7 +396,7 @@ func TestSignatureHelpAutoTriggerDisabled(t *testing.T) {
 	cfg := DefaultSignatureHelpConfig()
 	cfg.AutoTrigger = false
 	cfg.TriggerCharacters = []string{"(", ","}
-	SignatureHelpHandler(&mockLSP{}, editor, &mockWindowManager{}, nil, cfg)
+	SignatureHelpHandler(&mockLSP{}, editor, &mockWindowManager{}, nil, cfg, nil)
 	assert.False(t, subscribeCalled, "SubscribeEvents should not be called when AutoTrigger is false")
 }
 
@@ -421,7 +421,7 @@ func TestSignatureHelpAutoTriggerNoMatch(t *testing.T) {
 	}
 	cfg := DefaultSignatureHelpConfig()
 	cfg.TriggerCharacters = []string{"(", ","}
-	SignatureHelpHandler(&mockLSP{}, editor, &mockWindowManager{}, syncTick, cfg)
+	SignatureHelpHandler(&mockLSP{}, editor, &mockWindowManager{}, syncTick, cfg, nil)
 	require.NotNil(t, capturedHandler, "handler should be subscribed")
 
 	// Fire an edit event with a non-trigger character.
@@ -466,7 +466,7 @@ func TestSignatureHelpAutoTriggerNilResult(t *testing.T) {
 	}
 	cfg := DefaultSignatureHelpConfig()
 	cfg.TriggerCharacters = []string{"(", ","}
-	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg)
+	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg, nil)
 	require.NotNil(t, capturedHandler, "handler should be subscribed")
 
 	// Fire an edit event with a trigger character but LSP returns nil.
@@ -531,7 +531,7 @@ func TestSignatureHelpAutoTriggerSetsLocation(t *testing.T) {
 
 	cfg := DefaultSignatureHelpConfig()
 	cfg.TriggerCharacters = []string{"(", ","}
-	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg)
+	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg, nil)
 	require.NotNil(t, capturedHandler, "handler should be subscribed")
 
 	wsURI, err := workspaceapi.ParseURI("file:///test.go")
@@ -606,7 +606,7 @@ func TestSignatureHelpCursorClearsLocation(t *testing.T) {
 
 	cfg := DefaultSignatureHelpConfig()
 	cfg.TriggerCharacters = []string{"(", ","}
-	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg)
+	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg, nil)
 	require.NotNil(t, capturedHandler, "handler should be subscribed")
 
 	wsURI, err := workspaceapi.ParseURI("file:///test.go")
@@ -689,7 +689,7 @@ func TestSignatureHelpNonTriggerEditKeepsLocation(t *testing.T) {
 
 	cfg := DefaultSignatureHelpConfig()
 	cfg.TriggerCharacters = []string{"(", ","}
-	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg)
+	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg, nil)
 	require.NotNil(t, capturedHandler, "handler should be subscribed")
 
 	wsURI, err := workspaceapi.ParseURI("file:///test.go")
@@ -791,7 +791,7 @@ func TestSignatureHelpNonTriggerEditClearsWhenLSPReturnsNil(t *testing.T) {
 
 	cfg := DefaultSignatureHelpConfig()
 	cfg.TriggerCharacters = []string{"(", ","}
-	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg)
+	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg, nil)
 	require.NotNil(t, capturedHandler, "handler should be subscribed")
 
 	wsURI, err := workspaceapi.ParseURI("file:///test.go")
@@ -877,7 +877,7 @@ func TestSignatureHelpNavigationCursorClearsLocation(t *testing.T) {
 
 	cfg := DefaultSignatureHelpConfig()
 	cfg.TriggerCharacters = []string{"(", ","}
-	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg)
+	SignatureHelpHandler(lsp, editor, &mockWindowManager{}, syncTick, cfg, nil)
 	require.NotNil(t, capturedHandler, "handler should be subscribed")
 
 	wsURI, err := workspaceapi.ParseURI("file:///test.go")

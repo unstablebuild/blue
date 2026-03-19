@@ -66,7 +66,7 @@ func testFloatingHandler(entries []locationEntry, fc fileContent) *locationsFloa
 	cfg := LocationsConfig{PreviewAttr: term.Attributes{Bg: tcell.ColorYellow}}
 	return newLocationsFloatingHandler(
 		entries, &mockResourceOpener{}, &mockWindowManager{}, &mockEditor{},
-		&mockNotifications{}, testFS(fc), syncTick, nil, cfg,
+		&mockNotifications{}, testFS(fc), syncTick, nil, cfg, nil,
 	)
 }
 
@@ -271,7 +271,7 @@ func TestLocationsFloatingDrawPreviewClampsTargetLine(t *testing.T) {
 
 func TestLocationsFloatingHandlerDimensions(t *testing.T) {
 	entries := []locationEntry{{display: "a.go:1"}}
-	h := newLocationsFloatingHandler(entries, &mockResourceOpener{}, &mockWindowManager{}, &mockEditor{}, &mockNotifications{}, &mockFileSystem{}, syncTick, nil, LocationsConfig{})
+	h := newLocationsFloatingHandler(entries, &mockResourceOpener{}, &mockWindowManager{}, &mockEditor{}, &mockNotifications{}, &mockFileSystem{}, syncTick, nil, LocationsConfig{}, nil)
 	w, ht := h.Dimensions()
 	assert.Equal(t, minPreviewWidth+spanHPad, w)
 	assert.Equal(t, 1+previewContextLines+separatorHeight+spanVPad, ht)
@@ -281,7 +281,7 @@ func TestLocationsFloatingHandlerDimensionsWideEntries(t *testing.T) {
 	// An entry wider than minPreviewWidth should push the ideal width.
 	long := strings.Repeat("x", minPreviewWidth+20)
 	entries := []locationEntry{{display: long}}
-	h := newLocationsFloatingHandler(entries, &mockResourceOpener{}, &mockWindowManager{}, &mockEditor{}, &mockNotifications{}, &mockFileSystem{}, syncTick, nil, LocationsConfig{})
+	h := newLocationsFloatingHandler(entries, &mockResourceOpener{}, &mockWindowManager{}, &mockEditor{}, &mockNotifications{}, &mockFileSystem{}, syncTick, nil, LocationsConfig{}, nil)
 	w, ht := h.Dimensions()
 	assert.Equal(t, utf8.RuneCountInString(long)+spanHPad, w)
 	assert.Equal(t, 1+previewContextLines+separatorHeight+spanVPad, ht)
@@ -289,7 +289,7 @@ func TestLocationsFloatingHandlerDimensionsWideEntries(t *testing.T) {
 
 func TestLocationsFloatingResize(t *testing.T) {
 	entries := []locationEntry{{display: "a.go:1"}}
-	h := newLocationsFloatingHandler(entries, &mockResourceOpener{}, &mockWindowManager{}, &mockEditor{}, &mockNotifications{}, &mockFileSystem{}, syncTick, nil, LocationsConfig{})
+	h := newLocationsFloatingHandler(entries, &mockResourceOpener{}, &mockWindowManager{}, &mockEditor{}, &mockNotifications{}, &mockFileSystem{}, syncTick, nil, LocationsConfig{}, nil)
 
 	// Dimensions returns ideal size (inner + padding).
 	w, ht := h.Dimensions()
@@ -338,7 +338,7 @@ func TestLocationsFloatingEnterNotifiesOnError(t *testing.T) {
 		},
 	}
 	h := newLocationsFloatingHandler(
-		entries, opener, &mockWindowManager{}, &mockEditor{}, notify, &mockFileSystem{}, syncTick, nil, LocationsConfig{},
+		entries, opener, &mockWindowManager{}, &mockEditor{}, notify, &mockFileSystem{}, syncTick, nil, LocationsConfig{}, nil,
 	)
 	exit, handled := h.Handle(term.Event{Type: term.EventKey, Key: term.KeyEnter})
 	assert.True(t, exit)

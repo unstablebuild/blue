@@ -73,6 +73,7 @@ type locationsFloatingHandler struct {
 	fs               workspaceapi.FileSystem
 	scheduleNextTick func(func()) bool
 	parser           syntaxapi.Parser
+	log              *slog.Logger
 
 	// onSelect, when set, is called with the focused entry index on
 	// Enter instead of the default navigateTo behaviour.
@@ -152,6 +153,7 @@ func newLocationsFloatingHandler(
 	editor textapi.Editor, notify browserapi.Notifications,
 	fs workspaceapi.FileSystem, scheduleNextTick func(func()) bool,
 	parser syntaxapi.Parser, cfg LocationsConfig,
+	log *slog.Logger,
 ) *locationsFloatingHandler {
 	list := &component.FocusList{}
 	list.InitWithAttr(cfg.ListTextAttr, cfg.ListFocusAttr)
@@ -161,6 +163,9 @@ func newLocationsFloatingHandler(
 		if w := utf8.RuneCountInString(e.display); w > maxEntryW {
 			maxEntryW = w
 		}
+	}
+	if log == nil {
+		log = slog.Default()
 	}
 	handler := &locationsFloatingHandler{
 		entries:          entries,
@@ -172,6 +177,7 @@ func newLocationsFloatingHandler(
 		fs:               fs,
 		scheduleNextTick: scheduleNextTick,
 		parser:           parser,
+		log:              log,
 		maxEntryW:        maxEntryW,
 		previewAttr:      cfg.PreviewAttr,
 	}
@@ -377,7 +383,7 @@ func (l *locationsFloatingHandler) loadHighlights(
 		}
 	}
 	if err := iter.Err(); err != nil {
-		slog.Warn("highlight iteration", "uri", uri, "err", err)
+		l.log.Warn("highlight iteration", "uri", uri, "err", err)
 		return
 	}
 	l.scheduleNextTick(func() {

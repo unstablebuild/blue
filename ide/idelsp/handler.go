@@ -99,6 +99,7 @@ type CallbackHandler struct {
 	refresher        Refresher
 	interrupter      term.Interrupter
 	scheduleNextTick func(fn func()) bool
+	log              *slog.Logger
 
 	mu       sync.Mutex
 	progress map[string]string
@@ -142,6 +143,7 @@ func NewCallbackHandler(
 		refresher:        r,
 		interrupter:      interrupter,
 		scheduleNextTick: sched,
+		log:              slog.With("struct", "idelsp.CallbackHandler", "workspace", rootURI),
 		progress:         make(map[string]string),
 	}
 }
@@ -171,7 +173,7 @@ func (h *CallbackHandler) LogMessage(
 	ctx context.Context, params semanticapi.LogMessageParams,
 ) error {
 	level := messageTypeToSlogLevel(params.Type)
-	slog.Log(ctx, level, params.Message)
+	h.log.Log(ctx, level, params.Message)
 	return nil
 }
 
@@ -221,12 +223,12 @@ func (h *CallbackHandler) PublishDiagnostics(
 	ok := h.scheduleNextTick(func() {
 		eh, err := h.editor.Editor(uri)
 		if err != nil {
-			slog.Warn("editor for diagnostics", "uri", uri.Name(), "err", err)
+			h.log.Warn("editor for diagnostics", "uri", uri.Name(), "err", err)
 			return
 		}
 		err = h.editor.SetLocationList(eh, highest, "lsp-diagnostics", ll)
 		if err != nil {
-			slog.Warn("set diagnostics", "err", err)
+			h.log.Warn("set diagnostics", "err", err)
 		}
 	})
 	if !ok {
@@ -265,7 +267,7 @@ func (h *CallbackHandler) Progress(
 		ok := h.scheduleNextTick(func() {
 			id, err := h.notifications.Notify(browserapi.LevelInfo, msg)
 			if err != nil {
-				slog.Warn("progress begin notify", "err", err)
+				h.log.Warn("progress begin notify", "err", err)
 				return
 			}
 			h.mu.Lock()
@@ -322,7 +324,7 @@ func (h *CallbackHandler) Progress(
 
 // LogTrace logs a trace message at debug level.
 func (h *CallbackHandler) LogTrace(ctx context.Context, params semanticapi.LogTraceParams) error {
-	slog.Log(ctx, slog.LevelDebug, params.Message, "verbose", params.Verbose)
+	h.log.Log(ctx, slog.LevelDebug, params.Message, "verbose", params.Verbose)
 	return nil
 }
 
@@ -509,7 +511,7 @@ func (h *CallbackHandler) ApplyEdit(
 		ok := h.scheduleNextTick(func() {
 			err := h.applyDocumentChanges(ctx, edit.DocumentChanges)
 			if err != nil {
-				slog.Warn("apply document changes", "err", err)
+				h.log.Warn("apply document changes", "err", err)
 			}
 		})
 		if !ok {
@@ -522,8 +524,7 @@ func (h *CallbackHandler) ApplyEdit(
 		ok := h.scheduleNextTick(func() {
 			err := h.applyChanges(ctx, edit.Changes)
 			if err != nil {
-				slog.Warn("apply changes",
-					"err", err)
+				h.log.Warn("apply changes", "err", err)
 			}
 		})
 		if !ok {

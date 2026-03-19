@@ -104,13 +104,18 @@ func CompleteHandler(
 	lsp semanticapi.LSP, editor textapi.Editor,
 	wm browserapi.WindowManager, cfg CompleteConfig,
 	interrupter term.Interrupter,
+	log *slog.Logger,
 ) textapi.CommandHandler {
+	if log == nil {
+		log = slog.Default()
+	}
 	return &completeHandler{
 		lsp:         lsp,
 		editor:      editor,
 		wm:          wm,
 		cfg:         cfg,
 		interrupter: interrupter,
+		log:         log,
 	}
 }
 
@@ -122,6 +127,7 @@ type completeHandler struct {
 	wm          browserapi.WindowManager
 	cfg         CompleteConfig
 	interrupter term.Interrupter
+	log         *slog.Logger
 }
 
 func (h *completeHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
@@ -150,6 +156,7 @@ func (h *completeHandler) HandleCommand(ctx context.Context, cmd textapi.Command
 		icons:       h.cfg.Icons,
 		editor:      h.editor,
 		resource:    cmd.Resource,
+		log:         h.log,
 	}
 
 	go debug.CapturePanicReport(func() {
@@ -175,7 +182,7 @@ func (h *completeHandler) HandleCommand(ctx context.Context, cmd textapi.Command
 
 		result, err := h.lsp.Completion(ctx, params)
 		if err != nil {
-			slog.Warn("completion fetch", "err", err)
+			h.log.Warn("completion fetch", "err", err)
 			return
 		}
 		for _, item := range result.Items {
@@ -225,6 +232,7 @@ type completionHandler struct {
 	icons    map[semanticapi.CompletionItemKind]string
 	editor   textapi.Editor
 	resource textapi.Handler
+	log      *slog.Logger
 }
 
 // newCompletionHandler creates a pre-populated completionHandler.
@@ -242,6 +250,7 @@ func newCompletionHandler(labels []string) *completionHandler {
 		list:        list,
 		labels:      labels,
 		interrupter: term.NopInterrupter(),
+		log:         slog.Default(),
 	}
 	return h
 }
@@ -297,7 +306,7 @@ func (c *completionHandler) Handle(ev term.Event) (bool, bool) {
 		return exit, handled
 	}
 	if err := c.applyItem(label); err != nil {
-		slog.Warn("completion apply", "err", err)
+		c.log.Warn("completion apply", "err", err)
 	}
 	return exit, handled
 }

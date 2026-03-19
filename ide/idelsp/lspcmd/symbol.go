@@ -346,7 +346,7 @@ func showSymbolPicker(
 	}
 	handler := newLocationsFloatingHandler(
 		entries, nil, wm, nil, nil,
-		fs, scheduleNextTick, parser, DefaultLocationsConfig(),
+		fs, scheduleNextTick, parser, DefaultLocationsConfig(), nil,
 	)
 	handler.onSelect = func(idx int) {
 		onPick(matches[idx])

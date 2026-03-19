@@ -37,19 +37,25 @@ import (
 type callbackAdapter struct {
 	cb         semanticapi.LSPCallback
 	serverName string
+	log        *slog.Logger
 }
 
 // Compile-time assertion that callbackAdapter implements jsonrpc2.Handler.
 var _ jsonrpc2.Handler = (*callbackAdapter)(nil)
 
-func newCallbackAdapter(cb semanticapi.LSPCallback, serverName string) jsonrpc2.Handler {
+func newCallbackAdapter(cb semanticapi.LSPCallback, serverName string, workspace string) jsonrpc2.Handler {
 	if cb == nil {
 		return jsonrpc2.HandlerFunc(
 			func(ctx context.Context, req *jsonrpc2.Request) (any, error) {
 				return nil, jsonrpc2.ErrNotHandled
 			})
 	}
-	return &callbackAdapter{cb: cb, serverName: serverName}
+	return &callbackAdapter{
+		cb:         cb,
+		serverName: serverName,
+		log: slog.With("struct", "idelsp.callbackAdapter",
+			"server", serverName, "workspace", workspace),
+	}
 }
 
 // Handle implements jsonrpc2.Handler, processing server-initiated messages.
@@ -103,10 +109,10 @@ func (a *callbackAdapter) handleNotification(
 			err = a.cb.LogTrace(ctx, p)
 		}
 	default:
-		slog.Debug("idelsp: unknown notification", "method", method)
+		a.log.Debug("idelsp: unknown notification", "method", method)
 	}
 	if err != nil {
-		slog.Warn("idelsp: callback error", "method", method, "error", err)
+		a.log.Warn("idelsp: callback error", "method", method, "error", err)
 	}
 }
 

@@ -93,7 +93,7 @@ func newLangServer(
 		rootURI:  rootURI,
 		handler:  handler,
 		log: slog.With("struct", "idelsp.langServer",
-			"language", cfg.id, "uri", rootURI),
+			"language", cfg.id, "workspace", rootURI),
 	}
 }
 
