@@ -40,9 +40,32 @@ import (
 )
 
 const (
-	redirectCallType = "oauth2Redirect"
-	loggingClass     = "auth"
+	redirectCallType   = "oauth2Redirect"
+	loggingClass       = "auth"
+	defaultRedirectPath = "/o/oauth2/redirect"
 )
+
+// ClientOption configures the OAuth2 client flow.
+type ClientOption func(*clientConfig)
+
+type clientConfig struct {
+	redirectPath    string
+	authCodeOptions []oauth2.AuthCodeOption
+}
+
+// WithRedirectPath overrides the default callback path
+// ("/o/oauth2/redirect") used in the redirect URL. Use this when
+// the OAuth provider has a specific redirect URI registered
+// (e.g. "/auth/callback").
+func WithRedirectPath(path string) ClientOption {
+	return func(c *clientConfig) { c.redirectPath = path }
+}
+
+// WithAuthCodeOptions appends extra parameters to the authorization
+// URL (e.g. oauth2.SetAuthURLParam("prompt", "consent")).
+func WithAuthCodeOptions(opts ...oauth2.AuthCodeOption) ClientOption {
+	return func(c *clientConfig) { c.authCodeOptions = append(c.authCodeOptions, opts...) }
+}
 
 // NewClient starts an oauth2 like NewClientWithPorts but
 // will setup a callback listener on a random port.
@@ -50,8 +73,9 @@ const (
 func NewClient(
 	ctx context.Context, conf oauth2.Config,
 	visitURLCallback func(string) error, successBrowserCopy string,
+	opts ...ClientOption,
 ) (*http.Client, oauth2.TokenSource, error) {
-	return NewClientWithPorts(ctx, conf, visitURLCallback, successBrowserCopy, nil)
+	return NewClientWithPorts(ctx, conf, visitURLCallback, successBrowserCopy, nil, opts...)
 }
 
 // NewClientWithPorts starts a oauth2 flow with the given oaut2 config
@@ -70,8 +94,13 @@ func NewClient(
 func NewClientWithPorts(
 	ctx context.Context, conf oauth2.Config,
 	visitURLCallback func(string) error, successBrowserCopy string,
-	tryPorts []int,
+	tryPorts []int, opts ...ClientOption,
 ) (*http.Client, oauth2.TokenSource, error) {
+	cfg := clientConfig{redirectPath: defaultRedirectPath}
+	for _, o := range opts {
+		o(&cfg)
+	}
+
 	resChan := make(chan tokenResult)
 	readyChan := make(chan readyResult)
 	csrfToken := uuid.New().String()
@@ -88,8 +117,8 @@ func NewClientWithPorts(
 		if readyResult.err != nil {
 			return nil, nil, fmt.Errorf("serve: %v", readyResult.err)
 		}
-		conf.RedirectURL = fmt.Sprintf("http://localhost:%d/o/oauth2/redirect",
-			readyResult.port)
+		conf.RedirectURL = fmt.Sprintf("http://localhost:%d%s",
+			readyResult.port, cfg.redirectPath)
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
@@ -108,6 +137,7 @@ func NewClientWithPorts(
 	// Redirect user to consent page to ask for permission
 	// for the scopes specified above.
 	authCodeURLOpts := append([]oauth2.AuthCodeOption{oauth2.AccessTypeOffline}, pkceOpts...)
+	authCodeURLOpts = append(authCodeURLOpts, cfg.authCodeOptions...)
 	url := conf.AuthCodeURL(csrfToken, authCodeURLOpts...)
 	if err := visitURLCallback(url); err != nil {
 		return nil, nil, err
