@@ -312,7 +312,7 @@ func FormatSignatureMessage(result *semanticapi.SignatureHelp) string {
 
 func (h *signatureHelpHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
 	if cmd.Resource == nil {
-		return nil
+		return fmt.Errorf("no file open; open a file first")
 	}
 	params := semanticapi.SignatureHelpParams{
 		TextDocument: TextDocID(cmd.URI),

@@ -46,6 +46,7 @@ func TestTypeDefinitionHandler(t *testing.T) {
 		name         string
 		result       semanticapi.LocationResult
 		nilResource  bool
+		wantErr      bool
 		wantFloat    bool
 		wantNavigate bool
 		wantEntries  int
@@ -75,7 +76,7 @@ func TestTypeDefinitionHandler(t *testing.T) {
 			wantEntries: 2,
 		},
 		{name: "no type definitions"},
-		{name: "nil resource", nilResource: true},
+		{name: "nil resource", nilResource: true, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -113,7 +114,11 @@ func TestTypeDefinitionHandler(t *testing.T) {
 			}
 			cmd.Cursor.Content = term.Coordinates{X: 5, Y: 50}
 
-			err := h.HandleCommand(context.Background(), cmd)
+		err := h.HandleCommand(context.Background(), cmd)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantFloat, fh != nil)
 			assert.Equal(t, tt.wantNavigate, navigated)

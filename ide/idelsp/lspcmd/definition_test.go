@@ -55,6 +55,7 @@ func TestDefinitionHandler(t *testing.T) {
 		nilResource  bool
 		args         []string
 		parser       *mockParser
+		wantErr      bool
 		wantFloat    bool
 		wantNavigate bool
 		wantEntries  int
@@ -84,7 +85,7 @@ func TestDefinitionHandler(t *testing.T) {
 			wantEntries: 2,
 		},
 		{name: "no definitions"},
-		{name: "nil resource", nilResource: true},
+		{name: "nil resource", nilResource: true, wantErr: true},
 		{
 			name:        "definition via symbol name",
 			nilResource: true,
@@ -157,7 +158,11 @@ func TestDefinitionHandler(t *testing.T) {
 			}
 			cmd.Cursor.Content = term.Coordinates{X: 5, Y: 50}
 
-			err := h.HandleCommand(context.Background(), cmd)
+		err := h.HandleCommand(context.Background(), cmd)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
 			require.NoError(t, err)
 			if len(tt.args) > 0 && (tt.wantNavigate || tt.wantFloat) {
 				select {

@@ -217,9 +217,6 @@ func (r *routerHandler) Handle(_ context.Context, ev textapi.Event) bool {
 func (r *routerHandler) HandleCommand(
 	ctx context.Context, cmd textapi.Command,
 ) error {
-	if cmd.Resource == nil {
-		return nil
-	}
 	if cmd.Name != cmdName {
 		return fmt.Errorf("unknown command: %s", cmd.Name)
 	}

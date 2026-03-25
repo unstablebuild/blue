@@ -291,7 +291,10 @@ func resolveCommandSymbol(
 	onResolve func(symbolMatch),
 ) (proceed bool, err error) {
 	if len(cmd.Args) == 0 {
-		return cmd.Resource != nil, nil
+		if cmd.Resource == nil {
+			return false, fmt.Errorf("no file open; pass a symbol name or open a file first")
+		}
+		return true, nil
 	}
 	name := strings.Join(cmd.Args, " ")
 

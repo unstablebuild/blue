@@ -72,7 +72,7 @@ type renameHandler struct {
 
 func (h *renameHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
 	if cmd.Resource == nil {
-		return nil
+		return fmt.Errorf("no file open; open a file first")
 	}
 	pos := CoordToPos(cmd.Cursor.Content)
 

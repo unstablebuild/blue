@@ -25,6 +25,7 @@ package lspcmd
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/unstablebuild/rune-go-sdk/api/semanticapi"
 	"github.com/unstablebuild/rune-go-sdk/api/textapi"
@@ -57,7 +58,7 @@ func (h *formatHandler) HandleCommand(
 	ctx context.Context, cmd textapi.Command,
 ) error {
 	if cmd.Resource == nil {
-		return nil
+		return fmt.Errorf("no file open; open a file first")
 	}
 	_, hasSelection := cmd.Resource.Selection()
 	if hasSelection {

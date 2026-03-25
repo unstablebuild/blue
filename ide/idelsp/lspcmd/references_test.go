@@ -218,6 +218,7 @@ func TestReferencesHandler(t *testing.T) {
 		name         string
 		locs         []semanticapi.Location
 		nilResource  bool
+		wantErr      bool
 		wantFloat    bool
 		wantNavigate bool
 		wantEntries  int
@@ -257,7 +258,7 @@ func TestReferencesHandler(t *testing.T) {
 			wantEntries: 2,
 		},
 		{name: "zero references"},
-		{name: "nil resource", nilResource: true},
+		{name: "nil resource", nilResource: true, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -295,7 +296,11 @@ func TestReferencesHandler(t *testing.T) {
 			}
 			cmd.Cursor.Content = term.Coordinates{X: 5, Y: 10}
 
-			err := h.HandleCommand(context.Background(), cmd)
+		err := h.HandleCommand(context.Background(), cmd)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantFloat, fh != nil)
 			assert.Equal(t, tt.wantNavigate, navigated)
