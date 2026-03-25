@@ -238,7 +238,7 @@ func (c *Client) List(
 	if err != nil {
 		return nil, err
 	}
-	req := docpb.ListDocumentRequest{Filters: f, Fields: fieldsFromContext(ctx)}
+	req := docpb.ListDocumentRequest{Filters: f}
 	res, err := c.pb.List(ctx, &req)
 	if err != nil {
 		return nil, convertRpcError(err)
