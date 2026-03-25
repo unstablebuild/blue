@@ -68,6 +68,24 @@ in the last Resize, but rather the ideal width and height for this component to
 render the entire content. This should be implemented by all components/handlers with
 easy to calculate dimensions or when they're collections of Floating components/handlers.
 
+## Commit Messages
+
+When creating commit messages for this repository, match the existing
+commit subject style seen in recent history.
+
+- Prefer short, imperative, sentence-style subjects.
+- Usually start with a capitalized verb such as `Add`, `Update`, `Fix`,
+  `Remove`, `Display`, `Sort`, `Generate`, `Upgrade`, `Reverse`, or
+  `Revert`.
+- Keep the subject focused on the user-visible or code-level change.
+
+Good examples:
+
+- `Add AGENTS.md project instructions support`
+- `Update plan skill with critical loop exit section`
+- `Fix userMsgIdx after compaction to prevent index out of range panic`
+- `Display /clear confirmation inline instead of floating window`
+
 ## Builtin Skills
 
 Six skills are available for semantic code navigation via `runectl`.
