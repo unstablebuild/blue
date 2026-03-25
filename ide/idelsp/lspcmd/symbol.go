@@ -41,9 +41,10 @@ import (
 
 // symbolMatch represents a resolved workspace symbol candidate.
 type symbolMatch struct {
-	URI     string
-	Pos     semanticapi.Position
-	Display string
+	URI        string
+	Pos        semanticapi.Position
+	Display    string
+	ImportPath string
 }
 
 // symbolProgress reports resolution progress. msg describes the
@@ -134,25 +135,15 @@ func resolveSymbol(
 }
 
 // disambiguateDisplayNames sets display names that differentiate
-// matches from different files. It uses the short package directory
-// when unique, or the full package path when there are collisions.
+// matches from different packages. It prefers the resolved Go import
+// path and falls back to a package path derived from the file URI.
 func disambiguateDisplayNames(matches []symbolMatch, name string) {
-	pkgPaths := make([]string, len(matches))
-	shortPkgs := make([]string, len(matches))
 	for i, m := range matches {
-		pkgPaths[i] = packagePathFromURI(m.URI)
-		shortPkgs[i] = path.Base(pkgPaths[i])
-	}
-	shortCount := make(map[string]int)
-	for _, sp := range shortPkgs {
-		shortCount[sp]++
-	}
-	for i := range matches {
-		if shortCount[shortPkgs[i]] > 1 {
-			matches[i].Display = pkgPaths[i] + ": " + name
-		} else {
-			matches[i].Display = shortPkgs[i] + ": " + name
+		prefix := m.ImportPath
+		if prefix == "" {
+			prefix = packagePathFromURI(m.URI)
 		}
+		matches[i].Display = prefix + ": " + name
 	}
 }
 
@@ -180,7 +171,8 @@ func packagePathFromURI(uri string) string {
 func resolveImportPaths(
 	ctx context.Context, parser syntaxapi.Parser,
 ) (map[workspaceapi.URI]map[string]string, error) {
-	type fileImports = map[workspaceapi.URI]map[string]string
+	type fileImports = map[workspaceapi.URI][]string
+	type fileAliases = map[workspaceapi.URI]map[string]string
 
 	pathIter, err := parser.Search(
 		`(import_spec path: (interpreted_string_literal) @path)`,
@@ -192,17 +184,10 @@ func resolveImportPaths(
 	imports, err := iterator.Reduce(ctx, pathIter,
 		func(m fileImports, r syntaxapi.Result) (fileImports, error) {
 			p := strings.Trim(r.Text, `"`)
-			alias := path.Base(p)
-			if alias == "." || alias == "_" {
-				return m, nil
-			}
 			if m == nil {
 				m = make(fileImports)
 			}
-			if m[r.File] == nil {
-				m[r.File] = make(map[string]string)
-			}
-			m[r.File][alias] = p
+			m[r.File] = append(m[r.File], p)
 			return m, nil
 		},
 	)
@@ -217,28 +202,46 @@ func resolveImportPaths(
 	if err != nil {
 		return nil, err
 	}
-	_, err = iterator.Reduce(ctx, pairedResults(aliasIter),
-		func(_ struct{}, p [2]syntaxapi.Result) (struct{}, error) {
+	explicitAliases, err := iterator.Reduce(ctx, pairedResults(aliasIter),
+		func(m fileAliases, p [2]syntaxapi.Result) (fileAliases, error) {
 			alias := p[0].Text
-			if alias == "." || alias == "_" || imports == nil {
-				return struct{}{}, nil
+			if alias == "." || alias == "_" {
+				return m, nil
 			}
 			importPath := strings.Trim(p[1].Text, `"`)
-			defaultAlias := path.Base(importPath)
-			if fm := imports[p[0].File]; fm != nil {
-				delete(fm, defaultAlias)
-				fm[alias] = importPath
+			if m == nil {
+				m = make(fileAliases)
 			}
-			return struct{}{}, nil
+			if m[p[0].File] == nil {
+				m[p[0].File] = make(map[string]string)
+			}
+			m[p[0].File][importPath] = alias
+			return m, nil
 		},
 	)
 	if err != nil {
 		return nil, err
 	}
-	if imports == nil {
-		imports = make(fileImports)
+	resolved := make(map[workspaceapi.URI]map[string]string, len(imports))
+	for file, paths := range imports {
+		aliases := make(map[string]string)
+		for _, importPath := range paths {
+			alias := path.Base(importPath)
+			if fileAliases := explicitAliases[file]; fileAliases != nil {
+				if explicitAlias, ok := fileAliases[importPath]; ok {
+					alias = explicitAlias
+				}
+			}
+			if alias == "." || alias == "_" {
+				continue
+			}
+			aliases[alias] = importPath
+		}
+		if len(aliases) > 0 {
+			resolved[file] = aliases
+		}
 	}
-	return imports, nil
+	return resolved, nil
 }
 
 // deduplicateByImport collapses matches that reference the same
@@ -262,6 +265,7 @@ func deduplicateByImport(
 		if fileImports := lookup[m.URI]; fileImports != nil {
 			if importPath, ok := fileImports[alias]; ok {
 				key = importPath
+				m.ImportPath = importPath
 			}
 		}
 		if seen[key] {
