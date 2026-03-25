@@ -25,6 +25,7 @@ package lspcmd
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"unicode/utf8"
@@ -131,6 +132,9 @@ type completeHandler struct {
 }
 
 func (h *completeHandler) HandleCommand(ctx context.Context, cmd textapi.Command) error {
+	if cmd.Resource == nil {
+		return fmt.Errorf("no file open; open a file first")
+	}
 	params := semanticapi.CompletionParams{
 		TextDocument: TextDocID(cmd.URI),
 		Position:     CoordToPos(cmd.Cursor.Content),

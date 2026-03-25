@@ -133,6 +133,68 @@ func TestRouterCompleteSymbol(t *testing.T) {
 	}
 }
 
+func TestRouterNilResource(t *testing.T) {
+	t.Parallel()
+
+	rootURI, err := workspaceapi.ParseURI("file:///project")
+	require.NoError(t, err)
+
+	cfg := DefaultConfig()
+	cfg.RootURI = rootURI
+	cfg.ScheduleNextTick = syncTick
+	cfg.Interrupter = term.NopInterrupter()
+	cfg.Parser = &mockParser{}
+	router, err := AllHandler(
+		&mockLSP{}, &mockEditor{}, &mockWindowManager{},
+		&mockResourceOpener{}, &mockNotifications{},
+		&mockFileSystem{}, cfg.Parser, cfg,
+	)
+	require.NoError(t, err)
+
+	// Cursor-only commands should return an error when no file is open.
+	cursorOnly := []string{"format", "complete", "signature-help", "rename"}
+	for _, sub := range cursorOnly {
+		t.Run(sub+" no file", func(t *testing.T) {
+			cmd := textapi.Command{
+				Name: "lsp",
+				Args: []string{sub},
+			}
+			err := router.HandleCommand(context.Background(), cmd)
+			require.Error(t, err, "expected error for %s with nil Resource", sub)
+			assert.Contains(t, err.Error(), "no file open")
+		})
+	}
+
+	// Symbol-accepting commands with no args should return an error.
+	symbolCmds := []string{
+		"hover", "definition", "declaration",
+		"type-definition", "implementation", "references",
+	}
+	for _, sub := range symbolCmds {
+		t.Run(sub+" no args no file", func(t *testing.T) {
+			cmd := textapi.Command{
+				Name: "lsp",
+				Args: []string{sub},
+			}
+			err := router.HandleCommand(context.Background(), cmd)
+			require.Error(t, err, "expected error for %s with nil Resource and no args", sub)
+			assert.Contains(t, err.Error(), "no file open")
+		})
+	}
+
+	// Symbol-accepting commands with args should NOT error (async resolution).
+	for _, sub := range symbolCmds {
+		t.Run(sub+" with args no file", func(t *testing.T) {
+			cmd := textapi.Command{
+				Name: "lsp",
+				Args: []string{sub, "fmt.Println"},
+			}
+			err := router.HandleCommand(context.Background(), cmd)
+			require.NoError(t, err, "%s with symbol arg should proceed without error", sub)
+		})
+	}
+}
+
 func TestRouterCompleteReferencedSymbolFallback(t *testing.T) {
 	t.Parallel()
 
