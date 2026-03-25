@@ -108,9 +108,10 @@ func TestResolveSymbol(t *testing.T) {
 				{File: fileC, Text: "Println", From: term.Coordinates{X: 5, Y: 10}, CaptureName: "symbol"},
 			},
 			wantMatches: []symbolMatch{{
-				URI:     fileA.String(),
-				Pos:     semanticapi.Position{Line: 5, Character: 5},
-				Display: "fmt.Println",
+				URI:        fileA.String(),
+				Pos:        semanticapi.Position{Line: 5, Character: 5},
+				Display:    "fmt.Println",
+				ImportPath: "fmt",
 			}},
 		},
 		{
@@ -127,8 +128,34 @@ func TestResolveSymbol(t *testing.T) {
 				{File: fileC, Text: "Info", From: term.Coordinates{X: 5, Y: 10}, CaptureName: "symbol"},
 			},
 			wantMatches: []symbolMatch{
-				{URI: fileA.String(), Pos: semanticapi.Position{Line: 5, Character: 5}, Display: "pkg: log.Info"},
-				{URI: fileC.String(), Pos: semanticapi.Position{Line: 10, Character: 5}, Display: "other: log.Info"},
+				{URI: fileA.String(), Pos: semanticapi.Position{Line: 5, Character: 5}, Display: "github.com/pkg/log: log.Info", ImportPath: "github.com/pkg/log"},
+				{URI: fileC.String(), Pos: semanticapi.Position{Line: 10, Character: 5}, Display: "github.com/other/log: log.Info", ImportPath: "github.com/other/log"},
+			},
+		},
+		{
+			name:  "same base package with explicit alias deduplicates to two imports",
+			query: "iterator.Iterator",
+			imports: []syntaxapi.Result{
+				{File: fileA, Text: `"github.com/unstablebuild/blue/iterator"`, CaptureName: "path"},
+				{File: fileA, Text: `"github.com/unstablebuild/rune-go-sdk/iterator"`, CaptureName: "path"},
+				{File: fileB, Text: `"github.com/unstablebuild/blue/iterator"`, CaptureName: "path"},
+				{File: fileC, Text: `"github.com/unstablebuild/rune-go-sdk/iterator"`, CaptureName: "path"},
+			},
+			aliases: []syntaxapi.Result{
+				{File: fileA, Text: "sdkiterator", CaptureName: "alias"},
+				{File: fileA, Text: `"github.com/unstablebuild/rune-go-sdk/iterator"`, CaptureName: "path"},
+			},
+			types: []syntaxapi.Result{
+				{File: fileA, Text: "iterator", From: term.Coordinates{X: 1, Y: 5}, CaptureName: "pkg"},
+				{File: fileA, Text: "Iterator", From: term.Coordinates{X: 10, Y: 5}, CaptureName: "type"},
+				{File: fileB, Text: "iterator", From: term.Coordinates{X: 1, Y: 10}, CaptureName: "pkg"},
+				{File: fileB, Text: "Iterator", From: term.Coordinates{X: 10, Y: 10}, CaptureName: "type"},
+				{File: fileC, Text: "iterator", From: term.Coordinates{X: 1, Y: 15}, CaptureName: "pkg"},
+				{File: fileC, Text: "Iterator", From: term.Coordinates{X: 10, Y: 15}, CaptureName: "type"},
+			},
+			wantMatches: []symbolMatch{
+				{URI: fileA.String(), Pos: semanticapi.Position{Line: 5, Character: 10}, Display: "github.com/unstablebuild/blue/iterator: iterator.Iterator", ImportPath: "github.com/unstablebuild/blue/iterator"},
+				{URI: fileC.String(), Pos: semanticapi.Position{Line: 15, Character: 10}, Display: "github.com/unstablebuild/rune-go-sdk/iterator: iterator.Iterator", ImportPath: "github.com/unstablebuild/rune-go-sdk/iterator"},
 			},
 		},
 		{
@@ -588,7 +615,6 @@ func TestCompleteReferencedSymbol(t *testing.T) {
 		})
 	}
 }
-
 
 // benchmarkData builds mock parser data at realistic scale.
 // Real workspace profile: ~2200 imports, ~170 aliases, ~10K qualified types, ~24K selectors.
