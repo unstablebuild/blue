@@ -25,7 +25,7 @@ require (
 	github.com/unstablebuild/tcell/v3 v3.6.3
 	github.com/willf/pad v0.0.0-20200313202418-172aa767f2a4
 	github.com/yuin/goldmark v1.7.1
-	go.etcd.io/bbolt v1.3.4
+	go.etcd.io/bbolt v1.4.3
 	go.uber.org/config v1.4.0
 	go.uber.org/goleak v1.3.0
 	go.uber.org/mock v0.4.0
@@ -91,7 +91,7 @@ require (
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
 	golang.org/x/mod v0.32.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	golang.org/x/tools v0.41.0 // indirect
