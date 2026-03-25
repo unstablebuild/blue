@@ -177,16 +177,7 @@ func (s *Server) Delete(
 	return
 }
 
-func (s *Server) streamList(list docpb.DocumentStore_ListServer, it document.Iterator, fields []string) (err error) {
-	// Build a set for O(1) lookup; nil means "no projection".
-	var fieldSet map[string]struct{}
-	if len(fields) > 0 {
-		fieldSet = make(map[string]struct{}, len(fields))
-		for _, f := range fields {
-			fieldSet[f] = struct{}{}
-		}
-	}
-
+func (s *Server) streamList(list docpb.DocumentStore_ListServer, it document.Iterator) (err error) {
 	for it.HasNext() {
 		var pr map[string]interface{}
 		err = it.NextTo(&pr)
@@ -194,13 +185,6 @@ func (s *Server) streamList(list docpb.DocumentStore_ListServer, it document.Ite
 		if err != nil {
 			res.Error = err.Error()
 		} else {
-			if fieldSet != nil {
-				for k := range pr {
-					if _, ok := fieldSet[k]; !ok {
-						delete(pr, k)
-					}
-				}
-			}
 			res.Data = document.Encode(s.marshaler, pr, false)
 		}
 		err = list.SendMsg(&res)
@@ -232,5 +216,5 @@ func (s *Server) List(
 		return err
 	}
 
-	return s.streamList(list, it, req.GetFields())
+	return s.streamList(list, it)
 }

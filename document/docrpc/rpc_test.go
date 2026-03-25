@@ -29,7 +29,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/document/docmarshal"
@@ -182,74 +181,6 @@ func (h interopHelper) Close() error {
 		return err1
 	}
 	return err2
-}
-
-func TestListWithFieldProjection(t *testing.T) {
-	marshaler := docbson.Marshaler()
-	cache := document.NewInMemoryServiceWithMarshaler(marshaler)
-	addr, teardown := runDatastoreServer(t, cache, marshaler)
-	defer teardown()
-
-	store, err := NewClient(addr, marshaler,
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	defer func() { require.NoError(t, store.Close()) }()
-
-	ctx := context.Background()
-
-	// Create a document with multiple fields.
-	doc := map[string]any{
-		"name":  "alice",
-		"email": "alice@example.com",
-		"age":   30,
-	}
-	require.NoError(t, store.Create(ctx, "1", doc))
-
-	t.Run("with projection returns only requested fields", func(t *testing.T) {
-		pctx := WithFields(ctx, "name")
-		it, err := store.List(pctx, nil)
-		require.NoError(t, err)
-		defer func() { require.NoError(t, it.Close()) }()
-
-		require.True(t, it.HasNext())
-		var result map[string]any
-		require.NoError(t, it.NextTo(&result))
-
-		assert.Equal(t, "alice", result["name"])
-		// These fields should NOT be present.
-		assert.Nil(t, result["email"])
-		assert.Nil(t, result["age"])
-		assert.False(t, it.HasNext())
-	})
-
-	t.Run("without projection returns all fields", func(t *testing.T) {
-		it, err := store.List(ctx, nil)
-		require.NoError(t, err)
-		defer func() { require.NoError(t, it.Close()) }()
-
-		require.True(t, it.HasNext())
-		var result map[string]any
-		require.NoError(t, it.NextTo(&result))
-
-		assert.Equal(t, "alice", result["name"])
-		assert.Equal(t, "alice@example.com", result["email"])
-		assert.False(t, it.HasNext())
-	})
-
-	t.Run("with empty fields returns all fields", func(t *testing.T) {
-		pctx := WithFields(ctx)
-		it, err := store.List(pctx, nil)
-		require.NoError(t, err)
-		defer func() { require.NoError(t, it.Close()) }()
-
-		require.True(t, it.HasNext())
-		var result map[string]any
-		require.NoError(t, it.NextTo(&result))
-
-		assert.Equal(t, "alice", result["name"])
-		assert.Equal(t, "alice@example.com", result["email"])
-		assert.False(t, it.HasNext())
-	})
 }
 
 func TestRPCInterop(t *testing.T) {
