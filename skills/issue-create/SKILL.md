@@ -45,85 +45,57 @@ metadata:
 
 ## Conversation flow
 
-Ask questions in **batches** where possible, grouping short
-questions together to reduce round-trips. Wait for answers
-before proceeding to the next batch.
+**Batch questions aggressively.** Never ask just one question
+when you could ask several. The goal is to minimize round-trips.
 
-### Step 1 - Initial questions (ask all at once)
+### Round 1 — Collect everything upfront
 
-Ask these questions together in a single message:
+Ask all of the following in a **single** round:
 
 1. **Category** — What kind of feedback is this?
-   - Bug report
-   - Feature request
-   - General feedback / improvement idea
+   Options: Bug report · Feature request · General feedback
 2. **Package** — Which package does this relate to?
-   (If you can infer from the current working directory, suggest it.)
-3. **Subject** — A short one-line summary of the issue.
-4. **Repositories** — Which repositories should be looked at?
-   (Default: current working directory. Only ask if the work might
-   span other repos.)
-5. **Dependencies** — Does this issue depend on any other issues
-   being completed first? (If none, skip.)
-
-If the category is **bug report**, also ask:
+   Try to infer from the current working directory. If you can
+   infer it confidently, pre-fill and skip this question.
+3. **Subject** — Short one-line summary of the issue.
+   (free-form text)
+4. **Details** — Full description of the issue.
+   (free-form text — tell the user what to include based on
+   common sense: behavior, context, rationale, errors, etc.)
+5. **Repositories** — Which repos should be looked at?
+   Default: current working directory. Only ask if not obvious.
 6. **Version** — Which version or commit does this apply to?
-   (Accept a tag, commit hash, or "latest" / empty.)
+   Accept a tag, hash, "latest", or empty.
+7. **Dependencies** — Does this depend on other issues?
+   Accept issue IDs or "none".
 
-### Step 2 - Duplicate check
+If the user already provided some of this information in their
+initial message, do NOT re-ask for it. Only ask for what's missing.
+If everything is already provided, skip straight to the duplicate
+check.
 
-Once you know the package, check whether a similar issue already exists.
+### Round 2 — Duplicate check + validate dependencies
 
-Run `bluectl issue list <package>` and scan the output for issues
-with a similar subject. If any look like potential duplicates,
-present them to the user:
+Run `bluectl issue list <package>` and scan for similar issues.
 
-> I found these existing issues for **<package>**:
-> - **<ID>**: <subject>
-> - ...
->
-> Do any of these already cover your feedback?
-
-- If the user confirms a duplicate, stop and point them to the
-  existing issue ID.
-- If no duplicates or the user says none match, continue.
-- If the list is empty, continue.
-
-### Step 3 - Validate dependencies
+- If potential duplicates exist, present them and ask if any match.
+  If the user confirms a duplicate, stop.
+- If no duplicates (or the list is empty), continue automatically.
 
 If the user provided dependency issue IDs, **verify each one exists**
-by running `bluectl issue get <id>` for each ID. If any ID does not
-exist, tell the user and ask them to correct it. Only accept IDs
-that resolve to real issues.
+by running `bluectl issue get <id>`. If any ID does not exist, tell
+the user and ask them to correct it. Validated IDs are stored as a
+comma-separated list in the `depends` metadata field
+(e.g. `depends: "ISSUE-1, ISSUE-2"`).
 
-Once validated, these will be stored as a comma-separated list in
-the `depends` metadata field (e.g. `depends: "ISSUE-1, ISSUE-2"`).
-
-### Step 4 - Details
-
-Depending on the category:
-
-**Bug report** - ask for:
-- What happened (actual behavior)
-- What was expected
-- Steps to reproduce (if known)
-- Any error messages, panics, or stack traces
-
-**Feature request** - ask for:
-- What problem the feature solves
-- How they'd expect it to work
-- Any alternatives they considered
-
-**General feedback** - ask for:
-- A description of the improvement or observation
-
-### Step 5 - Research the codebase
+### Round 3 — Research the codebase
 
 Before writing the plan, use the Explore agent to research the
 relevant repositories. The goal is to understand the code well
 enough to write specific, actionable implementation steps — not
 just list related files.
 
+Use the Explore agent to research the relevant repositories.
 Spawn an Explore agent with a prompt that:
 - Searches the collected repository paths
 - Finds the specific files, functions, and types that will need
@@ -133,10 +105,10 @@ Spawn an Explore agent with a prompt that:
 - Returns concrete findings: file paths, symbol names, function
   signatures, and how they relate to each other
 
-### Step 6 - Write the implementation plan
+### Round 4 — Confirm and file
 
-Present a summary of the collected information to the user and ask
-for confirmation. Then produce the plan below.
+Present a summary of everything collected **and** the research
+findings. Ask the user for confirmation, then produce the plan.
 
 ## Writing the implementation plan
 
@@ -197,9 +169,10 @@ Then output:
 
 ## Rules
 
-- Be concise. Batch short questions together to reduce round-trips.
+- Be concise. Batch questions — never ask one at a time.
+- Minimize round-trips. 2-3 user interactions max (excluding confirmation).
+- If the user provides information upfront, skip those questions entirely.
 - Do NOT create the issue yourself. Only produce the plan.
-- If the user provides all information upfront, skip to confirmation.
 - Always confirm the final summary before producing the plan.
 - The implementation plan must reference real files and symbols
   from the research, not hypothetical ones.
