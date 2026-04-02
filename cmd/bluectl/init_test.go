@@ -41,6 +41,7 @@ import (
 const (
 	testTempDirPrefix        = "test_blue"
 	defaultReleaseCollection = "blue-release"
+	defaultReleaseBucket     = "blue-release"
 	defaultIssueCollection   = "blue-issue"
 	defaultSecretsCollection = "blue-secret"
 )
@@ -95,6 +96,7 @@ func testInitializerRun(t *testing.T, dirName string, projectID string) {
 	var expectedConfig cliConfig
 	expectedConfig.Auth.ProjectID = projectID
 	expectedConfig.Release.Collection = defaultReleaseCollection
+	expectedConfig.Release.Bucket = defaultReleaseBucket
 	expectedConfig.Issue.Collection = defaultIssueCollection
 	expectedConfig.Password.Collection = defaultSecretsCollection
 
@@ -125,6 +127,7 @@ func TestInitializerRun(t *testing.T) {
 		var config cliConfig
 		config.Auth.ProjectID = "4321"
 		config.Release.Collection = defaultReleaseCollection
+		config.Release.Bucket = defaultReleaseBucket
 		config.Issue.Collection = defaultIssueCollection
 		config.Password.Collection = defaultSecretsCollection
 		require.NoError(t, encodeConfig(f, &config))

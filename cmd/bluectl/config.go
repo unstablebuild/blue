@@ -31,6 +31,7 @@ auth:
   credentials-file:
 release:
   collection: blue-release
+  bucket: blue-release
 issue:
   collection: blue-issue
 password:
@@ -46,6 +47,11 @@ type collectionConfig struct {
 	Collection string `yaml:"collection"`
 }
 
+type releaseConfig struct {
+	Collection string `yaml:"collection"`
+	Bucket     string `yaml:"bucket"`
+}
+
 type issueConfig struct {
 	Collection string `yaml:"collection"`
 	Author     string `yaml:"author"`
@@ -53,7 +59,7 @@ type issueConfig struct {
 
 type cliConfig struct {
 	Auth     authConfig       `yaml:"auth"`
-	Release  collectionConfig `yaml:"release"`
+	Release  releaseConfig    `yaml:"release"`
 	Issue    issueConfig      `yaml:"issue"`
 	Password collectionConfig `yaml:"password"`
 }

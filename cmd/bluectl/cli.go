@@ -29,6 +29,7 @@ import (
 	"io"
 	"os"
 
+	"cloud.google.com/go/storage"
 	multierr "github.com/ernestrc/go-multierror"
 	"github.com/unstablebuild/blue/auth/secretmanager"
 	"github.com/unstablebuild/blue/cli"
@@ -40,6 +41,7 @@ import (
 	"github.com/unstablebuild/blue/issue"
 	"github.com/unstablebuild/blue/logging"
 	"github.com/unstablebuild/blue/release/docrelease"
+	"github.com/unstablebuild/blue/release/gcsrelease"
 )
 
 type blueCtl struct {
@@ -117,6 +119,29 @@ func (c *blueCtl) Man() cli.Manual {
 	}
 }
 
+func (c *blueCtl) newReleaseManager(init initializer, configFilePath string) (*gcsrelease.Manager, error) {
+	config, err := initializeConfig(init, configFilePath)
+	if err != nil {
+		return nil, err
+	}
+	docDB, err := firestore.New(config.Auth.ProjectID,
+		config.Release.Collection, config.Auth.CredentialsFile)
+	if err != nil {
+		return nil, fmt.Errorf("firestore: %w", err)
+	}
+	c.closers = append(c.closers, docDB)
+
+	gcsClient, err := storage.NewClient(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("gcs: %w", err)
+	}
+	c.closers = append(c.closers, gcsClient)
+
+	bucket := gcsClient.Bucket(config.Release.Bucket)
+	inner := docrelease.NewManager(docDB)
+	return gcsrelease.NewManager(inner, gcsrelease.NewBucket(bucket)), nil
+}
+
 func (c *blueCtl) initializeCli() error {
 	configFilePath := getCLIConfigFile(c.configFolder)
 	init := newInitializer(c.configFolder)
@@ -124,32 +149,18 @@ func (c *blueCtl) initializeCli() error {
 	c.cmds = map[string]cli.CLI{
 		"init": init,
 		"release": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
-			config, err := initializeConfig(init, configFilePath)
+			m, err := c.newReleaseManager(init, configFilePath)
 			if err != nil {
 				return nil, err
 			}
-			docDB, err := firestore.New(config.Auth.ProjectID,
-				config.Release.Collection, config.Auth.CredentialsFile)
-			if err != nil {
-				return nil, fmt.Errorf("firestore: %w", err)
-			}
-			c.closers = append(c.closers, docDB)
-			releaseManager := docrelease.NewManager(docDB)
-			return releaseCLI.NewCLI(releaseManager), nil
+			return releaseCLI.NewCLI(m), nil
 		}),
 		"package": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
-			config, err := initializeConfig(init, configFilePath)
+			m, err := c.newReleaseManager(init, configFilePath)
 			if err != nil {
 				return nil, err
 			}
-			docDB, err := firestore.New(config.Auth.ProjectID,
-				config.Release.Collection, config.Auth.CredentialsFile)
-			if err != nil {
-				return nil, fmt.Errorf("firestore: %w", err)
-			}
-			c.closers = append(c.closers, docDB)
-			releaseManager := docrelease.NewManager(docDB)
-			return packageCLI.NewCLI(releaseManager), nil
+			return packageCLI.NewCLI(m), nil
 		}),
 		"secret": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
 			config, err := initializeConfig(init, configFilePath)
