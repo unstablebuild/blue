@@ -40,9 +40,10 @@ import (
 )
 
 const (
-	redirectCallType   = "oauth2Redirect"
-	loggingClass       = "auth"
+	redirectCallType    = "oauth2Redirect"
+	loggingClass        = "auth"
 	defaultRedirectPath = "/o/oauth2/redirect"
+	defaultSuccessHTML  = "Success! Please close this tab."
 )
 
 // ClientOption configures the OAuth2 client flow.
@@ -51,6 +52,7 @@ type ClientOption func(*clientConfig)
 type clientConfig struct {
 	redirectPath    string
 	authCodeOptions []oauth2.AuthCodeOption
+	successHTML     string
 }
 
 // WithRedirectPath overrides the default callback path
@@ -67,15 +69,23 @@ func WithAuthCodeOptions(opts ...oauth2.AuthCodeOption) ClientOption {
 	return func(c *clientConfig) { c.authCodeOptions = append(c.authCodeOptions, opts...) }
 }
 
+// WithSuccessHTML overrides the HTML body shown to the user's browser
+// once the OAuth2 redirect handler has received the callback. The
+// default is a plain "Success! Please close this tab." message; pass
+// a fully-formed HTML document here to brand the page.
+func WithSuccessHTML(html string) ClientOption {
+	return func(c *clientConfig) { c.successHTML = html }
+}
+
 // NewClient starts an oauth2 like NewClientWithPorts but
 // will setup a callback listener on a random port.
 // See NewClientWithPorts for more details.
 func NewClient(
 	ctx context.Context, conf oauth2.Config,
-	visitURLCallback func(string) error, successBrowserCopy string,
+	visitURLCallback func(string) error,
 	opts ...ClientOption,
 ) (*http.Client, oauth2.TokenSource, error) {
-	return NewClientWithPorts(ctx, conf, visitURLCallback, successBrowserCopy, nil, opts...)
+	return NewClientWithPorts(ctx, conf, visitURLCallback, nil, opts...)
 }
 
 // NewClientWithPorts starts a oauth2 flow with the given oaut2 config
@@ -93,10 +103,13 @@ func NewClient(
 // to this constructor.
 func NewClientWithPorts(
 	ctx context.Context, conf oauth2.Config,
-	visitURLCallback func(string) error, successBrowserCopy string,
+	visitURLCallback func(string) error,
 	tryPorts []int, opts ...ClientOption,
 ) (*http.Client, oauth2.TokenSource, error) {
-	cfg := clientConfig{redirectPath: defaultRedirectPath}
+	cfg := clientConfig{
+		redirectPath: defaultRedirectPath,
+		successHTML:  defaultSuccessHTML,
+	}
 	for _, o := range opts {
 		o(&cfg)
 	}
@@ -110,7 +123,7 @@ func NewClientWithPorts(
 	defer func() { _ = srv.Close() }()
 
 	go serveRedirects(ctx, &srv, csrfToken, resChan,
-		readyChan, successBrowserCopy, tryPorts)
+		readyChan, cfg.successHTML, tryPorts)
 
 	select {
 	case readyResult := <-readyChan:
@@ -281,11 +294,7 @@ func (h redirectHandler) ServeHTTP(
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	body := h.doneCopy
-	if body == "" {
-		body = defaultSuccessHTML
-	}
-	_, err := w.Write([]byte(body))
+	_, err := w.Write([]byte(h.doneCopy))
 
 	h.ch <- tokenResult{data: code}
 	logging.LogResultInfo(err, attemptAt, traceID, redirectCallType, fields...)
