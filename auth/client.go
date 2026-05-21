@@ -279,9 +279,13 @@ func (h redirectHandler) ServeHTTP(
 		{Key: "URL", Value: r.URL.String()},
 	}
 
-	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	_, err := w.Write([]byte(h.doneCopy))
+	body := h.doneCopy
+	if body == "" {
+		body = defaultSuccessHTML
+	}
+	_, err := w.Write([]byte(body))
 
 	h.ch <- tokenResult{data: code}
 	logging.LogResultInfo(err, attemptAt, traceID, redirectCallType, fields...)
