@@ -458,3 +458,70 @@ func TestCDNManager(t *testing.T) {
 		assert.Equal(t, ErrReadOnly, m.Delete(ctx, "pkg", "1.0.0"))
 	})
 }
+
+// TestStatusError verifies that non-2xx responses from the API are
+// returned as a *StatusError that callers can recover via errors.As,
+// without having to string-match the formatted error message.
+func TestStatusError(t *testing.T) {
+	ctx := context.Background()
+
+	cases := []struct {
+		name   string
+		status int
+	}{
+		{"forbidden", http.StatusForbidden},
+		{"unauthorized", http.StatusUnauthorized},
+		{"not found", http.StatusNotFound},
+		{"internal", http.StatusInternalServerError},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, http.StatusText(tc.status), tc.status)
+			}))
+			defer srv.Close()
+			m := NewManager(srv.Client(), srv.URL)
+
+			_, err := m.GetPackage(ctx, "blue")
+			require.Error(t, err)
+
+			var se *StatusError
+			require.True(t, errors.As(err, &se), "want *StatusError, got %T: %v", err, err)
+			assert.Equal(t, tc.status, se.Status)
+			assert.Contains(t, se.URL, "/packages/blue")
+		})
+	}
+}
+
+// TestStatusError_DownloadStatus verifies that a non-2xx response
+// from the signed-URL download is also surfaced as *StatusError.
+func TestStatusError_DownloadStatus(t *testing.T) {
+	ctx := context.Background()
+
+	bundle := release.Bundle{Package: "blue", Version: "1.0.0"}
+	inner := &mockReleaseManager{
+		getFn: func(_ context.Context, _ string, _ release.Version, _ release.ProgressWriter) (release.Bundle, error) {
+			return bundle, nil
+		},
+	}
+	dataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	defer dataServer.Close()
+	signerMock := &mockSigner{
+		signFn: func(_ context.Context, _ string, _ release.Version) (string, error) {
+			return dataServer.URL + "/data", nil
+		},
+	}
+
+	m, srv, _ := newTestSetup(inner, signerMock, nil)
+	defer srv.Close()
+
+	var buf bytes.Buffer
+	_, err := m.Get(ctx, "blue", "1.0.0", release.NopProgressWriter(&buf))
+	require.Error(t, err)
+
+	var se *StatusError
+	require.True(t, errors.As(err, &se), "want *StatusError, got %T: %v", err, err)
+	assert.Equal(t, http.StatusForbidden, se.Status)
+}

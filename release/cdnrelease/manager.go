@@ -44,6 +44,30 @@ const sha256MetadataKey = "sha256"
 // ErrReadOnly is returned by write operations.
 var ErrReadOnly = errors.New("cdnrelease: read-only manager does not support write operations")
 
+// StatusError is returned by Manager methods when an HTTP response
+// reports a non-2xx status. Callers can recover it via errors.As to
+// branch on the HTTP status without string-matching the error message:
+//
+//	var se *cdnrelease.StatusError
+//	if errors.As(err, &se) && se.Status == http.StatusForbidden { ... }
+type StatusError struct {
+	// URL is the request URL that produced the non-2xx response. For
+	// errors from the signed-URL data download, URL is empty.
+	URL string
+	// Status is the HTTP status code returned by the server.
+	Status int
+}
+
+func (e *StatusError) Error() string {
+	if e.URL == "" {
+		return fmt.Sprintf("cdnrelease: download returned status %d", e.Status)
+	}
+	if e.Status == http.StatusNotFound {
+		return fmt.Sprintf("cdnrelease: %s: not found", e.URL)
+	}
+	return fmt.Sprintf("cdnrelease: %s: status %d", e.URL, e.Status)
+}
+
 // downloadResponse mirrors gcsrelease.DownloadResponse without importing it.
 type downloadResponse struct {
 	Bundle release.Bundle `json:"bundle"`
@@ -133,7 +157,7 @@ func (m *Manager) Get(ctx context.Context, pkg string, ver release.Version, out 
 	defer func() { _ = dataResp.Body.Close() }()
 
 	if dataResp.StatusCode != http.StatusOK {
-		return release.Bundle{}, fmt.Errorf("cdnrelease: download returned status %d", dataResp.StatusCode)
+		return release.Bundle{}, &StatusError{Status: dataResp.StatusCode}
 	}
 
 	hasher := sha256.New()
@@ -202,11 +226,8 @@ func (m *Manager) getJSON(ctx context.Context, url string, v any) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("cdnrelease: %s: not found", url)
-	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("cdnrelease: %s: status %d", url, resp.StatusCode)
+		return &StatusError{URL: url, Status: resp.StatusCode}
 	}
 	return json.NewDecoder(resp.Body).Decode(v)
 }
