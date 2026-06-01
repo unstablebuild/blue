@@ -55,37 +55,50 @@ var (
 type Store struct {
 	marshaler docmarshal.Marshaler
 	db        *bolt.DB
+	dbPath    string
 	collID    []byte
 }
 
 // New allocates store for a new Store and initializes it with the given
 // dbPath and collectionID.
 func New(dbPath string, collectionID string) (*Store, error) {
+	return NewWithMarshaler(dbPath, collectionID, docbson.Marshaler())
+}
+
+// NewWithMarshaler allocates a new Store using the given marshaler for
+// encoding stored documents. Callers that need the storage marshaler to
+// match the wire marshaler used elsewhere (for type-strict CAS preconditions
+// to round-trip identically) should pass the wire marshaler here.
+func NewWithMarshaler(
+	dbPath string, collectionID string, marshaler docmarshal.Marshaler,
+) (*Store, error) {
 	mu.Lock()
-	defer mu.Unlock()
 	if dbs[dbPath] == nil {
 		mu.Unlock()
 		db, err := bolt.Open(dbPath, 0600, &options)
 		mu.Lock()
 		if err != nil {
 			err = fmt.Errorf("could not open DB at path %s: %v", dbPath, err)
+			mu.Unlock()
 			return nil, err
 		}
 		dbs[dbPath] = db
 	}
 
 	db := dbs[dbPath]
+	mu.Unlock()
 
 	collID := []byte(collectionID)
 	s := &Store{
 		db:     db,
+		dbPath: dbPath,
 		collID: collID,
 	}
 	err := s.createBucketIfNotExists()
 	if err != nil {
 		return nil, err
 	}
-	s.marshaler = docbson.Marshaler()
+	s.marshaler = marshaler
 	return s, nil
 }
 
@@ -99,8 +112,16 @@ func (s *Store) createBucketIfNotExists() error {
 	})
 }
 
-// Close closes all resources associated with this Store .
+// Close closes all resources associated with this Store. The shared
+// *bolt.DB cached by the package-level dbs map is also evicted, so a
+// subsequent New call against the same dbPath opens a fresh DB instead
+// of returning the closed handle.
 func (s *Store) Close() error {
+	mu.Lock()
+	if cached, ok := dbs[s.dbPath]; ok && cached == s.db {
+		delete(dbs, s.dbPath)
+	}
+	mu.Unlock()
 	return s.db.Close()
 }
 
@@ -178,7 +199,7 @@ func (s *Store) Update(
 			return err
 		}
 
-		err = document.UpdateProto(docbson.Marshaler(), updates, doc, preconds...)
+		err = document.UpdateProto(s.marshaler, updates, doc, preconds...)
 		if err != nil {
 			return err
 		}
