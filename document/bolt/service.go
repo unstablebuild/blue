@@ -45,9 +45,18 @@ var (
 	// and often we want to instante multiple bolt.Store's
 	// in the same db path, one per collection.
 	mu      sync.Mutex
-	dbs     = make(map[string]*bolt.DB)
+	dbs     = make(map[string]*sharedDB)
 	options = bolt.Options{Timeout: defaultBoltTimeout}
 )
+
+// sharedDB tracks how many live Stores reference a single *bolt.DB so the
+// last Close releases the underlying handle. Multiple Stores (one per
+// collection, or one per consumer of the same path) share a DB by design,
+// so closing one must not evict the handle the others still use.
+type sharedDB struct {
+	db   *bolt.DB
+	refs int
+}
 
 // Store implements a document.Service backed by a local, embedded bolt DB.
 // It additionally provides a method to efficiently delete all
@@ -82,10 +91,19 @@ func NewWithMarshaler(
 			mu.Unlock()
 			return nil, err
 		}
-		dbs[dbPath] = db
+		// Another caller may have opened and cached the same path while
+		// this goroutine had the lock released for bolt.Open; close the
+		// redundant handle and reuse the cached one.
+		if dbs[dbPath] == nil {
+			dbs[dbPath] = &sharedDB{db: db}
+		} else {
+			_ = db.Close()
+		}
 	}
 
-	db := dbs[dbPath]
+	shared := dbs[dbPath]
+	shared.refs++
+	db := shared.db
 	mu.Unlock()
 
 	collID := []byte(collectionID)
@@ -96,6 +114,7 @@ func NewWithMarshaler(
 	}
 	err := s.createBucketIfNotExists()
 	if err != nil {
+		_ = s.Close()
 		return nil, err
 	}
 	s.marshaler = marshaler
@@ -112,15 +131,23 @@ func (s *Store) createBucketIfNotExists() error {
 	})
 }
 
-// Close closes all resources associated with this Store. The shared
-// *bolt.DB cached by the package-level dbs map is also evicted, so a
-// subsequent New call against the same dbPath opens a fresh DB instead
-// of returning the closed handle.
+// Close releases this Store's reference to the shared *bolt.DB. The
+// underlying handle is closed (and evicted from the package-level dbs
+// cache) only when the last Store referencing the path closes, so sibling
+// Stores opened against the same dbPath keep working.
 func (s *Store) Close() error {
 	mu.Lock()
-	if cached, ok := dbs[s.dbPath]; ok && cached == s.db {
-		delete(dbs, s.dbPath)
+	shared, ok := dbs[s.dbPath]
+	if !ok || shared.db != s.db {
+		mu.Unlock()
+		return nil
 	}
+	shared.refs--
+	if shared.refs > 0 {
+		mu.Unlock()
+		return nil
+	}
+	delete(dbs, s.dbPath)
 	mu.Unlock()
 	return s.db.Close()
 }

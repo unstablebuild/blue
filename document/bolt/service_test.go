@@ -156,3 +156,35 @@ func TestBolt(t *testing.T) {
 	})
 
 }
+
+// TestCloseSharedDBLifecycle verifies that closing one Store does not pull
+// the process-shared *bolt.DB out from under sibling Stores opened against
+// the same path. Without reference counting, the survivor fails with
+// "database not open".
+func TestCloseSharedDBLifecycle(t *testing.T) {
+	ctx := context.Background()
+	f, err := os.CreateTemp("", "bolt_close_lifecycle_test")
+	require.NoError(t, err)
+	defer func() { _ = os.Remove(f.Name()) }()
+	require.NoError(t, f.Close())
+
+	store1, err := New(f.Name(), "test")
+	require.NoError(t, err)
+	store2, err := New(f.Name(), "test")
+	require.NoError(t, err)
+
+	require.NoError(t, store2.Set(ctx, "1", doctest.Alice()))
+	require.NoError(t, store1.Close())
+
+	var got doctest.Segador
+	require.NoError(t, store2.Get(ctx, "1", &got),
+		"closing one store must not close the DB shared with siblings")
+
+	require.NoError(t, store2.Close())
+
+	store3, err := New(f.Name(), "test")
+	require.NoError(t, err)
+	require.NoError(t, store3.Get(ctx, "1", &got),
+		"a fresh Store must reopen the DB after the last Close")
+	require.NoError(t, store3.Close())
+}
