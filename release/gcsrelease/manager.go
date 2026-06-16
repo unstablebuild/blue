@@ -28,8 +28,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path"
 	"time"
@@ -38,6 +40,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/iterator"
 	"github.com/unstablebuild/blue/release"
+	"google.golang.org/api/googleapi"
 )
 
 const sha256MetadataKey = "sha256"
@@ -239,7 +242,7 @@ func (m *Manager) Delete(ctx context.Context, pkg string, ver release.Version) e
 	if err != nil {
 		return err
 	}
-	if err := m.object(pkg, ver).Delete(ctx); err != nil && err != storage.ErrObjectNotExist {
+	if err := m.object(pkg, ver).Delete(ctx); err != nil && !isObjectNotExist(err) {
 		return fmt.Errorf("gcs delete: %w", err)
 	}
 	return nil
@@ -265,10 +268,23 @@ func (m *Manager) SignedDownloadURL(ctx context.Context, pkg string, version rel
 
 func (m *Manager) forceDeleteObject(pkg string, ver release.Version) {
 	err := m.object(pkg, ver).Delete(context.Background())
-	if err != nil && err != storage.ErrObjectNotExist {
+	if err != nil && !isObjectNotExist(err) {
 		logrus.WithFields(logrus.Fields{
 			"package": pkg,
 			"version": string(ver),
 		}).Errorf("failed to clean up GCS object: %v", err)
 	}
+}
+
+// isObjectNotExist reports whether err indicates the GCS object was already
+// absent. The storage client returns storage.ErrObjectNotExist in most cases,
+// but a delete of a missing object over the JSON API surfaces a
+// *googleapi.Error with a 404 status that is not the sentinel, so we treat both
+// as "not found" to keep deletes idempotent.
+func isObjectNotExist(err error) bool {
+	if errors.Is(err, storage.ErrObjectNotExist) {
+		return true
+	}
+	var gerr *googleapi.Error
+	return errors.As(err, &gerr) && gerr.Code == http.StatusNotFound
 }

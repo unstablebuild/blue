@@ -32,6 +32,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/release"
+	"google.golang.org/api/googleapi"
 )
 
 func TestManagerSignedDownloadURLDefaultsExpiry(t *testing.T) {
@@ -84,3 +85,65 @@ type capturingObject struct{}
 func (capturingObject) NewWriter(context.Context) io.WriteCloser        { panic("unused") }
 func (capturingObject) NewReader(context.Context) (ObjectReader, error) { panic("unused") }
 func (capturingObject) Delete(context.Context) error                    { panic("unused") }
+
+func TestManagerDeleteToleratesMissingObject(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		delErr error
+	}{
+		{name: "sentinel", delErr: storage.ErrObjectNotExist},
+		{name: "googleapi 404", delErr: &googleapi.Error{Code: 404, Message: "No such object"}},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			inner := &fakeInner{}
+			b := &deleteBucket{delErr: tc.delErr}
+			m := NewManager(inner, b)
+
+			err := m.Delete(context.Background(), "pkg", release.Version("1"))
+			require.NoError(t, err)
+			require.True(t, inner.deleted, "inner metadata delete should run")
+		})
+	}
+}
+
+func TestManagerDeletePropagatesRealError(t *testing.T) {
+	t.Parallel()
+	inner := &fakeInner{}
+	b := &deleteBucket{delErr: &googleapi.Error{Code: 500, Message: "boom"}}
+	m := NewManager(inner, b)
+
+	err := m.Delete(context.Background(), "pkg", release.Version("1"))
+	require.Error(t, err)
+}
+
+// fakeInner is a minimal release.Manager that records a Delete call.
+type fakeInner struct {
+	release.Manager
+	deleted bool
+}
+
+func (f *fakeInner) Delete(context.Context, string, release.Version) error {
+	f.deleted = true
+	return nil
+}
+
+type deleteBucket struct {
+	delErr error
+}
+
+func (b *deleteBucket) Object(string) Object { return deleteObject{err: b.delErr} }
+func (b *deleteBucket) SignedURL(string, *storage.SignedURLOptions) (string, error) {
+	return "", nil
+}
+
+type deleteObject struct{ err error }
+
+func (deleteObject) NewWriter(context.Context) io.WriteCloser        { panic("unused") }
+func (deleteObject) NewReader(context.Context) (ObjectReader, error) { panic("unused") }
+func (o deleteObject) Delete(context.Context) error                  { return o.err }
