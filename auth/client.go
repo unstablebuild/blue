@@ -32,9 +32,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/unstablebuild/blue/logging"
 	"github.com/unstablebuild/blue/logging/trace"
-	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/authhandler"
 )
@@ -130,8 +130,7 @@ func NewClientWithPorts(
 		if readyResult.err != nil {
 			return nil, nil, fmt.Errorf("serve: %v", readyResult.err)
 		}
-		conf.RedirectURL = fmt.Sprintf("http://localhost:%d%s",
-			readyResult.port, cfg.redirectPath)
+		conf.RedirectURL = fmt.Sprintf("http://%s%s", readyResult.addr, cfg.redirectPath)
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
@@ -192,7 +191,7 @@ type tokenResult struct {
 
 type readyResult struct {
 	err  error
-	port int
+	addr string
 }
 
 func serveRedirects(
@@ -205,11 +204,16 @@ func serveRedirects(
 
 	var err error
 	var ln net.Listener
+	// Bind IPv4 loopback explicitly so the listener matches the literal
+	// 127.0.0.1 redirect URL. A wildcard ":port" bind is dual-stack and
+	// its reachability depends on bindv6only and how "localhost"
+	// resolves; where localhost maps to ::1 the browser connects over a
+	// family the listener never accepts and the redirect hangs.
 	if len(knownPorts) == 0 {
-		ln, err = net.Listen("tcp", srv.Addr)
+		ln, err = net.Listen("tcp4", "127.0.0.1:0")
 	} else {
 		for _, port := range knownPorts {
-			ln, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
+			ln, err = net.Listen("tcp4", fmt.Sprintf("127.0.0.1:%d", port))
 			if err == nil {
 				break
 			}
@@ -220,9 +224,15 @@ func serveRedirects(
 		case ready <- readyResult{err: err}:
 		case <-ctx.Done():
 		}
+		return
 	}
 
-	ready <- readyResult{port: ln.Addr().(*net.TCPAddr).Port}
+	select {
+	case ready <- readyResult{addr: ln.Addr().String()}:
+	case <-ctx.Done():
+		_ = ln.Close()
+		return
+	}
 	if err := srv.Serve(ln); err != nil {
 		select {
 		case done <- tokenResult{err: err}:
