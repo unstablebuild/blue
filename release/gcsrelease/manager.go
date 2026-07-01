@@ -97,6 +97,11 @@ func (m *Manager) Create(ctx context.Context, p release.Package) error {
 	return m.inner.Create(ctx, p)
 }
 
+// UpdatePackageMetadata delegates to the inner manager.
+func (m *Manager) UpdatePackageMetadata(ctx context.Context, pkg string, metadata map[string]string) error {
+	return m.inner.UpdatePackageMetadata(ctx, pkg, metadata)
+}
+
 // DeletePackage delegates to the inner manager.
 func (m *Manager) DeletePackage(ctx context.Context, pkg string) error {
 	return m.inner.DeletePackage(ctx, pkg)

@@ -78,6 +78,10 @@ type Manager interface {
 	// Create creates or updates a package.
 	Create(context.Context, Package) error
 
+	// UpdatePackageMetadata merges the given metadata keys into an existing
+	// package's manifest without touching other fields (Notes, Latest).
+	UpdatePackageMetadata(ctx context.Context, pkg string, metadata map[string]string) error
+
 	// DeletePackage deletes a package but package bundles are not deleted.
 	// Note that this does not prevent the next call to Upload to fail.
 	// In order to delete all traces of a package, all bundles must be deleted

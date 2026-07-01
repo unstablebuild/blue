@@ -98,6 +98,10 @@ func (m *Manager) Create(context.Context, release.Package) error {
 	return ErrReadOnly
 }
 
+func (m *Manager) UpdatePackageMetadata(context.Context, string, map[string]string) error {
+	return ErrReadOnly
+}
+
 func (m *Manager) DeletePackage(context.Context, string) error {
 	return ErrReadOnly
 }

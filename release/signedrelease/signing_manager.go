@@ -160,6 +160,12 @@ func (m *signingManager) Create(ctx context.Context, pack release.Package) error
 	return m.root.Create(ctx, pack)
 }
 
+func (m *signingManager) UpdatePackageMetadata(
+	ctx context.Context, pack string, metadata map[string]string,
+) error {
+	return m.root.UpdatePackageMetadata(ctx, pack, metadata)
+}
+
 func (m *signingManager) Delete(
 	ctx context.Context, pack string, ver release.Version,
 ) error {

@@ -22,7 +22,6 @@ import (
 type MockProgressReader struct {
 	ctrl     *gomock.Controller
 	recorder *MockProgressReaderMockRecorder
-	isgomock struct{}
 }
 
 // MockProgressReaderMockRecorder is the mock recorder for MockProgressReader.
@@ -73,7 +72,6 @@ func (mr *MockProgressReaderMockRecorder) Read(p any) *gomock.Call {
 type MockProgressWriter struct {
 	ctrl     *gomock.Controller
 	recorder *MockProgressWriterMockRecorder
-	isgomock struct{}
 }
 
 // MockProgressWriterMockRecorder is the mock recorder for MockProgressWriter.
@@ -124,7 +122,6 @@ func (mr *MockProgressWriterMockRecorder) Write(p any) *gomock.Call {
 type MockManager struct {
 	ctrl     *gomock.Controller
 	recorder *MockManagerMockRecorder
-	isgomock struct{}
 }
 
 // MockManagerMockRecorder is the mock recorder for MockManager.
@@ -244,6 +241,20 @@ func (m *MockManager) ListPackages(arg0 context.Context, arg1 map[string]string)
 func (mr *MockManagerMockRecorder) ListPackages(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPackages", reflect.TypeOf((*MockManager)(nil).ListPackages), arg0, arg1)
+}
+
+// UpdatePackageMetadata mocks base method.
+func (m *MockManager) UpdatePackageMetadata(ctx context.Context, pkg string, metadata map[string]string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePackageMetadata", ctx, pkg, metadata)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdatePackageMetadata indicates an expected call of UpdatePackageMetadata.
+func (mr *MockManagerMockRecorder) UpdatePackageMetadata(ctx, pkg, metadata any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePackageMetadata", reflect.TypeOf((*MockManager)(nil).UpdatePackageMetadata), ctx, pkg, metadata)
 }
 
 // Upload mocks base method.

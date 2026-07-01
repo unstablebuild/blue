@@ -1,6 +1,6 @@
 // Unstable Build LLC ("COMPANY") CONFIDENTIAL
 //
-// Unpublished Copyright (c) 2018-2024 Unstable Build, All Rights Reserved.
+// Unpublished Copyright (c) 2018-2026 Unstable Build, All Rights Reserved.
 //
 // NOTICE: All information contained herein is, and remains the property of COMPANY.
 // The intellectual and technical concepts contained herein are proprietary to
@@ -25,54 +25,73 @@ package pack
 
 import (
 	"context"
+	"errors"
+	"strings"
+	"time"
 
 	"github.com/unstablebuild/blue/cli"
 	"github.com/unstablebuild/blue/release"
 )
 
-var (
-	actionCreate   string = "create"
-	actionDelete   string = "delete"
-	actionDescribe string = "describe"
-	actionList     string = "list"
-	actionUpdate   string = "update"
+const (
+	updateTimeout = 10 * time.Second
 )
 
-type packageCLI struct {
-	cmds map[string]cli.CLI
-	fs   *cli.FlagSet
+type packageUpdate struct {
+	m         release.Manager
+	fs        *cli.FlagSet
+	mdataFlag metadataFlag
 }
 
-// NewCLI allocatest storage for a new package cli.CLI and
-// initializes it with the given package.Manager.
-func NewCLI(m release.Manager) cli.CLI {
-	return &packageCLI{
-		cmds: map[string]cli.CLI{
-			actionCreate:   newReleaseCreateCLI(m),
-			actionDelete:   newReleaseDeleteCLI(m),
-			actionDescribe: newReleaseDescribeCLI(m),
-			actionList:     newReleaseListCLI(m),
-			actionUpdate:   newReleaseUpdateCLI(m),
-		},
-		fs: cli.NewFlagSet("package"),
+func newReleaseUpdateCLI(m release.Manager) cli.CLI {
+	c := &packageUpdate{
+		m: m,
 	}
+	c.fs = cli.NewFlagSet("update")
+	c.fs.Var(&c.mdataFlag, "d", "Merge metadata into the manifest. Expects format to be <key>=<value>")
+	return c
 }
 
-func (s *packageCLI) Man() cli.Manual {
-	var cmds []cli.Manual
-	for _, cmd := range s.cmds {
-		cmds = append(cmds, cmd.Man())
-	}
-
+func (s *packageUpdate) Man() cli.Manual {
 	return cli.Manual{
-		Name:     "package",
-		Summary:  "Manage blue packages",
-		Synopsis: "<cmd>",
-		Commands: cmds,
+		Name:     "update",
+		Summary:  "Merge metadata into an existing package manifest",
+		Synopsis: "<package>",
 		Options:  *s.fs,
 	}
 }
 
-func (s *packageCLI) Run(ctx context.Context, args []string) error {
-	return cli.ParseAndRunCommand(ctx, s, s.fs, s.cmds, args)
+func (s *packageUpdate) parseMetadataFlag() (map[string]string, error) {
+	ret := make(map[string]string)
+	for _, arg := range s.mdataFlag {
+		kv := strings.Split(arg, "=")
+		if len(kv) != 2 {
+			return nil, errors.New("invalid -d format")
+		}
+		ret[kv[0]] = kv[1]
+	}
+	return ret, nil
+}
+
+func (s *packageUpdate) Run(ctx context.Context, args []string) error {
+	args, _, ok, err := cli.ParseUsage(s, s.fs, 1, args)
+	if err != nil || !ok {
+		return err
+	}
+	pack := args[0]
+
+	mdata, err := s.parseMetadataFlag()
+	if err != nil {
+		cli.Usage(s)
+		return err
+	}
+	if len(mdata) == 0 {
+		cli.Usage(s)
+		return errors.New("no metadata provided: pass at least one -d <key>=<value>")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, updateTimeout)
+	defer cancel()
+
+	return s.m.UpdatePackageMetadata(ctx, pack, mdata)
 }

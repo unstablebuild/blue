@@ -297,6 +297,45 @@ func TestDocumentManager(t *testing.T) {
 		require.Equal(t, ErrDataIntegrity, err)
 		require.Zero(t, manifest)
 	})
+
+	t.Run("update metadata preserves notes and latest", func(t *testing.T) {
+		m, _ := newTestingDocumentManager()
+		bundle := fixtureRelease
+		bundle.Version = "2.3.4"
+		err := m.Create(ctx, release.Package{
+			Name:     bundle.Package,
+			Notes:    "important notes",
+			Metadata: map[string]string{"existing": "keep"},
+		})
+		require.NoError(t, err)
+		err = m.Upload(ctx, bundle,
+			release.NopProgressReader(bytes.NewBuffer([]byte(""))))
+		require.NoError(t, err)
+
+		err = m.UpdatePackageMetadata(ctx, bundle.Package,
+			map[string]string{"language": "true"})
+		require.NoError(t, err)
+
+		pkg, err := m.GetPackage(ctx, bundle.Package)
+		require.NoError(t, err)
+		assert.Equal(t, release.Package{
+			Name:   bundle.Package,
+			Latest: release.Version("2.3.4"),
+			Notes:  "important notes",
+			Metadata: map[string]string{
+				"existing": "keep",
+				"language": "true",
+			},
+		}, pkg)
+	})
+
+	t.Run("update metadata fails for a non-existent package", func(t *testing.T) {
+		m, _ := newTestingDocumentManager()
+		err := m.UpdatePackageMetadata(ctx, "ghost",
+			map[string]string{"language": "true"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "does not exist")
+	})
 }
 
 func BenchmarkDocumentManagerUpload(b *testing.B) {

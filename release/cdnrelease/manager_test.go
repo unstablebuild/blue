@@ -56,6 +56,9 @@ type mockReleaseManager struct {
 func (m *mockReleaseManager) Create(ctx context.Context, p release.Package) error {
 	return m.createFn(ctx, p)
 }
+func (m *mockReleaseManager) UpdatePackageMetadata(ctx context.Context, pkg string, metadata map[string]string) error {
+	return nil
+}
 func (m *mockReleaseManager) DeletePackage(ctx context.Context, pkg string) error {
 	return m.deletePackageFn(ctx, pkg)
 }

@@ -199,6 +199,32 @@ func (d *documentManager) Create(
 	return nil
 }
 
+func (d *documentManager) UpdatePackageMetadata(
+	ctx context.Context, pkg string, metadata map[string]string,
+) error {
+	if pkg == "" {
+		panic("UpdatePackageMetadata: missing package name")
+	}
+	if len(metadata) == 0 {
+		panic("UpdatePackageMetadata: empty metadata")
+	}
+	updates := make([]document.Update, 0, len(metadata))
+	for k, v := range metadata {
+		updates = append(updates, document.Update{
+			FieldPath: []string{"Package", "Metadata", k},
+			Value:     v,
+		})
+	}
+	err := d.db.Update(ctx, makePackageDocID(pkg), updates)
+	if err != nil {
+		if err == document.ErrNotFound {
+			return fmt.Errorf("package %q does not exist", pkg)
+		}
+		return err
+	}
+	return nil
+}
+
 func makeReleaseDocID(pkg string, ver release.Version) string {
 	return fmt.Sprintf("release:%s:%s", pkg, ver)
 }
