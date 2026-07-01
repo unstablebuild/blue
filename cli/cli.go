@@ -26,7 +26,6 @@ package cli
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 )
 
@@ -90,11 +89,15 @@ func RunCommand(ctx context.Context, args []string, cmds map[string]CLI) error {
 	return ErrInvalidArgs
 }
 
+// handleCommonErrors prints usage for common CLI errors. It returns
+// true only when the error is fully handled and the program should
+// exit successfully (-h/--help). ErrInvalidArgs prints usage but must
+// propagate so the process exits with a non-zero status.
 func handleCommonErrors(c CLI, err error) bool {
 	switch err {
 	case ErrInvalidArgs:
-		fmt.Printf("%s\n\n", err)
-		fallthrough
+		Usage(c)
+		return false
 	case ErrHelp:
 		Usage(c)
 		return true

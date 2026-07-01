@@ -223,8 +223,8 @@ func (c *blueCtl) Run(ctx context.Context, args []string) error {
 	err = cli.RunCommand(ctx, rest, c.cmds)
 	switch err {
 	case cli.ErrInvalidArgs:
-		fmt.Printf("%s\n\n", err)
-		fallthrough
+		cli.Usage(c)
+		return err
 	case cli.ErrHelp:
 		cli.Usage(c)
 		return nil
