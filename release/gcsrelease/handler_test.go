@@ -32,6 +32,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/sirupsen/logrus"
+	logrustest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/unstablebuild/blue/iterator"
@@ -363,4 +365,40 @@ func TestHandlerUsesDiscardWriter(t *testing.T) {
 
 	// suppress unused import for io
 	_ = io.Discard
+}
+
+func TestHandlerErrorLogLevel(t *testing.T) {
+	tests := []struct {
+		name      string
+		getErr    error
+		wantCode  int
+		wantLevel logrus.Level
+	}{
+		{"not found logs at warn", errNotFound, http.StatusNotFound, logrus.WarnLevel},
+		{"server error logs at error", errors.New("gcs unavailable"), http.StatusInternalServerError, logrus.ErrorLevel},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hook := logrustest.NewGlobal()
+			defer hook.Reset()
+
+			m := &mockManager{
+				getFn: func(_ context.Context, _ string, _ release.Version, _ release.ProgressWriter) (release.Bundle, error) {
+					return release.Bundle{}, tc.getErr
+				},
+			}
+			h := NewHandler(m, &mockSigner{})
+
+			req := httptest.NewRequest("GET", "/packages/test/bundles/1.0.0", nil)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+
+			require.Equal(t, tc.wantCode, rec.Code)
+			entry := hook.LastEntry()
+			require.NotNil(t, entry, "expected a log entry")
+			assert.Equal(t, "release handler failure", entry.Message)
+			assert.Equal(t, tc.wantLevel, entry.Level)
+		})
+	}
 }

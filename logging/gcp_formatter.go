@@ -45,6 +45,7 @@ type LogrusGCPFormatter struct {
 // Format renders a single log entry in a format compatible with Google Cloud Logging.
 func (f LogrusGCPFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	f.resetTopLevelFields(entry)
+	stringifyErrors(entry.Data)
 	out, err := json.Marshal(entry.Data)
 	if err != nil {
 		return nil, fmt.Errorf("json marshal: %w", err)
@@ -52,6 +53,20 @@ func (f LogrusGCPFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 	out = append(out, '\n')
 	return out, nil
+}
+
+// stringifyErrors replaces error-typed field values with their Error()
+// string. json.Marshal serializes an error interface value by encoding
+// its (usually unexported) struct fields, which yields "{}" and drops the
+// message entirely. Mirrors logrus.JSONFormatter, which special-cases
+// errors the same way. Applies to every field, not just logrus.ErrorKey,
+// so callers using WithField("cause", err) are covered too.
+func stringifyErrors(data logrus.Fields) {
+	for k, v := range data {
+		if err, ok := v.(error); ok {
+			data[k] = err.Error()
+		}
+	}
 }
 
 type sourceLocation struct {

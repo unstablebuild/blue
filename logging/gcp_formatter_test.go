@@ -25,6 +25,8 @@ package logging
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"runtime"
 	"testing"
 	"time"
@@ -91,6 +93,32 @@ func BenchmarkGCPFormatterDebugOff(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, _ = f.Format(entry)
 	}
+}
+
+// TestGCPFormatterStringifiesErrors guards against the regression where
+// log.WithError(err) rendered as "error": {} because json.Marshal encodes
+// an error's unexported struct fields instead of its message.
+func TestGCPFormatterStringifiesErrors(t *testing.T) {
+	logger := logrus.New()
+	f := LogrusGCPFormatter{}
+	logger.SetFormatter(&f)
+
+	wrapped := fmt.Errorf("sync failed: %w", errors.New("http response status: 400 Bad Request"))
+
+	entry := logrus.NewEntry(logger).
+		WithError(wrapped).
+		WithField("cause", errors.New("secondary boom"))
+	entry.Level = logrus.ErrorLevel
+	entry.Message = "release handler failure"
+
+	out, err := f.Format(entry)
+	require.NoError(t, err)
+
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(out, &parsed))
+
+	assert.Equal(t, "sync failed: http response status: 400 Bad Request", parsed[logrus.ErrorKey])
+	assert.Equal(t, "secondary boom", parsed["cause"])
 }
 
 func setupGCPTestCase(

@@ -183,7 +183,15 @@ func writeError(w http.ResponseWriter, code int, err error, route string, fields
 	}
 	fields["route"] = route
 	fields["status"] = code
-	logrus.WithFields(fields).WithError(err).Error("release handler failure")
+	entry := logrus.WithFields(fields).WithError(err)
+	// 4xx responses are client mistakes (unknown package/bundle), not
+	// service faults; logging them at ERROR floods dashboards and hides
+	// real 5xx failures.
+	if code >= http.StatusInternalServerError {
+		entry.Error("release handler failure")
+	} else {
+		entry.Warn("release handler failure")
+	}
 	writeJSON(w, code, map[string]string{"error": err.Error()})
 }
 
