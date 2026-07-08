@@ -112,7 +112,7 @@ func NewWithMarshaler(
 		dbPath: dbPath,
 		collID: collID,
 	}
-	err := s.createBucketIfNotExists()
+	err := s.createBucketIfNotExists(context.Background())
 	if err != nil {
 		_ = s.Close()
 		return nil, err
@@ -121,13 +121,27 @@ func NewWithMarshaler(
 	return s, nil
 }
 
-func (s *Store) createBucketIfNotExists() error {
-	return s.db.Update(func(tx *bolt.Tx) error {
+func (s *Store) createBucketIfNotExists(ctx context.Context) error {
+	return s.update(ctx, func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(s.collID)
 		if err != nil {
 			return fmt.Errorf("create collection: %s", err)
 		}
 		return nil
+	})
+}
+
+// update runs fn in a read-write transaction whose commit durability
+// honors ctx (see ContextWithNoSync). The flag is assigned inside the
+// transaction: bbolt reads db.NoSync only while committing (tx.write,
+// tx.writeMeta), under the writer lock the transaction already holds,
+// so writing it here orders every flip against every commit and each
+// commit uses exactly the durability its own operation requested.
+func (s *Store) update(ctx context.Context, fn func(tx *bolt.Tx) error) error {
+	noSync := NoSyncRequested(ctx)
+	return s.db.Update(func(tx *bolt.Tx) error {
+		s.db.NoSync = noSync
+		return fn(tx)
 	})
 }
 
@@ -182,7 +196,7 @@ func (s *Store) Create(
 }
 
 func (s *Store) set(
-	_ context.Context, ID string, doc any,
+	ctx context.Context, ID string, doc any,
 	errAlreadyExists bool,
 ) error {
 	if doc == nil {
@@ -193,7 +207,7 @@ func (s *Store) set(
 		return err
 	}
 
-	return s.db.Update(func(tx *bolt.Tx) error {
+	return s.update(ctx, func(tx *bolt.Tx) error {
 		b := tx.Bucket(s.collID)
 		key := []byte(ID)
 		if errAlreadyExists && len(b.Get(key)) != 0 {
@@ -212,7 +226,7 @@ func (s *Store) Update(
 		panic("Update: no paths to update")
 	}
 
-	return s.db.Update(func(tx *bolt.Tx) error {
+	return s.update(ctx, func(tx *bolt.Tx) error {
 		b := tx.Bucket(s.collID)
 		data := b.Get([]byte(ID))
 
@@ -246,7 +260,7 @@ func (s *Store) Get(
 func (s *Store) Delete(
 	ctx context.Context, ID string,
 ) error {
-	return s.db.Update(func(tx *bolt.Tx) error {
+	return s.update(ctx, func(tx *bolt.Tx) error {
 		b := tx.Bucket(s.collID)
 		return b.Delete([]byte(ID))
 	})
@@ -277,7 +291,7 @@ func (s *Store) List(ctx context.Context, filters []document.Filter) (
 
 // Drop satisfies document.DroppableService.
 func (s *Store) Drop(ctx context.Context) error {
-	err := s.db.Update(func(tx *bolt.Tx) error {
+	err := s.update(ctx, func(tx *bolt.Tx) error {
 		return tx.DeleteBucket(s.collID)
 	})
 	if err != nil {
@@ -285,7 +299,7 @@ func (s *Store) Drop(ctx context.Context) error {
 	}
 
 	// if this fails we're screwed because the rest of operations will panic..
-	err = s.createBucketIfNotExists()
+	err = s.createBucketIfNotExists(ctx)
 	if err != nil {
 		panic(fmt.Sprintf("critical error: failed to recreate collection: %v", err))
 	}
