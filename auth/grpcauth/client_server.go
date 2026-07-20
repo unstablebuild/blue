@@ -58,11 +58,11 @@ func GRPCServerWithOauth2[T any](
 	authorizer auth.Authorizer[T],
 	creds credentials.TransportCredentials,
 ) []grpc.ServerOption {
-	return []grpc.ServerOption{
-		grpc.UnaryInterceptor(oauth2UnaryInterceptor[T](verifyKeys, authorizer)),
-		grpc.StreamInterceptor(oauth2StreamInterceptor[T](verifyKeys, authorizer)),
-		grpc.Creds(creds),
-	}
+	return GRPCServerWithOauth2Interceptors(
+		Oauth2UnaryInterceptor[T](verifyKeys, authorizer),
+		Oauth2StreamInterceptor[T](verifyKeys, authorizer),
+		creds,
+	)
 }
 
 // GRPCServerWithInsecureOauth2 returns a set of grpc.ServerOption that configure the server
@@ -73,13 +73,47 @@ func GRPCServerWithInsecureOauth2[T any](
 	verifyKeys auth.Keys,
 	authorizer auth.Authorizer[T],
 ) []grpc.ServerOption {
+	return GRPCServerWithInsecureOauth2Interceptors(
+		Oauth2UnaryInterceptor[T](verifyKeys, authorizer),
+		Oauth2StreamInterceptor[T](verifyKeys, authorizer),
+	)
+}
+
+// GRPCServerWithOauth2Interceptors returns the server options for an oauth2
+// server using the given interceptors. Callers that need to wrap the oauth2
+// interceptors (e.g. to cache verification/authorization) pass the wrapped
+// interceptors here instead of using GRPCServerWithOauth2.
+func GRPCServerWithOauth2Interceptors(
+	unary grpc.UnaryServerInterceptor,
+	stream grpc.StreamServerInterceptor,
+	creds credentials.TransportCredentials,
+) []grpc.ServerOption {
 	return []grpc.ServerOption{
-		grpc.UnaryInterceptor(oauth2UnaryInterceptor(verifyKeys, authorizer)),
-		grpc.StreamInterceptor(oauth2StreamInterceptor(verifyKeys, authorizer)),
+		grpc.UnaryInterceptor(unary),
+		grpc.StreamInterceptor(stream),
+		grpc.Creds(creds),
 	}
 }
 
-func oauth2StreamInterceptor[T any](
+// GRPCServerWithInsecureOauth2Interceptors is like
+// GRPCServerWithOauth2Interceptors but without TLS credentials. This should
+// only be used when the transport is secured externally (TCP/TLS load
+// balancer, etc.), or for debugging or local testing.
+func GRPCServerWithInsecureOauth2Interceptors(
+	unary grpc.UnaryServerInterceptor,
+	stream grpc.StreamServerInterceptor,
+) []grpc.ServerOption {
+	return []grpc.ServerOption{
+		grpc.UnaryInterceptor(unary),
+		grpc.StreamInterceptor(stream),
+	}
+}
+
+// Oauth2StreamInterceptor returns the stream interceptor that authenticates
+// and authorizes oauth2 requests and installs the resulting claims in the
+// stream context. It is exposed so callers can wrap it (e.g. to add a cache
+// in front of the per-RPC verification/authorization).
+func Oauth2StreamInterceptor[T any](
 	verifyKeys auth.Keys, authorizer auth.Authorizer[T],
 ) grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream,
@@ -95,7 +129,11 @@ func oauth2StreamInterceptor[T any](
 	}
 }
 
-func oauth2UnaryInterceptor[T any](
+// Oauth2UnaryInterceptor returns the unary interceptor that authenticates
+// and authorizes oauth2 requests and installs the resulting claims in the
+// request context. It is exposed so callers can wrap it (e.g. to add a cache
+// in front of the per-RPC verification/authorization).
+func Oauth2UnaryInterceptor[T any](
 	verifyKeys auth.Keys, authorizer auth.Authorizer[T],
 ) grpc.UnaryServerInterceptor {
 	return func(
