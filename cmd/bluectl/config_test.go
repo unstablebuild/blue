@@ -40,6 +40,7 @@ email:
   reply-to: Support <reply@example.com>
   sendgrid:
     api-key: test-sendgrid-key
+    unsubscribe-group-id: 33767
 `), configFileMode))
 
 	config, err := sourceConfig(path)
@@ -47,4 +48,5 @@ email:
 	assert.Equal(t, "Blue <sender@example.com>", config.Email.Sender)
 	assert.Equal(t, "Support <reply@example.com>", config.Email.ReplyTo)
 	assert.Equal(t, "test-sendgrid-key", config.Email.SendGrid.APIKey)
+	assert.Equal(t, 33767, config.Email.SendGrid.UnsubscribeGroupID)
 }

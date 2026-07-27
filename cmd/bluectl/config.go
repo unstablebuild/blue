@@ -41,6 +41,7 @@ email:
   reply-to:
   sendgrid:
     api-key:
+    unsubscribe-group-id: 0
 `
 
 type authConfig struct {
@@ -63,7 +64,8 @@ type issueConfig struct {
 }
 
 type sendgridConfig struct {
-	APIKey string `yaml:"api-key"`
+	APIKey             string `yaml:"api-key"`
+	UnsubscribeGroupID int    `yaml:"unsubscribe-group-id"`
 }
 
 type emailConfig struct {

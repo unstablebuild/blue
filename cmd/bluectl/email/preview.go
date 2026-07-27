@@ -26,6 +26,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 
@@ -36,22 +37,26 @@ import (
 type previewOpener func(*url.URL) error
 
 type previewCLI struct {
-	fs        *cli.FlagSet
-	variables templateVariables
-	open      previewOpener
+	fs          *cli.FlagSet
+	variables   templateVariables
+	openBrowser bool
+	open        previewOpener
+	output      io.Writer
 }
 
 func newPreviewCLI(open previewOpener) cli.CLI {
-	command := &previewCLI{open: open}
+	command := &previewCLI{open: open, output: os.Stdout}
 	command.fs = cli.NewFlagSet(actionPreview)
 	command.fs.Var(&command.variables, "X", "Set a template variable. Expects key=value and may be repeated.")
+	command.fs.BoolVar(&command.openBrowser, "o", false,
+		"Open the generated HTML using BROWSER, then the first available of open, google-chrome-stable, firefox, or chromium.")
 	return command
 }
 
 func (p *previewCLI) Man() cli.Manual {
 	return cli.Manual{
 		Name:     actionPreview,
-		Summary:  "Render a Go HTML template file and open it in the preferred browser.",
+		Summary:  "Render a Go HTML template file to a temporary HTML file.",
 		Synopsis: "[options] <recipient> <template-file.tmpl>",
 		Options:  *p.fs,
 	}
@@ -103,12 +108,16 @@ func (p *previewCLI) Run(_ context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	location := &url.URL{Scheme: "file", Path: path}
-	if err := p.open(location); err != nil {
-		_ = os.Remove(path)
-		return fmt.Errorf("open email preview: %w", err)
+	if p.openBrowser {
+		location := &url.URL{Scheme: "file", Path: path}
+		if err := p.open(location); err != nil {
+			_ = os.Remove(path)
+			return fmt.Errorf("open email preview: %w", err)
+		}
+		_, err = fmt.Fprintf(p.output, "opened email preview %s\n", path)
+		return err
 	}
 
-	_, err = fmt.Fprintf(os.Stdout, "opened email preview %s\n", path)
+	_, err = fmt.Fprintf(p.output, "generated email preview %s\n", path)
 	return err
 }

@@ -35,23 +35,30 @@ import (
 )
 
 type sendCLI struct {
-	factory   senderFactory
-	fs        *cli.FlagSet
-	variables templateVariables
-	sender    string
-	replyTo   string
+	factory            senderFactory
+	fs                 *cli.FlagSet
+	variables          templateVariables
+	sender             string
+	replyTo            string
+	unsubscribeGroupID int
 }
 
-func newSendCLI(factory senderFactory, defaultSender, defaultReplyTo string) cli.CLI {
+func newSendCLI(
+	factory senderFactory,
+	defaultSender, defaultReplyTo string,
+	defaultUnsubscribeGroupID int,
+) cli.CLI {
 	command := &sendCLI{
-		factory: factory,
-		sender:  defaultSender,
-		replyTo: defaultReplyTo,
+		factory:            factory,
+		sender:             defaultSender,
+		replyTo:            defaultReplyTo,
+		unsubscribeGroupID: defaultUnsubscribeGroupID,
 	}
 	command.fs = cli.NewFlagSet(actionSend)
 	command.fs.Var(&command.variables, "X", "Set a template variable. Expects key=value and may be repeated.")
 	command.fs.StringVar(&command.sender, "S", defaultSender, "Override the configured sender email address or named mailbox.")
 	command.fs.StringVar(&command.replyTo, "R", defaultReplyTo, "Override the configured reply-to email address or named mailbox.")
+	command.fs.IntVar(&command.unsubscribeGroupID, "U", defaultUnsubscribeGroupID, "Override the configured SendGrid unsubscribe group ID.")
 	return command
 }
 
@@ -78,6 +85,9 @@ func (s *sendCLI) Run(ctx context.Context, args []string) error {
 	}
 	if strings.TrimSpace(s.sender) == "" {
 		return errors.New("sender is not configured; set email.sender in the bluectl config or pass -S")
+	}
+	if s.unsubscribeGroupID < 0 {
+		return errors.New("unsubscribe group ID cannot be negative")
 	}
 
 	recipient, err := parseAddress(args[1])
@@ -106,7 +116,7 @@ func (s *sendCLI) Run(ctx context.Context, args []string) error {
 	if s.factory == nil {
 		return errors.New("email sender is not configured")
 	}
-	provider, err := s.factory(sender, replyTo)
+	provider, err := s.factory(sender, replyTo, s.unsubscribeGroupID)
 	if err != nil {
 		return err
 	}

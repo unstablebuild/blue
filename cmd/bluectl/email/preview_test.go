@@ -24,9 +24,11 @@
 package email
 
 import (
+	"bytes"
 	"context"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -39,9 +41,12 @@ func TestPreviewRendersAndOpensFileURL(t *testing.T) {
 	command := newPreviewCLI(func(location *url.URL) error {
 		opened = location
 		return nil
-	})
+	}).(*previewCLI)
+	var output bytes.Buffer
+	command.output = &output
 
 	err := command.Run(context.Background(), []string{
+		"-o",
 		"-X", "Greeting=Hello",
 		"recipient@example.com",
 		path,
@@ -49,10 +54,35 @@ func TestPreviewRendersAndOpensFileURL(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, opened)
 	assert.Equal(t, "file", opened.Scheme)
+	assert.Equal(t, "opened email preview "+opened.Path+"\n", output.String())
 	t.Cleanup(func() { _ = os.Remove(opened.Path) })
 	body, err := os.ReadFile(opened.Path)
 	require.NoError(t, err)
 	assert.Equal(t, `<p>Hello, recipient@example.com</p>`, string(body))
+}
+
+func TestPreviewGeneratesWithoutOpeningBrowser(t *testing.T) {
+	templatePath := writeTemplate(t, `<p>{{.Recipient}}</p>`)
+	openCalls := 0
+	command := newPreviewCLI(func(*url.URL) error {
+		openCalls++
+		return nil
+	}).(*previewCLI)
+	var output bytes.Buffer
+	command.output = &output
+
+	err := command.Run(context.Background(), []string{
+		"recipient@example.com",
+		templatePath,
+	})
+	require.NoError(t, err)
+	assert.Zero(t, openCalls)
+	previewPath := strings.TrimSpace(strings.TrimPrefix(output.String(), "generated email preview "))
+	require.NotEmpty(t, previewPath)
+	t.Cleanup(func() { _ = os.Remove(previewPath) })
+	body, err := os.ReadFile(previewPath)
+	require.NoError(t, err)
+	assert.Equal(t, `<p>recipient@example.com</p>`, string(body))
 }
 
 func TestPreviewMissingVariableDoesNotOpenBrowser(t *testing.T) {
@@ -66,4 +96,12 @@ func TestPreviewMissingVariableDoesNotOpenBrowser(t *testing.T) {
 	err := command.Run(context.Background(), []string{"recipient@example.com", path})
 	require.Error(t, err)
 	assert.Zero(t, openCalls)
+}
+
+func TestPreviewManualDocumentsOpenFlag(t *testing.T) {
+	manual := newPreviewCLI(nil).Man()
+
+	openFlag := manual.Options.Lookup("o")
+	require.NotNil(t, openFlag)
+	assert.Equal(t, "false", openFlag.DefValue)
 }

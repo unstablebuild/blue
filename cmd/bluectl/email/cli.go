@@ -39,6 +39,7 @@ const (
 type senderFactory func(
 	sender emailprovider.Address,
 	replyTo *emailprovider.Address,
+	unsubscribeGroupID int,
 ) (emailprovider.Sender, error)
 
 type emailCLI struct {
@@ -48,8 +49,9 @@ type emailCLI struct {
 
 // Config contains defaults for bluectl's email commands.
 type Config struct {
-	Sender  string
-	ReplyTo string
+	Sender             string
+	ReplyTo            string
+	UnsubscribeGroupID int
 }
 
 // NewCLI returns the bluectl email command. The factory may be nil when the
@@ -57,10 +59,12 @@ type Config struct {
 func NewCLI(factory func(
 	emailprovider.Address,
 	*emailprovider.Address,
+	int,
 ) (emailprovider.Sender, error), config Config) cli.CLI {
 	return &emailCLI{
 		cmds: map[string]cli.CLI{
-			actionSend:    newSendCLI(senderFactory(factory), config.Sender, config.ReplyTo),
+			actionSend: newSendCLI(senderFactory(factory), config.Sender, config.ReplyTo,
+				config.UnsubscribeGroupID),
 			actionPreview: newPreviewCLI(openPreview),
 		},
 		fs: cli.NewFlagSet("email"),

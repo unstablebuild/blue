@@ -70,6 +70,17 @@ bluectl email preview \
 ```
 
 Values may contain `=`; `-X ActionURL=https://example.com/?a=b` is valid.
+By default, preview generates a temporary HTML file and prints its path without
+opening a browser. Add `-o` before the positional arguments only when the user
+wants the generated preview opened in the preferred browser.
+
+For `-o`, "preferred browser" means the executable named by the `BROWSER`
+process environment setting when present. Otherwise, bluectl looks for a
+supported browser launcher on `PATH` in this order: `open`,
+`google-chrome-stable`, `firefox`, then `chromium`. On macOS this normally
+finds `open`, which delegates to the user's system-default browser. If no
+launcher is found, preview generation succeeds up to the open step and reports
+an error instead of silently choosing an unrelated application.
 
 ## Workflow
 
@@ -131,15 +142,17 @@ private customer data merely to produce a preview.
 ### 4. Preview with bluectl
 
 Run only `bluectl email preview`, with options first, the simulated recipient
-next, and the `.tmpl` file last.
+next, and the `.tmpl` file last. Do not pass `-o` by default; use it only when
+the user asks to open the preview in a browser.
 
 If preview reports a missing variable, add the missing `-X` value or correct
 the template. Do not weaken strict validation. If preview reports malformed
 HTML-template syntax, fix the template and preview again.
 
-The command opens a temporary rendered HTML file in the preferred browser and
-prints its path. Use user feedback or a user-provided screenshot to evaluate
-visual rendering when you cannot inspect the browser directly.
+The command generates a temporary rendered HTML file and prints its path. With
+`-o`, it also opens that file in the preferred browser. Use user feedback or a
+user-provided screenshot to evaluate visual rendering when you cannot inspect
+the browser directly.
 
 ### 5. Iterate and hand off
 

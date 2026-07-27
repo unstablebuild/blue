@@ -41,10 +41,11 @@ func testSender(t *testing.T, handler http.HandlerFunc) emailprovider.Sender {
 	t.Cleanup(server.Close)
 	replyTo := emailprovider.Address{Name: "Support", Email: "reply@example.com"}
 	s, err := New(Credentials{APIKey: "test-key"}, Config{
-		Sender:   emailprovider.Address{Name: "Blue", Email: "sender@example.com"},
-		ReplyTo:  &replyTo,
-		Endpoint: server.URL,
-		Client:   server.Client(),
+		Sender:             emailprovider.Address{Name: "Blue", Email: "sender@example.com"},
+		ReplyTo:            &replyTo,
+		UnsubscribeGroupID: 33767,
+		Endpoint:           server.URL,
+		Client:             server.Client(),
 	})
 	require.NoError(t, err)
 	return s
@@ -82,6 +83,8 @@ func TestSendUsesPrivatePersonalizations(t *testing.T) {
 	assert.Equal(t, sgAddress{Email: "sender@example.com", Name: "Blue"}, got.From)
 	require.NotNil(t, got.ReplyTo)
 	assert.Equal(t, "reply@example.com", got.ReplyTo.Email)
+	require.NotNil(t, got.ASM)
+	assert.Equal(t, 33767, got.ASM.GroupID)
 	for _, personalization := range got.Personalizations {
 		assert.Len(t, personalization.To, 1, "recipients must never see one another")
 	}
@@ -113,6 +116,30 @@ func TestSendGroupsDifferentBodiesIntoSeparateRequests(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, requestCount)
 	assert.Len(t, results, 2)
+}
+
+func TestSendOmitsASMWithoutUnsubscribeGroup(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request mailRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+		assert.Nil(t, request.ASM)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	t.Cleanup(server.Close)
+
+	sender, err := New(Credentials{APIKey: "test-key"}, Config{
+		Sender:   emailprovider.Address{Email: "sender@example.com"},
+		Endpoint: server.URL,
+		Client:   server.Client(),
+	})
+	require.NoError(t, err)
+
+	_, err = sender.Send(context.Background(), []emailprovider.Message{{
+		Recipient: emailprovider.Address{Email: "one@example.com"},
+		Subject:   "One",
+		HTMLBody:  "one",
+	}})
+	require.NoError(t, err)
 }
 
 func TestSendValidatesWholeBatchBeforeSending(t *testing.T) {
@@ -182,4 +209,10 @@ func TestNewValidatesConfiguration(t *testing.T) {
 
 	_, err = New(Credentials{APIKey: "key"}, Config{Sender: emailprovider.Address{Email: "invalid"}})
 	assert.EqualError(t, err, `invalid sender address "invalid"`)
+
+	_, err = New(Credentials{APIKey: "key"}, Config{
+		Sender:             emailprovider.Address{Email: "sender@example.com"},
+		UnsubscribeGroupID: -1,
+	})
+	assert.EqualError(t, err, "sendgrid unsubscribe group ID cannot be negative")
 }

@@ -55,19 +55,23 @@ func TestSendRendersOneRecipient(t *testing.T) {
 	}}}
 	var gotSender emailprovider.Address
 	var gotReplyTo *emailprovider.Address
+	var gotUnsubscribeGroupID int
 	command := newSendCLI(func(
 		sender emailprovider.Address,
 		replyTo *emailprovider.Address,
+		unsubscribeGroupID int,
 	) (emailprovider.Sender, error) {
 		gotSender = sender
 		gotReplyTo = replyTo
+		gotUnsubscribeGroupID = unsubscribeGroupID
 		return provider, nil
-	}, "Configured <configured@example.com>", "configured-reply@example.com")
+	}, "Configured <configured@example.com>", "configured-reply@example.com", 12345)
 
 	err := command.Run(context.Background(), []string{
 		"-X", "Name=Ernest",
 		"-S", "Blue <sender@example.com>",
 		"-R", "reply@example.com",
+		"-U", "33767",
 		"Welcome",
 		"Recipient <recipient@example.com>",
 		path,
@@ -78,6 +82,7 @@ func TestSendRendersOneRecipient(t *testing.T) {
 	assert.Equal(t, emailprovider.Address{Name: "Blue", Email: "sender@example.com"}, gotSender)
 	require.NotNil(t, gotReplyTo)
 	assert.Equal(t, "reply@example.com", gotReplyTo.Email)
+	assert.Equal(t, 33767, gotUnsubscribeGroupID)
 	assert.Equal(t, "recipient@example.com", provider.messages[0].Recipient.Email)
 	assert.Equal(t, "Welcome", provider.messages[0].Subject)
 	assert.Equal(t,
@@ -92,10 +97,11 @@ func TestSendMissingVariableSendsNoEmail(t *testing.T) {
 	command := newSendCLI(func(
 		emailprovider.Address,
 		*emailprovider.Address,
+		int,
 	) (emailprovider.Sender, error) {
 		factoryCalls++
 		return provider, nil
-	}, "sender@example.com", "")
+	}, "sender@example.com", "", 0)
 
 	err := command.Run(context.Background(), []string{
 		"-X", "Show=",
@@ -111,7 +117,7 @@ func TestSendMissingVariableSendsNoEmail(t *testing.T) {
 
 func TestSendRequiresExactlyOneRecipient(t *testing.T) {
 	path := writeTemplate(t, `<p>Hello</p>`)
-	command := newSendCLI(nil, "sender@example.com", "")
+	command := newSendCLI(nil, "sender@example.com", "", 0)
 
 	err := command.Run(context.Background(), []string{
 		"Welcome",
@@ -129,14 +135,17 @@ func TestSendUsesConfiguredEnvelopeDefaults(t *testing.T) {
 	}}}
 	var gotSender emailprovider.Address
 	var gotReplyTo *emailprovider.Address
+	var gotUnsubscribeGroupID int
 	command := newSendCLI(func(
 		sender emailprovider.Address,
 		replyTo *emailprovider.Address,
+		unsubscribeGroupID int,
 	) (emailprovider.Sender, error) {
 		gotSender = sender
 		gotReplyTo = replyTo
+		gotUnsubscribeGroupID = unsubscribeGroupID
 		return provider, nil
-	}, "Blue <sender@example.com>", "Support <reply@example.com>")
+	}, "Blue <sender@example.com>", "Support <reply@example.com>", 33767)
 
 	err := command.Run(context.Background(), []string{
 		"Configured subject",
@@ -147,16 +156,18 @@ func TestSendUsesConfiguredEnvelopeDefaults(t *testing.T) {
 	assert.Equal(t, emailprovider.Address{Name: "Blue", Email: "sender@example.com"}, gotSender)
 	require.NotNil(t, gotReplyTo)
 	assert.Equal(t, emailprovider.Address{Name: "Support", Email: "reply@example.com"}, *gotReplyTo)
+	assert.Equal(t, 33767, gotUnsubscribeGroupID)
 	assert.Equal(t, "Configured subject", provider.messages[0].Subject)
 }
 
 func TestSendManualDisplaysConfiguredDefaults(t *testing.T) {
-	command := newSendCLI(nil, "Blue <sender@example.com>", "reply@example.com")
+	command := newSendCLI(nil, "Blue <sender@example.com>", "reply@example.com", 33767)
 	manual := command.Man()
 
 	assert.Equal(t, "[options] <subject> <recipient> <template-file.tmpl>", manual.Synopsis)
 	assert.Equal(t, "Blue <sender@example.com>", manual.Options.Lookup("S").DefValue)
 	assert.Equal(t, "reply@example.com", manual.Options.Lookup("R").DefValue)
+	assert.Equal(t, "33767", manual.Options.Lookup("U").DefValue)
 	assert.Nil(t, manual.Options.Lookup("subject"))
 	assert.Nil(t, manual.Options.Lookup("sender"))
 	assert.Nil(t, manual.Options.Lookup("reply-to"))

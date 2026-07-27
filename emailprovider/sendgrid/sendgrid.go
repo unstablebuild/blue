@@ -53,19 +53,21 @@ type Credentials struct {
 
 // Config contains message-level and transport settings for a Sender.
 type Config struct {
-	Sender   emailprovider.Address
-	ReplyTo  *emailprovider.Address
-	Endpoint string
-	Client   *http.Client
+	Sender             emailprovider.Address
+	ReplyTo            *emailprovider.Address
+	UnsubscribeGroupID int
+	Endpoint           string
+	Client             *http.Client
 }
 
 // sender sends email through SendGrid.
 type sender struct {
-	apiKey   string
-	sender   emailprovider.Address
-	replyTo  *emailprovider.Address
-	endpoint string
-	client   *http.Client
+	apiKey             string
+	sender             emailprovider.Address
+	replyTo            *emailprovider.Address
+	unsubscribeGroupID int
+	endpoint           string
+	client             *http.Client
 }
 
 type sgAddress struct {
@@ -84,11 +86,16 @@ type content struct {
 	Value string `json:"value"`
 }
 
+type asm struct {
+	GroupID int `json:"group_id"`
+}
+
 type mailRequest struct {
 	Personalizations []personalization `json:"personalizations"`
 	From             sgAddress         `json:"from"`
 	ReplyTo          *sgAddress        `json:"reply_to,omitempty"`
 	Content          []content         `json:"content"`
+	ASM              *asm              `json:"asm,omitempty"`
 }
 
 type indexedMessage struct {
@@ -149,6 +156,9 @@ func New(creds Credentials, config Config) (emailprovider.Sender, error) {
 			return nil, err
 		}
 	}
+	if config.UnsubscribeGroupID < 0 {
+		return nil, errors.New("sendgrid unsubscribe group ID cannot be negative")
+	}
 
 	endpoint := config.Endpoint
 	if endpoint == "" {
@@ -165,11 +175,12 @@ func New(creds Credentials, config Config) (emailprovider.Sender, error) {
 	}
 
 	return &sender{
-		apiKey:   apiKey,
-		sender:   config.Sender,
-		replyTo:  replyTo,
-		endpoint: endpoint,
-		client:   client,
+		apiKey:             apiKey,
+		sender:             config.Sender,
+		replyTo:            replyTo,
+		unsubscribeGroupID: config.UnsubscribeGroupID,
+		endpoint:           endpoint,
+		client:             client,
 	}, nil
 }
 
@@ -208,6 +219,9 @@ func (s *sender) request(messages []indexedMessage) mailRequest {
 	if s.replyTo != nil {
 		replyTo := address(*s.replyTo)
 		request.ReplyTo = &replyTo
+	}
+	if s.unsubscribeGroupID != 0 {
+		request.ASM = &asm{GroupID: s.unsubscribeGroupID}
 	}
 	if messages[0].message.TextBody != "" {
 		request.Content = append(request.Content, content{

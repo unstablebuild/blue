@@ -187,16 +187,19 @@ func (c *blueCtl) initializeCli() error {
 			return emailCLI.NewCLI(func(
 				sender emailprovider.Address,
 				replyTo *emailprovider.Address,
+				unsubscribeGroupID int,
 			) (emailprovider.Sender, error) {
 				return sendgrid.New(sendgrid.Credentials{
 					APIKey: config.Email.SendGrid.APIKey,
 				}, sendgrid.Config{
-					Sender:  sender,
-					ReplyTo: replyTo,
+					Sender:             sender,
+					ReplyTo:            replyTo,
+					UnsubscribeGroupID: unsubscribeGroupID,
 				})
 			}, emailCLI.Config{
-				Sender:  config.Email.Sender,
-				ReplyTo: config.Email.ReplyTo,
+				Sender:             config.Email.Sender,
+				ReplyTo:            config.Email.ReplyTo,
+				UnsubscribeGroupID: config.Email.SendGrid.UnsubscribeGroupID,
 			}), nil
 		}),
 		"analysis": newAnalysisCli(),
