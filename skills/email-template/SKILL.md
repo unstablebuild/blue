@@ -82,6 +82,36 @@ finds `open`, which delegates to the user's system-default browser. If no
 launcher is found, preview generation succeeds up to the open step and reports
 an error instead of silently choosing an unrelated application.
 
+## SendGrid ASM unsubscribe controls
+
+Classify the message before editing it:
+
+- Bulk email such as newsletters, customer announcements, release notes, and
+  product updates must include both group-scoped unsubscribe controls.
+- Transactional email such as login codes, security notices, password resets,
+  receipts, and essential account messages must not include these controls.
+
+For bulk email, include visible links using these exact literal SendGrid tags:
+
+```html
+<a href="<%asm_preferences_raw_url%>">Manage preferences</a>
+<a href="<%asm_group_unsubscribe_raw_url%>">Unsubscribe</a>
+```
+
+Do not model these URLs as Go template variables or request them through `-X`.
+They must survive local Go template rendering unchanged so SendGrid can replace
+them with recipient-specific URLs during delivery.
+
+These tags require the eventual SendGrid Mail Send request to contain a positive
+`asm.group_id`. `bluectl email send` gets that value from its configured
+unsubscribe group ID or its `-U` override. This skill must not inspect provider
+credentials or send a message to verify delivery; note the requirement in the
+handoff instead.
+
+Do not use SendGrid global-unsubscribe tags or enable legacy Subscription
+Tracking as a substitute. A global unsubscribe can suppress unrelated
+transactional messages, including login and password-reset email.
+
 ## Workflow
 
 ### 1. Establish the template requirements
@@ -176,4 +206,6 @@ with:
 - Always use a `.tmpl` file and place it last in the preview command.
 - Always provide every required `-X` variable before considering a preview
   successful.
+- For bulk email, always include both the ASM Manage preferences and group
+  Unsubscribe links and verify both literal tags remain in the rendered preview.
 - Always state explicitly that no email was sent.
