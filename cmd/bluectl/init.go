@@ -30,6 +30,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/unstablebuild/blue/cli"
 	"github.com/unstablebuild/blue/cmd/bluectl/options"
@@ -37,7 +38,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const configFile = "config"
+const (
+	configFile     = "config"
+	configFileMode = 0o600
+)
 
 type initializer struct {
 	configFolder string
@@ -84,6 +88,9 @@ func encodeConfig(f io.Writer, c *cliConfig) (err error) {
 }
 
 func updateConfig(filePath string, auth authConfig) error {
+	if err := os.Chmod(filePath, configFileMode); err != nil {
+		return err
+	}
 	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_RDWR, os.ModeAppend)
 	if err != nil {
 		return err
@@ -91,7 +98,7 @@ func updateConfig(filePath string, auth authConfig) error {
 
 	defer func() { _ = f.Close() }()
 
-	provider, err := config.NewReaderProvider(f)
+	provider, err := config.NewReaderProvider(strings.NewReader(defaultReferenceConfig), f)
 	if err != nil {
 		return err
 	}
@@ -111,7 +118,7 @@ func updateConfig(filePath string, auth authConfig) error {
 }
 
 func createDefaultConfig(filePath string, auth authConfig) error {
-	f, err := os.Create(filePath)
+	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, configFileMode)
 	if err != nil {
 		return err
 	}

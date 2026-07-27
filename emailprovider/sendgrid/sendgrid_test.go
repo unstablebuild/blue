@@ -1,0 +1,185 @@
+// Unstable Build LLC ("COMPANY") CONFIDENTIAL
+//
+// Unpublished Copyright (c) 2018-2026 Unstable Build, All Rights Reserved.
+//
+// NOTICE: All information contained herein is, and remains the property of COMPANY.
+// The intellectual and technical concepts contained herein are proprietary to
+// COMPANY and may be covered by U.S. and Foreign Patents, patents in process,
+// and are protected by trade secret or copyright law. Dissemination of this information
+// or reproduction of this material is strictly forbidden unless prior written permission
+// is obtained from COMPANY. Access to the source code contained herein is hereby
+// forbidden to anyone except current COMPANY employees, managers or contractors who
+// have executed Confidentiality and Non-disclosure agreements explicitly covering such access.
+//
+// The copyright notice above does not evidence any actual or intended publication or
+// disclosure of this source code, which includes information that is confidential and/or
+// proprietary, and is a trade secret, of COMPANY. ANY REPRODUCTION, MODIFICATION,
+// DISTRIBUTION, PUBLIC  PERFORMANCE, OR PUBLIC DISPLAY OF OR THROUGH USE OF THIS SOURCE CODE
+// WITHOUT  THE EXPRESS WRITTEN CONSENT OF COMPANY IS STRICTLY PROHIBITED, AND IN
+// VIOLATION OF APPLICABLE LAWS AND INTERNATIONAL TREATIES. THE RECEIPT OR POSSESSION OF
+// THIS SOURCE CODE AND/OR RELATED INFORMATION DOES NOT CONVEY OR IMPLY ANY RIGHTS TO
+// REPRODUCE, DISCLOSE OR DISTRIBUTE ITS CONTENTS, OR TO MANUFACTURE, USE, OR SELL
+// ANYTHING THAT IT MAY DESCRIBE, IN WHOLE OR IN PART.
+
+package sendgrid
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/unstablebuild/blue/emailprovider"
+)
+
+func testSender(t *testing.T, handler http.HandlerFunc) emailprovider.Sender {
+	t.Helper()
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	replyTo := emailprovider.Address{Name: "Support", Email: "reply@example.com"}
+	s, err := New(Credentials{APIKey: "test-key"}, Config{
+		Sender:   emailprovider.Address{Name: "Blue", Email: "sender@example.com"},
+		ReplyTo:  &replyTo,
+		Endpoint: server.URL,
+		Client:   server.Client(),
+	})
+	require.NoError(t, err)
+	return s
+}
+
+func TestSendUsesPrivatePersonalizations(t *testing.T) {
+	requestCount := 0
+	var got mailRequest
+	sender := testSender(t, func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		assert.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+		w.Header().Set("X-Message-Id", "request-id")
+		w.WriteHeader(http.StatusAccepted)
+	})
+	messages := []emailprovider.Message{
+		{
+			Recipient: emailprovider.Address{Email: "one@example.com"},
+			Subject:   "One",
+			HTMLBody:  "<p>Hello</p>",
+			Metadata:  map[string]string{"campaign": "test"},
+		},
+		{
+			Recipient: emailprovider.Address{Email: "two@example.com"},
+			Subject:   "Two",
+			HTMLBody:  "<p>Hello</p>",
+		},
+	}
+
+	results, err := sender.Send(context.Background(), messages)
+	require.NoError(t, err)
+	assert.Equal(t, 1, requestCount)
+	require.Len(t, got.Personalizations, 2)
+	assert.Equal(t, sgAddress{Email: "sender@example.com", Name: "Blue"}, got.From)
+	require.NotNil(t, got.ReplyTo)
+	assert.Equal(t, "reply@example.com", got.ReplyTo.Email)
+	for _, personalization := range got.Personalizations {
+		assert.Len(t, personalization.To, 1, "recipients must never see one another")
+	}
+	assert.Equal(t, "one@example.com", got.Personalizations[0].To[0].Email)
+	assert.Equal(t, "Two", got.Personalizations[1].Subject)
+	assert.Equal(t, map[string]string{"campaign": "test"}, got.Personalizations[0].CustomArgs)
+	require.Len(t, got.Content, 1)
+	assert.Equal(t, "text/html", got.Content[0].Type)
+	require.Len(t, results, 2)
+	for _, result := range results {
+		assert.Equal(t, emailprovider.StatusAccepted, result.Status)
+		assert.Equal(t, "request-id", result.ProviderID)
+		assert.NoError(t, result.Err)
+	}
+}
+
+func TestSendGroupsDifferentBodiesIntoSeparateRequests(t *testing.T) {
+	requestCount := 0
+	sender := testSender(t, func(w http.ResponseWriter, _ *http.Request) {
+		requestCount++
+		w.WriteHeader(http.StatusAccepted)
+	})
+	messages := []emailprovider.Message{
+		{Recipient: emailprovider.Address{Email: "one@example.com"}, Subject: "One", HTMLBody: "one"},
+		{Recipient: emailprovider.Address{Email: "two@example.com"}, Subject: "Two", HTMLBody: "two"},
+	}
+
+	results, err := sender.Send(context.Background(), messages)
+	require.NoError(t, err)
+	assert.Equal(t, 2, requestCount)
+	assert.Len(t, results, 2)
+}
+
+func TestSendValidatesWholeBatchBeforeSending(t *testing.T) {
+	requestCount := 0
+	sender := testSender(t, func(w http.ResponseWriter, _ *http.Request) {
+		requestCount++
+		w.WriteHeader(http.StatusAccepted)
+	})
+	messages := []emailprovider.Message{
+		{Recipient: emailprovider.Address{Email: "one@example.com"}, Subject: "One", HTMLBody: "one"},
+		{Recipient: emailprovider.Address{Email: "invalid"}, Subject: "Two", HTMLBody: "two"},
+	}
+
+	_, err := sender.Send(context.Background(), messages)
+	require.Error(t, err)
+	assert.Zero(t, requestCount)
+}
+
+func TestSendSplitsDuplicateRecipientsAcrossRequests(t *testing.T) {
+	requestCount := 0
+	sender := testSender(t, func(w http.ResponseWriter, _ *http.Request) {
+		requestCount++
+		w.WriteHeader(http.StatusAccepted)
+	})
+	messages := []emailprovider.Message{
+		{Recipient: emailprovider.Address{Email: "same@example.com"}, Subject: "One", HTMLBody: "same"},
+		{Recipient: emailprovider.Address{Email: "same@example.com"}, Subject: "Two", HTMLBody: "same"},
+	}
+
+	results, err := sender.Send(context.Background(), messages)
+	require.NoError(t, err)
+	assert.Equal(t, 2, requestCount)
+	assert.Len(t, results, 2)
+}
+
+func TestSendDistinguishesRejectedAndUnknown(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		code   int
+		status emailprovider.Status
+	}{
+		{name: "validation rejection", code: http.StatusBadRequest, status: emailprovider.StatusRejected},
+		{name: "provider failure", code: http.StatusInternalServerError, status: emailprovider.StatusUnknown},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			sender := testSender(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(test.code)
+				_, _ = w.Write([]byte(`{"errors":[{"message":"failed"}]}`))
+			})
+
+			results, err := sender.Send(context.Background(), []emailprovider.Message{{
+				Recipient: emailprovider.Address{Email: "one@example.com"},
+				Subject:   "One",
+				HTMLBody:  "one",
+			}})
+			require.Error(t, err)
+			require.Len(t, results, 1)
+			assert.Equal(t, test.status, results[0].Status)
+			assert.Error(t, results[0].Err)
+		})
+	}
+}
+
+func TestNewValidatesConfiguration(t *testing.T) {
+	_, err := New(Credentials{}, Config{Sender: emailprovider.Address{Email: "sender@example.com"}})
+	assert.EqualError(t, err, "sendgrid API key is required")
+
+	_, err = New(Credentials{APIKey: "key"}, Config{Sender: emailprovider.Address{Email: "invalid"}})
+	assert.EqualError(t, err, `invalid sender address "invalid"`)
+}

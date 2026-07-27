@@ -33,11 +33,14 @@ import (
 	multierr "github.com/ernestrc/go-multierror"
 	"github.com/unstablebuild/blue/auth/secretmanager"
 	"github.com/unstablebuild/blue/cli"
+	emailCLI "github.com/unstablebuild/blue/cmd/bluectl/email"
 	issueCLI "github.com/unstablebuild/blue/cmd/bluectl/issue"
 	packageCLI "github.com/unstablebuild/blue/cmd/bluectl/package"
 	releaseCLI "github.com/unstablebuild/blue/cmd/bluectl/release"
 	secretCLI "github.com/unstablebuild/blue/cmd/bluectl/secret"
 	"github.com/unstablebuild/blue/document/firestore"
+	"github.com/unstablebuild/blue/emailprovider"
+	"github.com/unstablebuild/blue/emailprovider/sendgrid"
 	"github.com/unstablebuild/blue/issue"
 	"github.com/unstablebuild/blue/logging"
 	"github.com/unstablebuild/blue/release/docrelease"
@@ -102,6 +105,7 @@ func (c *blueCtl) Man() cli.Manual {
 			"release":  releaseCLI.NewCLI(nil),
 			"package":  packageCLI.NewCLI(nil),
 			"secret":   secretCLI.NewCLI(nil),
+			"email":    emailCLI.NewCLI(nil, emailCLI.Config{}),
 			"analysis": newAnalysisCli(),
 			"license":  newLicenseCli(),
 			"issue":    issueCLI.NewCLI(nil, Tag, ""),
@@ -174,6 +178,26 @@ func (c *blueCtl) initializeCli() error {
 			}
 			c.closers = append(c.closers, secretManager)
 			return secretCLI.NewCLI(secretManager), nil
+		}),
+		"email": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
+			config, err := initializeConfig(init, configFilePath)
+			if err != nil {
+				return nil, err
+			}
+			return emailCLI.NewCLI(func(
+				sender emailprovider.Address,
+				replyTo *emailprovider.Address,
+			) (emailprovider.Sender, error) {
+				return sendgrid.New(sendgrid.Credentials{
+					APIKey: config.Email.SendGrid.APIKey,
+				}, sendgrid.Config{
+					Sender:  sender,
+					ReplyTo: replyTo,
+				})
+			}, emailCLI.Config{
+				Sender:  config.Email.Sender,
+				ReplyTo: config.Email.ReplyTo,
+			}), nil
 		}),
 		"analysis": newAnalysisCli(),
 		"license":  newLicenseCli(),

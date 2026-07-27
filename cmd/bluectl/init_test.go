@@ -60,8 +60,9 @@ func assertConfigInitialized(
 ) {
 	fileName := path.Join(folder, configFile)
 
-	_, err := os.Stat(fileName)
+	info, err := os.Stat(fileName)
 	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(configFileMode), info.Mode().Perm())
 
 	f, err := os.Open(fileName)
 	t.Cleanup(func() { _ = f.Close() })

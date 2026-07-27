@@ -36,6 +36,11 @@ issue:
   collection: blue-issue
 password:
   collection: blue-secret
+email:
+  sender:
+  reply-to:
+  sendgrid:
+    api-key:
 `
 
 type authConfig struct {
@@ -57,11 +62,22 @@ type issueConfig struct {
 	Author     string `yaml:"author"`
 }
 
+type sendgridConfig struct {
+	APIKey string `yaml:"api-key"`
+}
+
+type emailConfig struct {
+	Sender   string         `yaml:"sender"`
+	ReplyTo  string         `yaml:"reply-to"`
+	SendGrid sendgridConfig `yaml:"sendgrid"`
+}
+
 type cliConfig struct {
 	Auth     authConfig       `yaml:"auth"`
 	Release  releaseConfig    `yaml:"release"`
 	Issue    issueConfig      `yaml:"issue"`
 	Password collectionConfig `yaml:"password"`
+	Email    emailConfig      `yaml:"email"`
 }
 
 func sourceConfig(overridesConfigPath string) (
@@ -85,6 +101,7 @@ func sourceConfigFromProvider(provider config.Provider) (
 		config.Section{Name: "release", Target: &c.Release},
 		config.Section{Name: "issue", Target: &c.Issue},
 		config.Section{Name: "password", Target: &c.Password},
+		config.Section{Name: "email", Target: &c.Email},
 	)
 	return
 }
