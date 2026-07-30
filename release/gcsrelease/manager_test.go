@@ -27,6 +27,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -200,6 +201,62 @@ func (w *uploadWriter) Close() error {
 
 func newStringReader(s string) io.Reader { return strings.NewReader(s) }
 
+func TestManagerUploadSucceedsWhenStreamMatchesStat(t *testing.T) {
+	t.Parallel()
+	b := newUploadBucket()
+	inner := &fakeInner{}
+	m := NewManager(inner, b)
+
+	err := m.Upload(context.Background(), release.Bundle{
+		Package: "rune-agent", Version: release.Version("v1.1.3"),
+	}, &statReader{Reader: strings.NewReader("payload"), size: int64(len("payload"))})
+
+	require.NoError(t, err)
+	require.True(t, inner.uploaded, "metadata must be written")
+	require.True(t, b.object.exists, "artifact must be committed")
+	require.Equal(t, len("payload"), b.object.written)
+}
+
+// TestManagerUploadRejectsTruncatedStream pins the EOF-truncation hole: a
+// cut pipe surfaces as a clean EOF, and without a size check the upload
+// would publish a truncated artifact whose checksum matches the
+// truncated bytes — with package Latest then pointing at it.
+func TestManagerUploadRejectsTruncatedStream(t *testing.T) {
+	t.Parallel()
+	b := newUploadBucket()
+	inner := &fakeInner{}
+	m := NewManager(inner, b)
+
+	err := m.Upload(context.Background(), release.Bundle{
+		Package: "rune-agent", Version: release.Version("v1.1.3"),
+	}, &statReader{Reader: strings.NewReader("payload"), size: 9999})
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "truncated")
+	require.False(t, inner.uploaded, "no metadata may be written for a truncated stream")
+	require.False(t, b.object.exists, "truncated artifact must not survive")
+}
+
+// statReader is a release.ProgressReader whose Stat reports size
+// regardless of how many bytes the stream actually yields.
+type statReader struct {
+	io.Reader
+	size int64
+}
+
+func (r *statReader) Progress(int64, int64, string) {}
+
+func (r *statReader) Stat() (os.FileInfo, error) { return fakeFileInfo{size: r.size}, nil }
+
+type fakeFileInfo struct{ size int64 }
+
+func (fakeFileInfo) Name() string           { return "release.tar.gz" }
+func (f fakeFileInfo) Size() int64          { return f.size }
+func (fakeFileInfo) Mode() os.FileMode      { return 0 }
+func (fakeFileInfo) ModTime() (t time.Time) { return }
+func (fakeFileInfo) IsDir() bool            { return false }
+func (fakeFileInfo) Sys() any               { return nil }
+
 func TestManagerSignedDownloadURLDefaultsExpiry(t *testing.T) {
 	t.Parallel()
 	b := &capturingBucket{}
@@ -287,12 +344,39 @@ func TestManagerDeletePropagatesRealError(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestManagerDeleteCleansOrphanObject covers the crash-window cleanup: a
+// publish that died between the blob commit and the metadata write
+// leaves an object with no document, and its presence blocks
+// re-publishing the version. Delete is the only cleanup path, so a
+// missing document must not stop the object delete.
+func TestManagerDeleteCleansOrphanObject(t *testing.T) {
+	t.Parallel()
+	inner := &fakeInner{deleteErr: errors.New("document not found")}
+	b := &deleteBucket{}
+	m := NewManager(inner, b)
+
+	err := m.Delete(context.Background(), "rune-agent", release.Version("v1.1.3"))
+	require.NoError(t, err)
+}
+
+func TestManagerDeleteFailsWhenNothingExists(t *testing.T) {
+	t.Parallel()
+	inner := &fakeInner{deleteErr: errors.New("document not found")}
+	b := &deleteBucket{delErr: storage.ErrObjectNotExist}
+	m := NewManager(inner, b)
+
+	err := m.Delete(context.Background(), "rune-agent", release.Version("v1.1.3"))
+	require.EqualError(t, err, "document not found")
+}
+
 // fakeInner is a minimal release.Manager for Upload and Delete flows.
 type fakeInner struct {
 	release.Manager
 	deleted   bool
 	exists    bool
+	uploaded  bool
 	uploadErr error
+	deleteErr error
 }
 
 func (f *fakeInner) Get(
@@ -305,10 +389,17 @@ func (f *fakeInner) Get(
 }
 
 func (f *fakeInner) Upload(context.Context, release.Bundle, release.ProgressReader) error {
-	return f.uploadErr
+	if f.uploadErr != nil {
+		return f.uploadErr
+	}
+	f.uploaded = true
+	return nil
 }
 
 func (f *fakeInner) Delete(context.Context, string, release.Version) error {
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
 	f.deleted = true
 	return nil
 }

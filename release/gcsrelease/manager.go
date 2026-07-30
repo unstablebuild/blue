@@ -175,6 +175,15 @@ func (m *Manager) Upload(ctx context.Context, bundle release.Bundle, r release.P
 		}
 	}
 
+	// A cut pipe is indistinguishable from a clean EOF, and the checksum
+	// is computed from the streamed bytes, so a short read would publish
+	// a truncated artifact that passes integrity checks.
+	if totalSize > 0 && totalRead != totalSize {
+		m.abortUpload(w, bundle)
+		return fmt.Errorf("release data truncated: read %d of %d bytes",
+			totalRead, totalSize)
+	}
+
 	if err := w.Close(); err != nil {
 		// Writers never overwrite, so a failed close committed nothing
 		// and any object under this name predates the call.
@@ -277,14 +286,23 @@ func (m *Manager) Get(ctx context.Context, pkg string, ver release.Version, out 
 	return bundle, nil
 }
 
-// Delete removes metadata via the inner manager and then deletes the GCS object.
+// Delete removes metadata via the inner manager and then deletes the GCS
+// object. A missing metadata document does not stop the object delete: a
+// publish that dies between the blob commit and the metadata write
+// orphans an object whose presence blocks re-publishing the version, and
+// Delete is the only cleanup path.
 func (m *Manager) Delete(ctx context.Context, pkg string, ver release.Version) error {
-	err := m.inner.Delete(ctx, pkg, ver)
-	if err != nil {
-		return err
+	innerErr := m.inner.Delete(ctx, pkg, ver)
+	if innerErr != nil && !isNotFound(innerErr) {
+		return innerErr
 	}
-	if err := m.object(pkg, ver).Delete(ctx); err != nil && !isObjectNotExist(err) {
+	err := m.object(pkg, ver).Delete(ctx)
+	if err != nil && !isObjectNotExist(err) {
 		return fmt.Errorf("gcs delete: %w", err)
+	}
+	if err != nil {
+		// Nothing was deleted on either side: surface the metadata miss.
+		return innerErr
 	}
 	return nil
 }
