@@ -47,6 +47,11 @@ const sha256MetadataKey = "sha256"
 
 const defaultSignedURLExpiry = 15 * time.Minute
 
+// ErrReleaseExists is returned by Upload when the version is already
+// published. Published versions are immutable; delete the release first
+// to re-publish it.
+var ErrReleaseExists = errors.New("release version already exists; delete it first to re-publish")
+
 // Signer can produce short-lived signed URLs for GCS objects.
 type Signer interface {
 	SignedDownloadURL(ctx context.Context, pkg string, version release.Version) (string, error)
@@ -123,9 +128,19 @@ func (m *Manager) List(ctx context.Context, pkg string, filters map[string]strin
 }
 
 // Upload writes binary data to GCS and metadata to the inner manager.
+// Published versions are immutable: re-uploading an existing version
+// fails with ErrReleaseExists before any data is transferred, and the
+// create-only GCS writer guarantees that even a concurrent publish can
+// never replace an already-published artifact.
 func (m *Manager) Upload(ctx context.Context, bundle release.Bundle, r release.ProgressReader) error {
+	_, err := m.inner.Get(ctx, bundle.Package, bundle.Version,
+		release.NopProgressWriter(io.Discard))
+	if err == nil {
+		return fmt.Errorf("%s@%s: %w", bundle.Package, bundle.Version, ErrReleaseExists)
+	}
+
 	obj := m.object(bundle.Package, bundle.Version)
-	w := obj.NewWriter(ctx)
+	w := obj.NewCreateWriter(ctx)
 	hasher := sha256.New()
 	tee := io.TeeReader(r, hasher)
 
@@ -145,9 +160,8 @@ func (m *Manager) Upload(ctx context.Context, bundle release.Bundle, r release.P
 		if n > 0 {
 			_, werr := w.Write(buf[:n])
 			if werr != nil {
-				_ = w.Close()
-				m.forceDeleteObject(bundle.Package, bundle.Version)
-				return fmt.Errorf("gcs write: %w", werr)
+				m.abortUpload(w, bundle)
+				return fmt.Errorf("gcs write: %w", translateExistsErr(werr, bundle))
 			}
 			totalRead += int64(n)
 			r.Progress(totalRead, totalSize, "bytes")
@@ -156,15 +170,15 @@ func (m *Manager) Upload(ctx context.Context, bundle release.Bundle, r release.P
 			break
 		}
 		if rerr != nil {
-			_ = w.Close()
-			m.forceDeleteObject(bundle.Package, bundle.Version)
+			m.abortUpload(w, bundle)
 			return fmt.Errorf("read release data: %w", rerr)
 		}
 	}
 
 	if err := w.Close(); err != nil {
-		m.forceDeleteObject(bundle.Package, bundle.Version)
-		return fmt.Errorf("gcs close: %w", err)
+		// Writers never overwrite, so a failed close committed nothing
+		// and any object under this name predates the call.
+		return fmt.Errorf("gcs close: %w", translateExistsErr(err, bundle))
 	}
 
 	checksum := hex.EncodeToString(hasher.Sum(nil))
@@ -173,12 +187,34 @@ func (m *Manager) Upload(ctx context.Context, bundle release.Bundle, r release.P
 	}
 	bundle.Metadata[sha256MetadataKey] = checksum
 
-	err := m.inner.Upload(ctx, bundle, release.NopProgressReader(bytes.NewReader(nil)))
-	if err != nil {
+	if err := m.inner.Upload(ctx, bundle, release.NopProgressReader(bytes.NewReader(nil))); err != nil {
 		m.forceDeleteObject(bundle.Package, bundle.Version)
 		return err
 	}
 	return nil
+}
+
+// translateExistsErr maps the create-only writer's precondition failure
+// (the artifact object already exists, e.g. orphaned by an earlier
+// partial publish) onto ErrReleaseExists so callers see one sentinel for
+// every "already published" shape.
+func translateExistsErr(err error, bundle release.Bundle) error {
+	var gerr *googleapi.Error
+	if errors.As(err, &gerr) && gerr.Code == http.StatusPreconditionFailed {
+		return fmt.Errorf("%s@%s: %w", bundle.Package, bundle.Version, ErrReleaseExists)
+	}
+	return err
+}
+
+// abortUpload finalises an interrupted write and removes the object only
+// when that finalise succeeded, which is the sole case in which this call
+// created it. Closing a partial write otherwise commits a truncated
+// object, so it cannot simply be left behind.
+func (m *Manager) abortUpload(w io.WriteCloser, bundle release.Bundle) {
+	if err := w.Close(); err != nil {
+		return
+	}
+	m.forceDeleteObject(bundle.Package, bundle.Version)
 }
 
 // Get fetches bundle metadata from the inner manager and optionally

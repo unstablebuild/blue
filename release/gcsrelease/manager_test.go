@@ -25,7 +25,9 @@ package gcsrelease
 
 import (
 	"context"
+	"errors"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +36,169 @@ import (
 	"github.com/unstablebuild/blue/release"
 	"google.golang.org/api/googleapi"
 )
+
+// TestManagerUploadFailsFastWhenVersionPublished covers the re-publish
+// path that wiped published rune-agent artifacts: the version is already
+// in the metadata store, so Upload must fail with ErrReleaseExists before
+// transferring a single byte or touching the published artifact.
+func TestManagerUploadFailsFastWhenVersionPublished(t *testing.T) {
+	t.Parallel()
+	b := newUploadBucket()
+	b.object.exists = true
+	inner := &fakeInner{exists: true}
+	m := NewManager(inner, b)
+
+	err := m.Upload(context.Background(), release.Bundle{
+		Package: "rune-agent", Version: release.Version("v1.1.2"),
+	}, release.NopProgressReader(newStringReader("payload")))
+
+	require.ErrorIs(t, err, ErrReleaseExists)
+	require.Contains(t, err.Error(), "rune-agent@v1.1.2")
+	require.Zero(t, b.object.written, "no data must be transferred")
+	require.False(t, b.object.deleted, "must not delete a pre-existing release artifact")
+	require.True(t, b.object.exists, "pre-existing release artifact must survive")
+}
+
+// TestManagerUploadKeepsExistingObjectOnPublishRace covers a publish that
+// slips past the fail-fast check: the create-only writer refuses to
+// replace the object and the existing artifact must survive untouched.
+func TestManagerUploadKeepsExistingObjectOnPublishRace(t *testing.T) {
+	t.Parallel()
+	b := newUploadBucket()
+	b.object.exists = true
+	m := NewManager(&fakeInner{}, b)
+
+	err := m.Upload(context.Background(), release.Bundle{
+		Package: "rune-agent", Version: release.Version("v1.1.2"),
+	}, release.NopProgressReader(newStringReader("payload")))
+
+	require.ErrorIs(t, err, ErrReleaseExists)
+	require.False(t, b.object.deleted, "must not delete a pre-existing release artifact")
+	require.True(t, b.object.exists, "pre-existing release artifact must survive")
+}
+
+// TestManagerUploadDeletesOwnObjectWhenMetadataRejectsVersion pins the
+// rollback scope when the duplicate is only detected at the metadata
+// write: the rollback may remove the object this call created, never a
+// survivor from an earlier publish.
+func TestManagerUploadDeletesOwnObjectWhenMetadataRejectsVersion(t *testing.T) {
+	t.Parallel()
+	b := newUploadBucket()
+	inner := &fakeInner{uploadErr: errors.New("document already exists")}
+	m := NewManager(inner, b)
+
+	err := m.Upload(context.Background(), release.Bundle{
+		Package: "rune-agent", Version: release.Version("v1.1.2"),
+	}, release.NopProgressReader(newStringReader("payload")))
+
+	require.Error(t, err)
+	require.True(t, b.object.deleted, "own orphaned artifact must be rolled back")
+}
+
+func TestManagerUploadDeletesObjectItCreatedWhenMetadataFails(t *testing.T) {
+	t.Parallel()
+	b := newUploadBucket()
+	inner := &fakeInner{uploadErr: errors.New("boom")}
+	m := NewManager(inner, b)
+
+	err := m.Upload(context.Background(), release.Bundle{
+		Package: "rune-agent", Version: release.Version("v1.1.3"),
+	}, release.NopProgressReader(newStringReader("payload")))
+
+	require.Error(t, err)
+	require.True(t, b.object.deleted, "orphaned artifact must be rolled back")
+}
+
+func TestManagerUploadDoesNotDeleteWhenWriteNeverCommits(t *testing.T) {
+	t.Parallel()
+	b := newUploadBucket()
+	b.object.exists = true
+	b.object.writeErr = errors.New("connection reset")
+	m := NewManager(&fakeInner{}, b)
+
+	err := m.Upload(context.Background(), release.Bundle{
+		Package: "rune-agent", Version: release.Version("v1.1.2"),
+	}, release.NopProgressReader(newStringReader("payload")))
+
+	require.Error(t, err)
+	require.False(t, b.object.deleted, "an uncommitted write owns no object to delete")
+	require.True(t, b.object.exists)
+}
+
+func TestManagerUploadDeletesTruncatedObjectItCommitted(t *testing.T) {
+	t.Parallel()
+	b := newUploadBucket()
+	b.object.writeErr = errors.New("connection reset")
+	m := NewManager(&fakeInner{}, b)
+
+	err := m.Upload(context.Background(), release.Bundle{
+		Package: "rune-agent", Version: release.Version("v1.1.3"),
+	}, release.NopProgressReader(newStringReader("payload")))
+
+	require.Error(t, err)
+	require.True(t, b.object.deleted, "truncated artifact must be rolled back")
+}
+
+func newUploadBucket() *uploadBucket {
+	return &uploadBucket{object: &uploadObject{}}
+}
+
+type uploadBucket struct {
+	object *uploadObject
+}
+
+func (b *uploadBucket) Object(string) Object { return b.object }
+func (b *uploadBucket) SignedURL(string, *storage.SignedURLOptions) (string, error) {
+	return "", nil
+}
+
+// uploadObject models the GCS DoesNotExist precondition: a write is only
+// committed at Close, and only when no object exists yet.
+type uploadObject struct {
+	exists   bool
+	deleted  bool
+	written  int
+	writeErr error
+}
+
+func (o *uploadObject) NewCreateWriter(context.Context) io.WriteCloser {
+	return &uploadWriter{obj: o}
+}
+
+func (o *uploadObject) NewReader(context.Context) (ObjectReader, error) {
+	return nil, storage.ErrObjectNotExist
+}
+
+func (o *uploadObject) Delete(context.Context) error {
+	if !o.exists {
+		return storage.ErrObjectNotExist
+	}
+	o.exists = false
+	o.deleted = true
+	return nil
+}
+
+type uploadWriter struct {
+	obj *uploadObject
+}
+
+func (w *uploadWriter) Write(p []byte) (int, error) {
+	if w.obj.writeErr != nil {
+		return 0, w.obj.writeErr
+	}
+	w.obj.written += len(p)
+	return len(p), nil
+}
+
+func (w *uploadWriter) Close() error {
+	if w.obj.exists {
+		return &googleapi.Error{Code: 412, Message: "conditionNotMet"}
+	}
+	w.obj.exists = true
+	return nil
+}
+
+func newStringReader(s string) io.Reader { return strings.NewReader(s) }
 
 func TestManagerSignedDownloadURLDefaultsExpiry(t *testing.T) {
 	t.Parallel()
@@ -82,7 +247,7 @@ func (b *capturingBucket) SignedURL(object string, opts *storage.SignedURLOption
 
 type capturingObject struct{}
 
-func (capturingObject) NewWriter(context.Context) io.WriteCloser        { panic("unused") }
+func (capturingObject) NewCreateWriter(context.Context) io.WriteCloser  { panic("unused") }
 func (capturingObject) NewReader(context.Context) (ObjectReader, error) { panic("unused") }
 func (capturingObject) Delete(context.Context) error                    { panic("unused") }
 
@@ -122,10 +287,25 @@ func TestManagerDeletePropagatesRealError(t *testing.T) {
 	require.Error(t, err)
 }
 
-// fakeInner is a minimal release.Manager that records a Delete call.
+// fakeInner is a minimal release.Manager for Upload and Delete flows.
 type fakeInner struct {
 	release.Manager
-	deleted bool
+	deleted   bool
+	exists    bool
+	uploadErr error
+}
+
+func (f *fakeInner) Get(
+	context.Context, string, release.Version, release.ProgressWriter,
+) (release.Bundle, error) {
+	if f.exists {
+		return release.Bundle{}, nil
+	}
+	return release.Bundle{}, errors.New("document not found")
+}
+
+func (f *fakeInner) Upload(context.Context, release.Bundle, release.ProgressReader) error {
+	return f.uploadErr
 }
 
 func (f *fakeInner) Delete(context.Context, string, release.Version) error {
@@ -144,6 +324,6 @@ func (b *deleteBucket) SignedURL(string, *storage.SignedURLOptions) (string, err
 
 type deleteObject struct{ err error }
 
-func (deleteObject) NewWriter(context.Context) io.WriteCloser        { panic("unused") }
+func (deleteObject) NewCreateWriter(context.Context) io.WriteCloser  { panic("unused") }
 func (deleteObject) NewReader(context.Context) (ObjectReader, error) { panic("unused") }
 func (o deleteObject) Delete(context.Context) error                  { return o.err }

@@ -39,7 +39,10 @@ type Bucket interface {
 
 // Object abstracts the operations needed on a GCS object.
 type Object interface {
-	NewWriter(ctx context.Context) io.WriteCloser
+	// NewCreateWriter returns a writer that creates the object.
+	// Finalising the write fails when the object already exists,
+	// leaving the existing object untouched.
+	NewCreateWriter(ctx context.Context) io.WriteCloser
 	NewReader(ctx context.Context) (ObjectReader, error)
 	Delete(ctx context.Context) error
 }
@@ -74,8 +77,8 @@ type gcsObject struct {
 	o *storage.ObjectHandle
 }
 
-func (g *gcsObject) NewWriter(ctx context.Context) io.WriteCloser {
-	return g.o.NewWriter(ctx)
+func (g *gcsObject) NewCreateWriter(ctx context.Context) io.WriteCloser {
+	return g.o.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
 }
 
 func (g *gcsObject) NewReader(ctx context.Context) (ObjectReader, error) {
@@ -97,4 +100,4 @@ type gcsReader struct {
 
 func (g *gcsReader) Read(p []byte) (int, error) { return g.r.Read(p) }
 func (g *gcsReader) Close() error               { return g.r.Close() }
-func (g *gcsReader) Size() int64                 { return g.r.Attrs.Size }
+func (g *gcsReader) Size() int64                { return g.r.Attrs.Size }
