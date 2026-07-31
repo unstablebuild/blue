@@ -35,6 +35,7 @@ import (
 	"github.com/unstablebuild/blue/cli"
 	emailCLI "github.com/unstablebuild/blue/cmd/bluectl/email"
 	issueCLI "github.com/unstablebuild/blue/cmd/bluectl/issue"
+	newsletterCLI "github.com/unstablebuild/blue/cmd/bluectl/newsletter"
 	packageCLI "github.com/unstablebuild/blue/cmd/bluectl/package"
 	releaseCLI "github.com/unstablebuild/blue/cmd/bluectl/release"
 	secretCLI "github.com/unstablebuild/blue/cmd/bluectl/secret"
@@ -101,14 +102,15 @@ func (c *blueCtl) Man() cli.Manual {
 	// can get their documentation
 	if len(c.cmds) == 0 {
 		c.cmds = map[string]cli.CLI{
-			"init":     newInitializer(c.configFolder),
-			"release":  releaseCLI.NewCLI(nil),
-			"package":  packageCLI.NewCLI(nil),
-			"secret":   secretCLI.NewCLI(nil),
-			"email":    emailCLI.NewCLI(nil, emailCLI.Config{}),
-			"analysis": newAnalysisCli(),
-			"license":  newLicenseCli(),
-			"issue":    issueCLI.NewCLI(nil, Tag, ""),
+			"init":       newInitializer(c.configFolder),
+			"release":    releaseCLI.NewCLI(nil),
+			"package":    packageCLI.NewCLI(nil),
+			"secret":     secretCLI.NewCLI(nil),
+			"email":      emailCLI.NewCLI(nil, emailCLI.Config{}),
+			"analysis":   newAnalysisCli(),
+			"license":    newLicenseCli(),
+			"issue":      issueCLI.NewCLI(nil, Tag, ""),
+			"newsletter": newsletterCLI.NewCLI(nil),
 		}
 	}
 	for _, cmd := range c.cmds {
@@ -218,6 +220,19 @@ func (c *blueCtl) initializeCli() error {
 			issueTracker := issue.NewDocumentTracker(trackerDB)
 
 			return issueCLI.NewCLI(issueTracker, Tag, config.Issue.Author), nil
+		}),
+		"newsletter": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
+			config, err := initializeConfig(init, configFilePath)
+			if err != nil {
+				return nil, err
+			}
+			subscriberDB, err := firestore.New(config.Auth.ProjectID,
+				config.Newsletter.Collection, config.Auth.CredentialsFile)
+			if err != nil {
+				return nil, fmt.Errorf("firestore: %w", err)
+			}
+			c.closers = append(c.closers, subscriberDB)
+			return newsletterCLI.NewCLI(subscriberDB), nil
 		}),
 	}
 

@@ -39,11 +39,12 @@ import (
 )
 
 const (
-	testTempDirPrefix        = "test_blue"
-	defaultReleaseCollection = "blue-release"
-	defaultReleaseBucket     = "blue-release"
-	defaultIssueCollection   = "blue-issue"
-	defaultSecretsCollection = "blue-secret"
+	testTempDirPrefix           = "test_blue"
+	defaultReleaseCollection    = "blue-release"
+	defaultReleaseBucket        = "blue-release"
+	defaultIssueCollection      = "blue-issue"
+	defaultSecretsCollection    = "blue-secret"
+	defaultNewsletterCollection = "newsletter-subscribers"
 )
 
 func newTestInitializer(_ *testing.T, dirName string) (
@@ -100,6 +101,7 @@ func testInitializerRun(t *testing.T, dirName string, projectID string) {
 	expectedConfig.Release.Bucket = defaultReleaseBucket
 	expectedConfig.Issue.Collection = defaultIssueCollection
 	expectedConfig.Password.Collection = defaultSecretsCollection
+	expectedConfig.Newsletter.Collection = defaultNewsletterCollection
 
 	assertConfigInitialized(t, i.configFolder, expectedConfig)
 }
@@ -131,6 +133,7 @@ func TestInitializerRun(t *testing.T) {
 		config.Release.Bucket = defaultReleaseBucket
 		config.Issue.Collection = defaultIssueCollection
 		config.Password.Collection = defaultSecretsCollection
+		config.Newsletter.Collection = defaultNewsletterCollection
 		require.NoError(t, encodeConfig(f, &config))
 		require.NoError(t, f.Close())
 

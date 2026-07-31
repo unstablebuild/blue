@@ -36,6 +36,8 @@ issue:
   collection: blue-issue
 password:
   collection: blue-secret
+newsletter:
+  collection: newsletter-subscribers
 email:
   sender:
   reply-to:
@@ -75,11 +77,12 @@ type emailConfig struct {
 }
 
 type cliConfig struct {
-	Auth     authConfig       `yaml:"auth"`
-	Release  releaseConfig    `yaml:"release"`
-	Issue    issueConfig      `yaml:"issue"`
-	Password collectionConfig `yaml:"password"`
-	Email    emailConfig      `yaml:"email"`
+	Auth       authConfig       `yaml:"auth"`
+	Release    releaseConfig    `yaml:"release"`
+	Issue      issueConfig      `yaml:"issue"`
+	Password   collectionConfig `yaml:"password"`
+	Newsletter collectionConfig `yaml:"newsletter"`
+	Email      emailConfig      `yaml:"email"`
 }
 
 func sourceConfig(overridesConfigPath string) (
@@ -103,6 +106,7 @@ func sourceConfigFromProvider(provider config.Provider) (
 		config.Section{Name: "release", Target: &c.Release},
 		config.Section{Name: "issue", Target: &c.Issue},
 		config.Section{Name: "password", Target: &c.Password},
+		config.Section{Name: "newsletter", Target: &c.Newsletter},
 		config.Section{Name: "email", Target: &c.Email},
 	)
 	return
