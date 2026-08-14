@@ -77,6 +77,56 @@ func TestBolt(t *testing.T) {
 		assert.False(t, it.HasNext())
 	})
 
+	t.Run("ApplyBatch", func(t *testing.T) {
+		ctx := context.Background()
+		f, err := os.CreateTemp("", "blue_batch_test")
+		require.NoError(t, err)
+		defer func() { _ = f.Close() }()
+
+		store, err := New(f.Name(), "test")
+		require.NoError(t, err)
+
+		require.NoError(t, store.Set(ctx, "taken", doctest.Alice()))
+		require.NoError(t, store.Set(ctx, "doomed", doctest.Alice()))
+		require.NoError(t, store.Set(ctx, "bob", doctest.Bob()))
+
+		results, err := store.ApplyBatch(ctx, []document.BatchOp{
+			{Type: document.BatchCreate, ID: "fresh", Doc: doctest.Bob()},
+			{Type: document.BatchCreate, ID: "taken", Doc: doctest.Bob()},
+			{Type: document.BatchSet, ID: "taken", Doc: doctest.Bob()},
+			{Type: document.BatchDelete, ID: "doomed"},
+			{Type: document.BatchUpdate, ID: "bob", Updates: []document.Update{
+				{FieldPath: []string{"Name"}, Value: "Robert"},
+			}},
+			{Type: document.BatchUpdate, ID: "bob", Updates: []document.Update{
+				{FieldPath: []string{"Name"}, Value: "Bobby"},
+			}, Preconditions: []document.Precondition{
+				{FieldPath: []string{"Name"}, Value: "Bob"},
+			}},
+			{Type: document.BatchUpdate, ID: "ghost", Updates: []document.Update{
+				{FieldPath: []string{"Name"}, Value: "Casper"},
+			}},
+		})
+		require.NoError(t, err)
+		require.Len(t, results, 7)
+		assert.NoError(t, results[0].Err)
+		assert.ErrorIs(t, results[1].Err, document.ErrAlreadyExists)
+		assert.NoError(t, results[2].Err)
+		assert.NoError(t, results[3].Err)
+		assert.NoError(t, results[4].Err)
+		assert.ErrorIs(t, results[5].Err, document.ErrPreconditionFailed)
+		assert.ErrorIs(t, results[6].Err, document.ErrNotFound)
+
+		var doc doctest.Segador
+		require.NoError(t, store.Get(ctx, "fresh", &doc))
+		assert.Equal(t, "Bob", doc.Name)
+
+		require.NoError(t, store.Get(ctx, "bob", &doc))
+		assert.Equal(t, "Robert", doc.Name)
+
+		assert.ErrorIs(t, store.Get(ctx, "doomed", &doc), document.ErrNotFound)
+	})
+
 	t.Run("with two concurrent instances", func(t *testing.T) {
 		ctx := context.Background()
 		f, err := os.CreateTemp("", "what_is_barnack_test")

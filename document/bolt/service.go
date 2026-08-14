@@ -25,6 +25,7 @@ package bolt
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -305,4 +306,72 @@ func (s *Store) Drop(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// ApplyBatch satisfies document.BatchWriter. Every op is applied in a
+// single read-write transaction, so a batch costs one commit — and one
+// fsync, unless ctx requests otherwise — instead of one per operation.
+func (s *Store) ApplyBatch(
+	ctx context.Context, ops []document.BatchOp,
+) ([]document.BatchOpResult, error) {
+	results := make([]document.BatchOpResult, len(ops))
+	err := s.update(ctx, func(tx *bolt.Tx) error {
+		b := tx.Bucket(s.collID)
+		for i, op := range ops {
+			err := s.applyBatchOp(b, op)
+			switch {
+			case errors.Is(err, document.ErrAlreadyExists),
+				errors.Is(err, document.ErrNotFound),
+				errors.Is(err, document.ErrPreconditionFailed):
+				results[i].Err = err
+			case err != nil:
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+func (s *Store) applyBatchOp(b *bolt.Bucket, op document.BatchOp) error {
+	key := []byte(op.ID)
+	switch op.Type {
+	case document.BatchDelete:
+		return b.Delete(key)
+	case document.BatchCreate, document.BatchSet:
+		if op.Doc == nil {
+			return fmt.Errorf("batch: nil document for %q", op.ID)
+		}
+		doc, err := document.DerefCreateValue(reflect.ValueOf(op.Doc))
+		if err != nil {
+			return err
+		}
+		if op.Type == document.BatchCreate && len(b.Get(key)) != 0 {
+			return document.ErrAlreadyExists
+		}
+		return b.Put(key, document.Encode(s.marshaler, doc, true))
+	case document.BatchUpdate:
+		if len(op.Updates) == 0 {
+			return fmt.Errorf("batch: no paths to update for %q", op.ID)
+		}
+		data := b.Get(key)
+		if len(data) == 0 {
+			return document.ErrNotFound
+		}
+		var doc map[string]any
+		if err := document.SafeDecode(s.marshaler, &doc, data); err != nil {
+			return err
+		}
+		err := document.UpdateProto(
+			s.marshaler, op.Updates, doc, op.Preconditions...)
+		if err != nil {
+			return err
+		}
+		return b.Put(key, document.Encode(s.marshaler, doc, false))
+	default:
+		return fmt.Errorf("batch: unknown operation type %d", op.Type)
+	}
 }
