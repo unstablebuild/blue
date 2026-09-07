@@ -39,10 +39,10 @@ generate:
 	@ go generate ./.../...
 
 license: $(EXEC)
-	@ $(BIN)/bluectl license LICENSE `find . -name \*.go | grep -v gomock | grep -v .pb.go | xargs`
+	@ $(BIN)/bluectl license LICENSE_HEADER `find . -name \*.go | grep -v gomock | grep -v .pb.go | xargs`
 
 assert_license: $(EXEC)
-	@ $(BIN)/bluectl license -d LICENSE `find . -name \*.go | grep -v gomock | grep -v .pb.go | xargs`
+	@ $(BIN)/bluectl license -d LICENSE_HEADER `find . -name \*.go | grep -v gomock | grep -v .pb.go | xargs`
 
 install:
 	@ go install ./...
