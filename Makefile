@@ -73,6 +73,3 @@ release:
 	@ TARGET_OS=linux TARGET_ARCH=amd64 $(MAKE) make_release
 	@ TARGET_OS=darwin TARGET_ARCH=amd64 $(MAKE) make_release
 	@ cd $(TARGET) && tar -czvf blue-release-`git describe --tags --dirty`.tar.gz *
-
-dist: release
-	@ ./dist.sh
