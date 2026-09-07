@@ -16,34 +16,52 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 
+	"github.com/go-jose/go-jose/v4"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestFetchPublicJWKS(t *testing.T) {
-	// NOTE: to make this test work, we should create an http endpoint and return a pub key
-	t.SkipNow()
-
-	endpoint := "https://www.googleapis.com/oauth2/v3/certs"
-	u, err := url.Parse(endpoint)
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
+
+	jwks := jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{
+		Key:       &privateKey.PublicKey,
+		Algorithm: string(jose.RS256),
+		Use:       "sig",
+		KeyID:     keyID,
+	}}}
+
+	server := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(jwks)
+		}))
+	defer server.Close()
+
+	u, err := url.Parse(server.URL)
+	require.NoError(t, err)
+
 	keys, err := FetchPublicJWKS(u)
 	require.NoError(t, err)
 
 	verifyKeys, err := keys.Verify(context.Background())
 	require.NoError(t, err)
+	require.Len(t, verifyKeys, 1)
 
-	require.True(t, len(verifyKeys) >= 1)
-
-	token := "REDACTED"
-
-	for _, key := range verifyKeys {
-		_, err = VerifyToken[any](key, token)
-		if err == nil {
-			break
-		}
-	}
+	token, err := SignToken(Key{key: privateKey, algo: jose.RS256},
+		"1234", "user@example.com", User{Role: "admin"}, tokenExpiresIn)
 	require.NoError(t, err)
+
+	claims, err := VerifyToken[User](verifyKeys[0], token)
+	require.NoError(t, err)
+	assert.Equal(t, "user@example.com", claims.Email)
+	assert.Equal(t, "admin", claims.Extra.Role)
 }
