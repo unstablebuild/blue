@@ -27,11 +27,12 @@ import (
 
 func newTestLedger() Ledger {
 	return Ledger{
-		Programs:    NewDocumentProgramStore(document.NewInMemoryService()),
-		Awards:      NewDocumentAwardStore(document.NewInMemoryService()),
-		Receipts:    NewDocumentReceiptStore(document.NewInMemoryService()),
-		Rounds:      NewDocumentRoundStore(document.NewInMemoryService()),
-		Obligations: NewDocumentObligationStore(document.NewInMemoryService()),
+		Programs:     NewDocumentProgramStore(document.NewInMemoryService()),
+		Participants: NewDocumentParticipantStore(document.NewInMemoryService()),
+		Awards:       NewDocumentAwardStore(document.NewInMemoryService()),
+		Receipts:     NewDocumentReceiptStore(document.NewInMemoryService()),
+		Rounds:       NewDocumentRoundStore(document.NewInMemoryService()),
+		Obligations:  NewDocumentObligationStore(document.NewInMemoryService()),
 	}
 }
 

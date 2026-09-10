@@ -29,6 +29,14 @@ password:
   collection: blue-secret
 newsletter:
   collection: newsletter-subscribers
+contributor:
+  program: contributor-program
+  participants: contributor-participants
+  awards: contributor-awards
+  receipts: contributor-receipts
+  rounds: contributor-rounds
+  obligations: contributor-obligations
+  operator:
 email:
   sender:
   reply-to:
@@ -56,6 +64,24 @@ type issueConfig struct {
 	Author     string `yaml:"author"`
 }
 
+// contributorConfig names the Firestore collections backing the
+// contributor program. They must match the ox-api
+// --contributor-*-collection flags: bluectl and the API write the same
+// ledger.
+type contributorConfig struct {
+	Program      string `yaml:"program"`
+	Participants string `yaml:"participants"`
+	Awards       string `yaml:"awards"`
+	Receipts     string `yaml:"receipts"`
+	Rounds       string `yaml:"rounds"`
+	Obligations  string `yaml:"obligations"`
+
+	// Operator identifies who runs the CLI. It is recorded as the
+	// proposer, decider or closer of everything bluectl writes to the
+	// ledger.
+	Operator string `yaml:"operator"`
+}
+
 type sendgridConfig struct {
 	APIKey             string `yaml:"api-key"`
 	UnsubscribeGroupID int    `yaml:"unsubscribe-group-id"`
@@ -68,12 +94,13 @@ type emailConfig struct {
 }
 
 type cliConfig struct {
-	Auth       authConfig       `yaml:"auth"`
-	Release    releaseConfig    `yaml:"release"`
-	Issue      issueConfig      `yaml:"issue"`
-	Password   collectionConfig `yaml:"password"`
-	Newsletter collectionConfig `yaml:"newsletter"`
-	Email      emailConfig      `yaml:"email"`
+	Auth        authConfig        `yaml:"auth"`
+	Release     releaseConfig     `yaml:"release"`
+	Issue       issueConfig       `yaml:"issue"`
+	Password    collectionConfig  `yaml:"password"`
+	Newsletter  collectionConfig  `yaml:"newsletter"`
+	Contributor contributorConfig `yaml:"contributor"`
+	Email       emailConfig       `yaml:"email"`
 }
 
 func sourceConfig(overridesConfigPath string) (
@@ -98,6 +125,7 @@ func sourceConfigFromProvider(provider config.Provider) (
 		config.Section{Name: "issue", Target: &c.Issue},
 		config.Section{Name: "password", Target: &c.Password},
 		config.Section{Name: "newsletter", Target: &c.Newsletter},
+		config.Section{Name: "contributor", Target: &c.Contributor},
 		config.Section{Name: "email", Target: &c.Email},
 	)
 	return

@@ -31,6 +31,8 @@ import (
 	packageCLI "github.com/unstablebuild/blue/cmd/bluectl/package"
 	releaseCLI "github.com/unstablebuild/blue/cmd/bluectl/release"
 	secretCLI "github.com/unstablebuild/blue/cmd/bluectl/secret"
+	"github.com/unstablebuild/blue/contributor"
+	"github.com/unstablebuild/blue/document"
 	"github.com/unstablebuild/blue/document/firestore"
 	"github.com/unstablebuild/blue/emailprovider"
 	"github.com/unstablebuild/blue/emailprovider/sendgrid"
@@ -103,7 +105,7 @@ func (c *blueCtl) Man() cli.Manual {
 			"license":     newLicenseCli(),
 			"issue":       issueCLI.NewCLI(nil, Tag, ""),
 			"newsletter":  newsletterCLI.NewCLI(nil),
-			"contributor": contributorCLI.NewCLI(),
+			"contributor": contributorCLI.NewCLI(nil),
 		}
 	}
 	for _, cmd := range c.cmds {
@@ -139,6 +141,56 @@ func (c *blueCtl) newReleaseManager(init initializer, configFilePath string) (*g
 	bucket := gcsClient.Bucket(config.Release.Bucket)
 	inner := docrelease.NewManager(docDB)
 	return gcsrelease.NewManager(inner, gcsrelease.NewBucket(bucket)), nil
+}
+
+// openContributorLedger opens the six contributor collections. They are
+// the same collections ox-api serves from, so the collection names must
+// match its --contributor-*-collection flags.
+func (c *blueCtl) openContributorLedger(
+	init initializer, configFilePath string,
+) (contributorCLI.Ledger, error) {
+	config, err := initializeConfig(init, configFilePath)
+	if err != nil {
+		return contributorCLI.Ledger{}, err
+	}
+
+	// failed records the first collection that could not be opened; the
+	// per-collection helper keeps the store wiring below readable.
+	var failed error
+	open := func(collection string) document.Service {
+		db, err := firestore.New(config.Auth.ProjectID, collection,
+			config.Auth.CredentialsFile)
+		if err != nil {
+			if failed == nil {
+				failed = fmt.Errorf("firestore (%s): %w", collection, err)
+			}
+			return nil
+		}
+		c.closers = append(c.closers, db)
+		return db
+	}
+
+	ledger := contributorCLI.Ledger{
+		Ledger: contributor.Ledger{
+			Programs: contributor.NewDocumentProgramStore(
+				open(config.Contributor.Program)),
+			Participants: contributor.NewDocumentParticipantStore(
+				open(config.Contributor.Participants)),
+			Awards: contributor.NewDocumentAwardStore(
+				open(config.Contributor.Awards)),
+			Receipts: contributor.NewDocumentReceiptStore(
+				open(config.Contributor.Receipts)),
+			Rounds: contributor.NewDocumentRoundStore(
+				open(config.Contributor.Rounds)),
+			Obligations: contributor.NewDocumentObligationStore(
+				open(config.Contributor.Obligations)),
+		},
+		Operator: config.Contributor.Operator,
+	}
+	if failed != nil {
+		return contributorCLI.Ledger{}, failed
+	}
+	return ledger, nil
 }
 
 func (c *blueCtl) initializeCli() error {
@@ -227,7 +279,14 @@ func (c *blueCtl) initializeCli() error {
 			c.closers = append(c.closers, subscriberDB)
 			return newsletterCLI.NewCLI(subscriberDB), nil
 		}),
-		"contributor": contributorCLI.NewCLI(),
+		// The contributor command is not cli.Lazy: its 'verify'
+		// sub-command audits an exported statement and must keep working
+		// for contributors with no access to the project. Only the
+		// sub-commands that touch the ledger open the collections.
+		"contributor": contributorCLI.NewCLI(
+			func(ctx context.Context) (contributorCLI.Ledger, error) {
+				return c.openContributorLedger(init, configFilePath)
+			}),
 	}
 
 	logging.SetDefaults(c.debug)

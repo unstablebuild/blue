@@ -38,6 +38,18 @@ const (
 	defaultNewsletterCollection = "newsletter-subscribers"
 )
 
+// defaultContributorConfig mirrors the contributor section of
+// defaultReferenceConfig; the collections must match the ox-api
+// --contributor-*-collection flags.
+var defaultContributorConfig = contributorConfig{
+	Program:      "contributor-program",
+	Participants: "contributor-participants",
+	Awards:       "contributor-awards",
+	Receipts:     "contributor-receipts",
+	Rounds:       "contributor-rounds",
+	Obligations:  "contributor-obligations",
+}
+
 func newTestInitializer(_ *testing.T, dirName string) (
 	i initializer, reader *bytes.Buffer, writer *bytes.Buffer,
 ) {
@@ -93,6 +105,7 @@ func testInitializerRun(t *testing.T, dirName string, projectID string) {
 	expectedConfig.Issue.Collection = defaultIssueCollection
 	expectedConfig.Password.Collection = defaultSecretsCollection
 	expectedConfig.Newsletter.Collection = defaultNewsletterCollection
+	expectedConfig.Contributor = defaultContributorConfig
 
 	assertConfigInitialized(t, i.configFolder, expectedConfig)
 }
@@ -125,6 +138,7 @@ func TestInitializerRun(t *testing.T) {
 		config.Issue.Collection = defaultIssueCollection
 		config.Password.Collection = defaultSecretsCollection
 		config.Newsletter.Collection = defaultNewsletterCollection
+		config.Contributor = defaultContributorConfig
 		require.NoError(t, encodeConfig(f, &config))
 		require.NoError(t, f.Close())
 

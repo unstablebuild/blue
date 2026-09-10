@@ -33,11 +33,12 @@ var ErrRoundClosed = errors.New("round already closed")
 // the pure engine and persists the results. It contains no allocation
 // logic of its own.
 type Ledger struct {
-	Programs    ProgramStore
-	Awards      AwardStore
-	Receipts    ReceiptStore
-	Rounds      RoundStore
-	Obligations ObligationStore
+	Programs     ProgramStore
+	Participants ParticipantStore
+	Awards       AwardStore
+	Receipts     ReceiptStore
+	Rounds       RoundStore
+	Obligations  ObligationStore
 }
 
 // assemble gathers the frozen inputs for month m and computes the round.
@@ -49,7 +50,7 @@ func (l Ledger) assemble(ctx context.Context, m Month) (
 	}
 	program, err := l.Programs.ProgramFor(ctx, m)
 	if err != nil {
-		return Round{}, nil, fmt.Errorf("program for %s: %v", m, err)
+		return Round{}, nil, fmt.Errorf("program for %s: %w", m, err)
 	}
 
 	receiptIt, err := l.Receipts.ListMonthReceipts(ctx, m)
