@@ -24,6 +24,7 @@ import (
 	multierr "github.com/ernestrc/go-multierror"
 	"github.com/unstablebuild/blue/auth/secretmanager"
 	"github.com/unstablebuild/blue/cli"
+	contributorCLI "github.com/unstablebuild/blue/cmd/bluectl/contributor"
 	emailCLI "github.com/unstablebuild/blue/cmd/bluectl/email"
 	issueCLI "github.com/unstablebuild/blue/cmd/bluectl/issue"
 	newsletterCLI "github.com/unstablebuild/blue/cmd/bluectl/newsletter"
@@ -93,15 +94,16 @@ func (c *blueCtl) Man() cli.Manual {
 	// can get their documentation
 	if len(c.cmds) == 0 {
 		c.cmds = map[string]cli.CLI{
-			"init":       newInitializer(c.configFolder),
-			"release":    releaseCLI.NewCLI(nil),
-			"package":    packageCLI.NewCLI(nil),
-			"secret":     secretCLI.NewCLI(nil),
-			"email":      emailCLI.NewCLI(nil, emailCLI.Config{}),
-			"analysis":   newAnalysisCli(),
-			"license":    newLicenseCli(),
-			"issue":      issueCLI.NewCLI(nil, Tag, ""),
-			"newsletter": newsletterCLI.NewCLI(nil),
+			"init":        newInitializer(c.configFolder),
+			"release":     releaseCLI.NewCLI(nil),
+			"package":     packageCLI.NewCLI(nil),
+			"secret":      secretCLI.NewCLI(nil),
+			"email":       emailCLI.NewCLI(nil, emailCLI.Config{}),
+			"analysis":    newAnalysisCli(),
+			"license":     newLicenseCli(),
+			"issue":       issueCLI.NewCLI(nil, Tag, ""),
+			"newsletter":  newsletterCLI.NewCLI(nil),
+			"contributor": contributorCLI.NewCLI(),
 		}
 	}
 	for _, cmd := range c.cmds {
@@ -225,6 +227,7 @@ func (c *blueCtl) initializeCli() error {
 			c.closers = append(c.closers, subscriberDB)
 			return newsletterCLI.NewCLI(subscriberDB), nil
 		}),
+		"contributor": contributorCLI.NewCLI(),
 	}
 
 	logging.SetDefaults(c.debug)
