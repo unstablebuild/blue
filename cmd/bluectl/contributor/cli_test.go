@@ -79,13 +79,18 @@ func testLedger(t *testing.T) OpenFunc {
 		},
 		Operator: "operator",
 	}
-	require.NoError(t, ledger.Participants.CreateParticipant(
-		context.Background(), contributor.Participant{
-			Account:          "auth0|alice",
-			GitHubHandle:     "alice-gh",
-			AgreementVersion: "2026-01",
-			Status:           contributor.ParticipantEligible,
-		}))
+	for handle, account := range map[string]string{
+		"alice-gh": "auth0|alice",
+		"bob-gh":   "auth0|bob",
+	} {
+		require.NoError(t, ledger.Participants.CreateParticipant(
+			context.Background(), contributor.Participant{
+				Account:          account,
+				GitHubHandle:     handle,
+				AgreementVersion: "2026-01",
+				Status:           contributor.ParticipantEligible,
+			}))
+	}
 	return func(context.Context) (Ledger, error) { return ledger, nil }
 }
 
@@ -123,13 +128,14 @@ func TestLedgerCommands(t *testing.T) {
 			"-activation", "2026-01",
 			"-e", "https://github.com/unstablebuild/blue/pull/1",
 			"-m", "great work",
-			"Alice-GH=60",
+			"Alice-GH=60", "bob-gh=40",
 		}))
 		awards := listAwards(t, ledger, "")
 		require.Len(t, awards, 1)
 		awardID = awards[0].ID
 		assert.Equal(t, []contributor.Split{
 			{Account: "auth0|alice", Credits: 60},
+			{Account: "auth0|bob", Credits: 40},
 		}, awards[0].Splits)
 		assert.Equal(t, "operator", awards[0].ProposedBy)
 	})
