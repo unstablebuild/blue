@@ -294,8 +294,14 @@ func (h redirectHandler) ServeHTTP(
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Publishing the code can close the server before this handler returns.
+	// A fixed length avoids a chunked terminator that would still be pending.
+	w.Header().Set("Content-Length", strconv.Itoa(len(h.doneCopy)))
 
 	_, err := w.Write([]byte(h.doneCopy))
+	if err == nil {
+		err = http.NewResponseController(w).Flush()
+	}
 
 	h.ch <- tokenResult{data: code}
 	logging.LogResultInfo(err, attemptAt, traceID, redirectCallType, fields...)
