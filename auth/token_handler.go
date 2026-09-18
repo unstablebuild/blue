@@ -57,6 +57,12 @@ func TokenHTTPHandler[T any](
 
 const tokenCallType = "Oauth2RedeemToken"
 
+// grantTypeDeviceCode is the RFC 8628 device authorization grant. It is
+// redeemed at the provider's token endpoint like a refresh, but the
+// client polls it, so the provider's pending/denied errors must reach
+// the client verbatim for the poll loop to interpret them.
+const grantTypeDeviceCode = "urn:ietf:params:oauth:grant-type:device_code"
+
 type tokenHandler[T any] struct {
 	secretStore SecretStore
 	signKey     Keys
@@ -71,7 +77,7 @@ func (h tokenHandler[T]) ServeHTTP(
 	logger := log.WithFields(log.Fields{logging.KeyTraceID: traceID})
 	attemptAt := logAttempt(tokenCallType, in, traceID)
 
-	body, refreshToken, clientID, err := validateTokenRequest(
+	body, grantType, clientID, err := validateTokenRequest(
 		ctx, traceID, attemptAt, w, in)
 	if err != nil {
 		writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusBadRequest,
@@ -87,18 +93,20 @@ func (h tokenHandler[T]) ServeHTTP(
 		return
 	}
 
-	// use token URL to refresh tokens
-	if refreshToken != "" {
+	// refresh and device grants redeem at the provider's token endpoint
+	if grantType == "refresh_token" || grantType == grantTypeDeviceCode {
 		if tokenURL == "" {
 			writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
-				response{Message: "secret does not have a token URL, but token refresh attempted"})
+				response{Message: fmt.Sprintf(
+					"secret does not have a token URL, but %s grant attempted", grantType)})
 			return
 		}
 		redeemURL = tokenURL
 	}
 
 	providerResponse, ok := fetchProviderToken[T](
-		ctx, logger, traceID, attemptAt, tokenCallType, w, in, redeemURL, body)
+		ctx, logger, traceID, attemptAt, tokenCallType, w, in, redeemURL, body,
+		grantType == grantTypeDeviceCode)
 	if !ok {
 		return
 	}
@@ -195,7 +203,7 @@ type redeemResponse[T any] struct {
 func validateTokenRequest(
 	_ context.Context, _ trace.ID, _ time.Time,
 	_ http.ResponseWriter, in *http.Request,
-) (body []byte, refreshToken, clientID string, err error) {
+) (body []byte, grantType, clientID string, err error) {
 	body, err = io.ReadAll(in.Body)
 	if err != nil {
 		err = fmt.Errorf("read body: %v", err)
@@ -214,9 +222,8 @@ func validateTokenRequest(
 	// NOTE: we do not support RFC 6749 section 2.3.1 (on basic auth),
 	// so all oauth2 params are expected to be in a POST request's
 	// form.
-	grantType := in.PostForm.Get("grant_type")
+	grantType = in.PostForm.Get("grant_type")
 	clientID = in.PostForm.Get("client_id")
-	refreshToken = in.PostForm.Get("refresh_token")
 
 	// validate by gran type
 	switch grantType {
@@ -228,8 +235,13 @@ func validateTokenRequest(
 			return nil, "", "", err
 		}
 	case "refresh_token":
-		if refreshToken == "" || clientID == "" {
+		if in.PostForm.Get("refresh_token") == "" || clientID == "" {
 			err := errors.New("'refresh_token' and 'client_id' must always be set for this gran_type")
+			return nil, "", "", err
+		}
+	case grantTypeDeviceCode:
+		if in.PostForm.Get("device_code") == "" || clientID == "" {
+			err := errors.New("'device_code' and 'client_id' must always be set for this grant_type")
 			return nil, "", "", err
 		}
 	default:
@@ -264,7 +276,7 @@ func validateClientSecret(
 func fetchProviderToken[T any](
 	ctx context.Context, _ *log.Entry, traceID trace.ID, attemptAt time.Time,
 	callType string, w http.ResponseWriter, in *http.Request,
-	redeemURL string, body []byte,
+	redeemURL string, body []byte, relayProviderError bool,
 ) (ret redeemResponse[T], ok bool) {
 	// clone incoming request
 	out, err := http.NewRequestWithContext(ctx, in.Method, redeemURL, bytes.NewReader(body))
@@ -313,6 +325,12 @@ func fetchProviderToken[T any](
 	}
 
 	if ret.IDToken == "" {
+		if relayProviderError && resStatus >= 400 {
+			if perr, ok := parseProviderError(respBody); ok {
+				writeProviderError(traceID, attemptAt, callType, w, in, resStatus, perr)
+				return ret, false
+			}
+		}
 		if resStatus < 300 {
 			resStatus = http.StatusBadRequest
 		}
@@ -324,6 +342,43 @@ func fetchProviderToken[T any](
 	}
 	ok = true
 	return
+}
+
+// providerError is the RFC 6749 section 5.2 error body an oauth2
+// provider answers a failed token request with.
+type providerError struct {
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description,omitempty"`
+}
+
+func parseProviderError(body []byte) (providerError, bool) {
+	var perr providerError
+	if err := json.Unmarshal(body, &perr); err != nil || perr.Error == "" {
+		return providerError{}, false
+	}
+	return perr, true
+}
+
+func writeProviderError(
+	traceID trace.ID, attemptAt time.Time, callType string,
+	w http.ResponseWriter, in *http.Request, status int, perr providerError,
+) {
+	fields := []logging.Field{
+		{Key: logging.KeyClass, Value: loggingClass},
+		{Key: "Method", Value: in.Method},
+		{Key: "URL", Value: in.URL.String()},
+		{Key: "Status", Value: strconv.Itoa(status)},
+		{Key: "ProviderError", Value: perr.Error},
+	}
+	data, err := json.Marshal(perr)
+	if err != nil {
+		logging.LogResultInfo(err, attemptAt, traceID, callType, fields...)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, err = w.Write(data)
+	logging.LogResultInfo(err, attemptAt, traceID, callType, fields...)
 }
 
 func validateProviderResponse[T any](

@@ -163,6 +163,20 @@ func TestTokenHandler(t *testing.T) {
 			url.Values{"grant_type": []string{"authorization_code"}, "client_id": []string{validClientID},
 				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"}, "code_challenge_method": []string{"plain"}},
 			goodRedeemHandlerBadResponse(validClientID), goodCertsHandler(&validJWKS), http.StatusBadRequest},
+		{"device code grant without device_code is a 400",
+			url.Values{"grant_type": []string{grantTypeDeviceCode}, "client_id": []string{validClientID}},
+			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
+		{"device code grant without client_id is a 400",
+			url.Values{"grant_type": []string{grantTypeDeviceCode}, "device_code": []string{"dc-1"}},
+			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusBadRequest},
+		{"device code grant with secret missing token url is 500",
+			url.Values{"grant_type": []string{grantTypeDeviceCode}, "client_id": []string{clientIDMissingTokenURLS},
+				"device_code": []string{"dc-1"}},
+			goodRedeemHandler(clientIDMissingTokenURLS, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusInternalServerError},
+		{"happy path device code grant",
+			url.Values{"grant_type": []string{grantTypeDeviceCode}, "client_id": []string{validClientID},
+				"device_code": []string{"dc-1"}},
+			goodRedeemHandler(validClientID, rsaPrivateKey), goodCertsHandler(&validJWKS), http.StatusOK},
 	}
 
 	for _, test := range suite {
@@ -210,6 +224,87 @@ func TestTokenHandler(t *testing.T) {
 			assert.NotZero(t, actualOut.TokenType)
 			assert.Zero(t, actualOut.IDToken)
 			assert.Equal(t, "admin", actualOut.Extra.Role)
+		})
+	}
+}
+
+// TestTokenHandlerDeviceCodeRelaysProviderErrors guards the contract
+// the device grant's poll loop depends on: the provider's RFC 8628
+// pending and terminal errors reach the client as-is, status and
+// error code included, instead of the handler's own {"Message"}
+// envelope which the polling client cannot interpret. The
+// authorization_code grant keeps the envelope.
+func TestTokenHandlerDeviceCodeRelaysProviderErrors(t *testing.T) {
+	grantAll := FuncGranter(func(context.Context, *ProviderClaims) (User, error) {
+		return User{Role: "admin"}, nil
+	})
+	testSignKeys, err := GenerateKeys()
+	require.NoError(t, err)
+	const clientID = "id: 1"
+
+	for _, tc := range []struct {
+		grantType      string
+		providerStatus int
+		providerBody   string
+		wantStatus     int
+		wantRelayed    bool
+	}{
+		{grantTypeDeviceCode, http.StatusForbidden,
+			`{"error":"authorization_pending","error_description":"user has yet to authorize"}`,
+			http.StatusForbidden, true},
+		{grantTypeDeviceCode, http.StatusForbidden,
+			`{"error":"slow_down"}`, http.StatusForbidden, true},
+		{grantTypeDeviceCode, http.StatusForbidden,
+			`{"error":"expired_token","error_description":"code expired"}`,
+			http.StatusForbidden, true},
+		{grantTypeDeviceCode, http.StatusForbidden,
+			`{"error":"access_denied","error_description":"user denied"}`,
+			http.StatusForbidden, true},
+		// A provider 4xx without an error code is still enveloped.
+		{grantTypeDeviceCode, http.StatusBadRequest,
+			`{"token_type":"weird"}`, http.StatusBadRequest, false},
+		// The browser grant is unchanged.
+		{"authorization_code", http.StatusForbidden,
+			`{"error":"access_denied"}`, http.StatusForbidden, false},
+	} {
+		t.Run(tc.grantType+" "+tc.providerBody, func(t *testing.T) {
+			provider := httptest.NewServer(http.HandlerFunc(
+				func(w http.ResponseWriter, _ *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(tc.providerStatus)
+					_, _ = w.Write([]byte(tc.providerBody))
+				}))
+			defer provider.Close()
+
+			secretStore := MapSecretStore(
+				map[string][]byte{EncodeSecretID(clientID): []byte("1")},
+				metadataKeyRedeemURL, provider.URL,
+				metadataKeyTokenURL, provider.URL,
+				metadataKeyCertsURL, provider.URL,
+			)
+
+			form := url.Values{
+				"grant_type": []string{tc.grantType}, "client_id": []string{clientID},
+				"device_code": []string{"dc-1"},
+				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"},
+			}
+			req := httptest.NewRequest("POST", "http://localhost:3001/o/oauth2/token",
+				strings.NewReader(form.Encode()))
+			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+			w := httptest.NewRecorder()
+			TokenHTTPHandler(testSignKeys, secretStore, grantAll, tokenExpiresIn).ServeHTTP(w, req)
+
+			resp := w.Result()
+			body, _ := io.ReadAll(resp.Body)
+			require.Equal(t, tc.wantStatus, resp.StatusCode, string(body))
+			if tc.wantRelayed {
+				assert.JSONEq(t, tc.providerBody, string(body))
+				return
+			}
+			var enveloped response
+			require.NoError(t, json.Unmarshal(body, &enveloped))
+			assert.Contains(t, enveloped.Message, "no id token")
 		})
 	}
 }
