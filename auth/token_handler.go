@@ -57,11 +57,14 @@ func TokenHTTPHandler[T any](
 
 const tokenCallType = "Oauth2RedeemToken"
 
-// grantTypeDeviceCode is the RFC 8628 device authorization grant. It is
-// redeemed at the provider's token endpoint like a refresh, but the
-// client polls it, so the provider's pending/denied errors must reach
-// the client verbatim for the poll loop to interpret them.
-const grantTypeDeviceCode = "urn:ietf:params:oauth:grant-type:device_code"
+// The oauth2 grant types the handler redeems.
+const (
+	grantTypeAuthorizationCode = "authorization_code"
+	grantTypeRefreshToken      = "refresh_token"
+	// grantTypeDeviceCode is the RFC 8628 device authorization grant.
+	// It is redeemed at the provider's token endpoint like a refresh.
+	grantTypeDeviceCode = "urn:ietf:params:oauth:grant-type:device_code"
+)
 
 type tokenHandler[T any] struct {
 	secretStore SecretStore
@@ -94,7 +97,7 @@ func (h tokenHandler[T]) ServeHTTP(
 	}
 
 	// refresh and device grants redeem at the provider's token endpoint
-	if grantType == "refresh_token" || grantType == grantTypeDeviceCode {
+	if grantType == grantTypeRefreshToken || grantType == grantTypeDeviceCode {
 		if tokenURL == "" {
 			writeResponse(ctx, tokenCallType, traceID, attemptAt, w, in, http.StatusInternalServerError,
 				response{Message: fmt.Sprintf(
@@ -104,9 +107,14 @@ func (h tokenHandler[T]) ServeHTTP(
 		redeemURL = tokenURL
 	}
 
+	// The provider's own error must reach the client verbatim for the
+	// device grant's poll loop to interpret pending/denied, and for a
+	// refreshing client to see invalid_grant and know its refresh
+	// token was revoked or has expired: nothing else tells it to sign
+	// in again.
 	providerResponse, ok := fetchProviderToken[T](
 		ctx, logger, traceID, attemptAt, tokenCallType, w, in, redeemURL, body,
-		grantType == grantTypeDeviceCode)
+		grantType == grantTypeDeviceCode || grantType == grantTypeRefreshToken)
 	if !ok {
 		return
 	}
@@ -227,14 +235,14 @@ func validateTokenRequest(
 
 	// validate by gran type
 	switch grantType {
-	case "authorization_code":
+	case grantTypeAuthorizationCode:
 		challenge := in.PostForm.Get("code_challenge")
 		verifier := in.PostForm.Get("code_verifier")
 		if clientID == "" || challenge == "" || verifier == "" {
 			err := errors.New("'client_id' and pkce params must always be set for this grant_type")
 			return nil, "", "", err
 		}
-	case "refresh_token":
+	case grantTypeRefreshToken:
 		if in.PostForm.Get("refresh_token") == "" || clientID == "" {
 			err := errors.New("'refresh_token' and 'client_id' must always be set for this gran_type")
 			return nil, "", "", err

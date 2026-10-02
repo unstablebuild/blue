@@ -228,13 +228,15 @@ func TestTokenHandler(t *testing.T) {
 	}
 }
 
-// TestTokenHandlerDeviceCodeRelaysProviderErrors guards the contract
-// the device grant's poll loop depends on: the provider's RFC 8628
-// pending and terminal errors reach the client as-is, status and
-// error code included, instead of the handler's own {"Message"}
-// envelope which the polling client cannot interpret. The
-// authorization_code grant keeps the envelope.
-func TestTokenHandlerDeviceCodeRelaysProviderErrors(t *testing.T) {
+// TestTokenHandlerRelaysProviderErrors guards the contracts clients
+// depend on: the device grant's poll loop must see the provider's RFC
+// 8628 pending and terminal errors, and a client refreshing a revoked
+// or expired refresh token must see invalid_grant to know it has been
+// signed out. Both reach the client as-is, status and error code
+// included, instead of the handler's own {"Message"} envelope, which
+// carries no error code. The authorization_code grant keeps the
+// envelope.
+func TestTokenHandlerRelaysProviderErrors(t *testing.T) {
 	grantAll := FuncGranter(func(context.Context, *ProviderClaims) (User, error) {
 		return User{Role: "admin"}, nil
 	})
@@ -263,8 +265,13 @@ func TestTokenHandlerDeviceCodeRelaysProviderErrors(t *testing.T) {
 		// A provider 4xx without an error code is still enveloped.
 		{grantTypeDeviceCode, http.StatusBadRequest,
 			`{"token_type":"weird"}`, http.StatusBadRequest, false},
+		{grantTypeRefreshToken, http.StatusForbidden,
+			`{"error":"invalid_grant","error_description":"Unknown or invalid refresh token."}`,
+			http.StatusForbidden, true},
+		{grantTypeRefreshToken, http.StatusBadRequest,
+			`{"token_type":"weird"}`, http.StatusBadRequest, false},
 		// The browser grant is unchanged.
-		{"authorization_code", http.StatusForbidden,
+		{grantTypeAuthorizationCode, http.StatusForbidden,
 			`{"error":"access_denied"}`, http.StatusForbidden, false},
 	} {
 		t.Run(tc.grantType+" "+tc.providerBody, func(t *testing.T) {
@@ -285,7 +292,7 @@ func TestTokenHandlerDeviceCodeRelaysProviderErrors(t *testing.T) {
 
 			form := url.Values{
 				"grant_type": []string{tc.grantType}, "client_id": []string{clientID},
-				"device_code": []string{"dc-1"},
+				"device_code": []string{"dc-1"}, "refresh_token": []string{"rt-1"},
 				"code_challenge": []string{"1234"}, "code_verifier": []string{"1234"},
 			}
 			req := httptest.NewRequest("POST", "http://localhost:3001/o/oauth2/token",
