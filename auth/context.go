@@ -20,7 +20,10 @@ import (
 
 type ctxKey int
 
-var claimsKey ctxKey
+const (
+	claimsKey ctxKey = iota
+	clientIDKey
+)
 
 // ContextWithClaims returns a new Context that holds claims.
 func ContextWithClaims[T any](ctx context.Context, claims UserClaims[T]) context.Context {
@@ -31,4 +34,20 @@ func ContextWithClaims[T any](ctx context.Context, claims UserClaims[T]) context
 func ClaimsFromContext[T any](ctx context.Context) (UserClaims[T], bool) {
 	claims, ok := ctx.Value(claimsKey).(UserClaims[T])
 	return claims, ok
+}
+
+// ClientIDFromContext returns the OAuth2 client a Granter is granting
+// for. TokenHTTPHandler sets it only after the provider's ID token was
+// validated with that client as its audience, so it names the client the
+// provider issued the tokens to, not merely the one the request claimed.
+// It is absent outside of a Granter called by TokenHTTPHandler.
+func ClientIDFromContext(ctx context.Context) (string, bool) {
+	clientID, ok := ctx.Value(clientIDKey).(string)
+	return clientID, ok
+}
+
+// ContextWithClientID returns a new Context that holds clientID for
+// ClientIDFromContext, as TokenHTTPHandler hands it to a Granter.
+func ContextWithClientID(ctx context.Context, clientID string) context.Context {
+	return context.WithValue(ctx, clientIDKey, clientID)
 }

@@ -119,7 +119,7 @@ func (h tokenHandler[T]) ServeHTTP(
 	}
 
 	// override access_token with own token, that we can decode and introspect on middleware
-	extra, err := h.granter.Grant(ctx, claims)
+	extra, err := h.granter.Grant(ContextWithClientID(ctx, clientID), claims)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, document.ErrNotFound) {

@@ -309,6 +309,59 @@ func TestTokenHandlerDeviceCodeRelaysProviderErrors(t *testing.T) {
 	}
 }
 
+// TestTokenHandlerGivesGranterClientID guards that a Granter can tell
+// which client the provider issued the tokens to, for every grant that
+// mints an access token.
+func TestTokenHandlerGivesGranterClientID(t *testing.T) {
+	testSignKeys, err := GenerateKeys()
+	require.NoError(t, err)
+	rsaPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	jwks := jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{
+		Key: &rsaPrivateKey.PublicKey, Algorithm: string(jose.RS256), Use: "sig", KeyID: keyID,
+	}}}
+	const clientID = "headless"
+
+	for _, form := range []url.Values{
+		{"grant_type": {"authorization_code"}, "client_id": {clientID},
+			"code_challenge": {"1234"}, "code_verifier": {"1234"}},
+		{"grant_type": {"refresh_token"}, "client_id": {clientID}, "refresh_token": {"r"}},
+		{"grant_type": {grantTypeDeviceCode}, "client_id": {clientID}, "device_code": {"dc-1"}},
+	} {
+		t.Run(form.Get("grant_type"), func(t *testing.T) {
+			tokenServer := httptest.NewServer(goodRedeemHandler(clientID, rsaPrivateKey))
+			defer tokenServer.Close()
+			certsServer := httptest.NewServer(goodCertsHandler(&jwks))
+			defer certsServer.Close()
+			secretStore := MapSecretStore(
+				map[string][]byte{EncodeSecretID(clientID): []byte("1")},
+				metadataKeyRedeemURL, tokenServer.URL,
+				metadataKeyTokenURL, tokenServer.URL,
+				metadataKeyCertsURL, certsServer.URL,
+			)
+
+			var got string
+			var present bool
+			granter := FuncGranter(func(ctx context.Context, _ *ProviderClaims) (User, error) {
+				got, present = ClientIDFromContext(ctx)
+				return User{}, nil
+			})
+			req := httptest.NewRequest("POST", "http://localhost:3001/o/oauth2/token",
+				strings.NewReader(form.Encode()))
+			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+			w := httptest.NewRecorder()
+			TokenHTTPHandler(testSignKeys, secretStore, granter, tokenExpiresIn).ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			assert.True(t, present)
+			assert.Equal(t, clientID, got)
+		})
+	}
+
+	_, ok := ClientIDFromContext(context.Background())
+	assert.False(t, ok)
+}
+
 func writeTestRedeemResponse(
 	w http.ResponseWriter, clientID string,
 	expiresIn time.Duration, privateKey *rsa.PrivateKey,
