@@ -24,6 +24,7 @@ import (
 	"github.com/unstablebuild/blue/crypto"
 	"github.com/unstablebuild/blue/release"
 	"github.com/unstablebuild/blue/release/signedrelease"
+	"github.com/unstablebuild/rune-go-sdk/term/progstatus"
 )
 
 const (
@@ -102,18 +103,22 @@ func (s *releaseGet) Run(ctx context.Context, args []string) error {
 	}
 	defer func() { _ = f.Close() }()
 
+	status := progstatus.FromContext(ctx)
+	downloading := fmt.Sprintf("Downloading %s %s", pack, version)
 	var m release.Bundle
 	key, err := s.findKeyInArmoredKeyRing()
 	if err != nil {
 		fmt.Printf("WARNING: Failed to check data integrity: "+
 			"error finding armored key '%s' in keyring: %s", s.pubKeyID, err)
-		m, err = s.m.Get(ctx, pack, version, newBarProgress(f))
+		m, err = s.m.Get(ctx, pack, version,
+			newBarProgress(f, status, downloading))
 		if err != nil {
 			return err
 		}
 	} else {
 		sm := signedrelease.NewManager(s.m, key)
-		m, err = sm.Get(ctx, pack, version, newBarProgress(f))
+		m, err = sm.Get(ctx, pack, version,
+			newBarProgress(f, status, downloading))
 		if err != nil {
 			return err
 		}

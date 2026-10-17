@@ -18,15 +18,22 @@ import (
 	"os"
 
 	"github.com/cheggaaa/pb/v3"
+	"github.com/unstablebuild/rune-go-sdk/term/progstatus"
 )
 
 type barProgress struct {
-	f   *os.File
-	bar *pb.ProgressBar
+	f      *os.File
+	bar    *pb.ProgressBar
+	status *progstatus.Reporter
+	msg    string
 }
 
-func newBarProgress(f *os.File) *barProgress {
-	return &barProgress{f: f}
+// newBarProgress returns a progress bar over f that also reports its
+// progress to the terminal as msg.
+func newBarProgress(
+	f *os.File, status *progstatus.Reporter, msg string,
+) *barProgress {
+	return &barProgress{f: f, status: status, msg: msg}
 }
 
 func (bp *barProgress) Progress(progress, total int64, units string) {
@@ -38,6 +45,14 @@ func (bp *barProgress) Progress(progress, total int64, units string) {
 		bp.bar.Start()
 	}
 	bp.bar.SetCurrent(progress)
+	if total > 0 {
+		percent := min(max(progress*100/total, 0), 100)
+		bp.status.Report(progstatus.Report{
+			State:    progstatus.Working,
+			Progress: progstatus.Percent(int(percent)),
+			Msg:      bp.msg,
+		})
+	}
 }
 
 func (bp *barProgress) Read(p []byte) (n int, err error) {

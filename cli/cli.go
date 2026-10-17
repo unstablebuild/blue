@@ -68,13 +68,14 @@ func Run(ctx context.Context, cli CLI) error {
 }
 
 // RunCommand is a helper that attempts to find and run the next command in cmds.
+// See ContextWithDispatchHook to observe the commands it runs.
 func RunCommand(ctx context.Context, args []string, cmds map[string]CLI) error {
 	if len(args) == 0 {
 		return ErrInvalidArgs
 	}
 	argCmd := args[0]
 	if cmd, ok := cmds[argCmd]; ok {
-		return cmd.Run(ctx, args[1:])
+		return cmd.Run(contextWithDispatched(ctx, argCmd), args[1:])
 	}
 
 	return ErrInvalidArgs

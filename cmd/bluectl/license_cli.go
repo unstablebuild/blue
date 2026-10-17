@@ -24,6 +24,7 @@ import (
 
 	"github.com/ernestrc/go-multierror"
 	"github.com/unstablebuild/blue/cli"
+	"github.com/unstablebuild/rune-go-sdk/term/progstatus"
 )
 
 const defaultRegexpStr = `(?:\/\/.*(?:\r?\n|\r)?)+`
@@ -91,7 +92,12 @@ func (c *licenseCli) Run(ctx context.Context, args []string) error {
 		return fmt.Errorf("license: %w", err)
 	}
 
+	status := progstatus.FromContext(ctx)
+	msg := fmt.Sprintf("Checking license headers of %d files", len(files))
 	results := make([]result, len(files))
+	// mu orders the progress reports so that they never go backwards.
+	var mu sync.Mutex
+	var processed int
 	var wg sync.WaitGroup
 	wg.Add(len(files))
 	for i, filename := range files {
@@ -99,6 +105,14 @@ func (c *licenseCli) Run(ctx context.Context, args []string) error {
 			defer wg.Done()
 			results[i] = processFile(ctx, r, license, filename,
 				c.errorOnChanges, c.forceReplace)
+			mu.Lock()
+			defer mu.Unlock()
+			processed++
+			status.Report(progstatus.Report{
+				State:    progstatus.Working,
+				Progress: progstatus.Percent(processed * 100 / len(files)),
+				Msg:      msg,
+			})
 		}(i, license, filename)
 	}
 	wg.Wait()

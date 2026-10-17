@@ -77,7 +77,7 @@ func (s *issueCreate) Run(ctx context.Context, args []string) error {
 	}
 	template.Author = s.getAuthor()
 
-	r, err := tempIssue(template, !s.noEdit)
+	r, err := tempIssue(ctx, template, !s.noEdit)
 	if err != nil {
 		return err
 	}

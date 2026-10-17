@@ -26,6 +26,7 @@ import (
 	"github.com/unstablebuild/blue/cli"
 	"github.com/unstablebuild/blue/cmd/bluectl/options"
 	"github.com/unstablebuild/blue/config"
+	"github.com/unstablebuild/rune-go-sdk/term/progstatus"
 	"gopkg.in/yaml.v3"
 )
 
@@ -162,10 +163,13 @@ func getCLIConfigFile(configFolder string) string {
 }
 
 func (i initializer) Run(ctx context.Context, _ []string) error {
+	resume := progstatus.FromContext(ctx).Block(progstatus.Question,
+		"Google Cloud project ID required to configure bluectl")
 	projectID, err := i.readLine("ProjectID:")
 	if err != nil {
 		return err
 	}
+	resume()
 
 	return i.Initialize(projectID)
 }

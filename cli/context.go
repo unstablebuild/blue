@@ -17,11 +17,19 @@ package cli
 import (
 	"context"
 	"flag"
+	"slices"
 )
 
 // key is an unexported type for keys defined in this package.
 // This prevents collisions with keys defined in other packages.
 type key string
+
+type dispatchKey struct{}
+
+type dispatch struct {
+	path []string
+	hook func(path []string)
+}
 
 // ContextWithOptions iterates over the options in fs and returns a context
 // with the options defined as values.
@@ -44,4 +52,28 @@ func OptionFromContext(ctx context.Context, name string) (
 	v = ctx.Value(key(name))
 	ok = v != nil
 	return
+}
+
+// ContextWithDispatchHook returns a copy of ctx in which RunCommand calls
+// hook before it runs each sub-command, with the names of the commands
+// it dispatched to so far: running "release upload" calls hook with
+// [release] and then with [release upload].
+func ContextWithDispatchHook(
+	ctx context.Context, hook func(path []string),
+) context.Context {
+	return context.WithValue(ctx, dispatchKey{}, dispatch{hook: hook})
+}
+
+// contextWithDispatched returns a copy of ctx in which name is the last
+// command dispatched to, and calls the hook installed with
+// ContextWithDispatchHook, if any.
+func contextWithDispatched(ctx context.Context, name string) context.Context {
+	d, ok := ctx.Value(dispatchKey{}).(dispatch)
+	if !ok {
+		return ctx
+	}
+	// Clip so that the paths of sibling commands never share an array.
+	d.path = append(slices.Clip(d.path), name)
+	d.hook(d.path)
+	return context.WithValue(ctx, dispatchKey{}, d)
 }

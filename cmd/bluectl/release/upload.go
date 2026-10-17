@@ -31,6 +31,7 @@ import (
 	"github.com/unstablebuild/blue/crypto"
 	"github.com/unstablebuild/blue/release"
 	"github.com/unstablebuild/blue/release/signedrelease"
+	"github.com/unstablebuild/rune-go-sdk/term/progstatus"
 	"golang.org/x/term"
 )
 
@@ -127,6 +128,8 @@ func readPasswordFromStdin() (string, error) {
 func (s *releaseUpload) uploadSignedRelease(
 	ctx context.Context, m release.Bundle, in *os.File,
 ) error {
+	status := progstatus.FromContext(ctx)
+	uploading := fmt.Sprintf("Uploading %s %s", m.Package, m.Version)
 	var out bytes.Buffer
 	var passphrase string
 	var key crypto.Key
@@ -157,7 +160,7 @@ func (s *releaseUpload) uploadSignedRelease(
 		ctx, cancel := context.WithTimeout(ctx, uploadTimeout)
 		defer cancel()
 
-		pb = newBarProgress(in)
+		pb = newBarProgress(in, status, uploading)
 
 		err = sm.Upload(ctx, m, pb)
 		if err == nil {
@@ -170,10 +173,14 @@ func (s *releaseUpload) uploadSignedRelease(
 		log.Debugf("found key %s but requires passphrase", s.privKeyID)
 
 		if s.privKeyPassphrase == "" {
+			resume := status.Block(progstatus.Auth, fmt.Sprintf(
+				"PGP key passphrase required to sign %s %s",
+				m.Package, m.Version))
 			passphrase, err = readPasswordFromStdin()
 			if err != nil {
 				return err
 			}
+			resume()
 		} else {
 			passphrase = s.privKeyPassphrase
 		}
@@ -219,7 +226,7 @@ func (s *releaseUpload) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	m, err := tempBundle(pack, version, getDefaultAuthor(), mdata, !s.noEdit)
+	m, err := tempBundle(ctx, pack, version, getDefaultAuthor(), mdata, !s.noEdit)
 	if err != nil {
 		return err
 	}
@@ -231,7 +238,8 @@ func (s *releaseUpload) Run(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, uploadTimeout)
 	defer cancel()
 
-	pb := newBarProgress(file)
+	pb := newBarProgress(file, progstatus.FromContext(ctx),
+		fmt.Sprintf("Uploading %s %s", pack, version))
 	defer func() { _ = pb.Close() }()
 
 	return s.m.Upload(ctx, m, pb)

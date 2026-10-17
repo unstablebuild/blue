@@ -46,7 +46,7 @@ func newTestCLI(t *testing.T) cli.CLI {
 	i := newInitializer(tempDir)
 	require.NoError(t, i.Initialize(testProjectID))
 
-	c, err := newBlueCtl(tempDir)
+	c, err := newBlueCtl(tempDir, nil)
 	require.NoError(t, err)
 
 	return c

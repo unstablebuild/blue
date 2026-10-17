@@ -45,7 +45,12 @@ func main() {
 		exitWithError(err)
 	}
 
-	ctl, err := newBlueCtl(path.Join(homeDir, ".bluectl"))
+	status := newStatusReporter()
+	if status != nil {
+		reportInterrupts(status)
+	}
+
+	ctl, err := newBlueCtl(path.Join(homeDir, ".bluectl"), status)
 	if err != nil {
 		exitWithError(err)
 	}

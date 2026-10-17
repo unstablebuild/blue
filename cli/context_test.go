@@ -66,3 +66,74 @@ func TestDoesNotConflict(t *testing.T) {
 	_, ok := OptionFromContext(ctx, "sickles")
 	assert.Equal(t, false, ok)
 }
+
+func TestDispatchHook(t *testing.T) {
+	group := func(name string, cmds map[string]CLI) CLI {
+		return runFuncCLI{
+			testCLI: testCLI{name: name},
+			runFn: func(ctx context.Context, args []string) error {
+				return ParseAndRunCommand(ctx, testCLI{name: name},
+					NewFlagSet(name), cmds, args)
+			},
+		}
+	}
+	leaf := runFuncCLI{
+		testCLI: testCLI{name: "leaf"},
+		runFn:   func(context.Context, []string) error { return nil },
+	}
+	cmds := map[string]CLI{
+		"release": group("release", map[string]CLI{
+			"upload": leaf,
+			"get":    leaf,
+		}),
+		"init": leaf,
+	}
+
+	tsuite := []struct {
+		name string
+		args []string
+		want [][]string
+	}{
+		{"leaf", []string{"init", "arg"}, [][]string{{"init"}}},
+		{"nested", []string{"release", "upload", "a", "b"},
+			[][]string{{"release"}, {"release", "upload"}}},
+		{"unknown sub-command", []string{"release", "nope"},
+			[][]string{{"release"}}},
+		{"unknown command", []string{"nope"}, nil},
+	}
+	for _, tcase := range tsuite {
+		t.Run(tcase.name, func(t *testing.T) {
+			var got [][]string
+			ctx := ContextWithDispatchHook(context.Background(),
+				func(path []string) { got = append(got, path) })
+
+			_ = RunCommand(ctx, tcase.args, cmds)
+
+			assert.Equal(t, tcase.want, got)
+		})
+	}
+}
+
+func TestDispatchHookSiblingPaths(t *testing.T) {
+	var got [][]string
+	ctx := ContextWithDispatchHook(context.Background(),
+		func(path []string) { got = append(got, path) })
+	leaf := runFuncCLI{runFn: func(context.Context, []string) error { return nil }}
+	cmds := map[string]CLI{"a": leaf, "b": leaf}
+	// three levels deep, appending to the path would have spare capacity
+	for _, name := range []string{"x", "y", "z"} {
+		ctx = contextWithDispatched(ctx, name)
+	}
+
+	require.NoError(t, RunCommand(ctx, []string{"a"}, cmds))
+	require.NoError(t, RunCommand(ctx, []string{"b"}, cmds))
+
+	assert.Equal(t, []string{"x", "y", "z", "a"}, got[3])
+	assert.Equal(t, []string{"x", "y", "z", "b"}, got[4])
+}
+
+func TestRunCommandWithoutDispatchHook(t *testing.T) {
+	leaf := runFuncCLI{runFn: func(context.Context, []string) error { return nil }}
+	require.NoError(t, RunCommand(context.Background(), []string{"a"},
+		map[string]CLI{"a": leaf}))
+}
