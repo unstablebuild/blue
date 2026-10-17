@@ -27,6 +27,7 @@ import (
 	"github.com/unstablebuild/blue/cli"
 	"github.com/unstablebuild/blue/cli/cliformat"
 	"github.com/unstablebuild/blue/iterator"
+	"github.com/unstablebuild/rune-go-sdk/term/progstatus"
 )
 
 const (
@@ -96,9 +97,12 @@ func (s *secretAccess) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
+	resume := progstatus.FromContext(ctx).Block(progstatus.Permission,
+		fmt.Sprintf("View the payload of secret %s?", id))
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("Do you want view the secret(s) payload now? [y/n]:")
 	text, _ := reader.ReadString('\n')
+	resume()
 	switch text {
 	case "y\n", "Y\n":
 		for _, sec := range res {

@@ -16,6 +16,7 @@ package issue
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -25,6 +26,7 @@ import (
 	"github.com/ernestrc/sensible/editor"
 	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/issue"
+	"github.com/unstablebuild/rune-go-sdk/term/progstatus"
 	"gopkg.in/yaml.v3"
 )
 
@@ -40,7 +42,9 @@ func getDefaultAuthor() string {
 	return fmt.Sprintf("%s@%s", u.Username, h)
 }
 
-func tempIssue(ret issue.Report, interactive bool) (issue.Report, error) {
+func tempIssue(
+	ctx context.Context, ret issue.Report, interactive bool,
+) (issue.Report, error) {
 	f, err := os.CreateTemp("", "blue-issue")
 	if err != nil {
 		err = fmt.Errorf("create temp file: %v", err)
@@ -85,12 +89,15 @@ func tempIssue(ret issue.Report, interactive bool) (issue.Report, error) {
 		return ret, nil
 	}
 
+	status := progstatus.FromContext(ctx)
 	for {
+		resume := status.Block(progstatus.Question, "Edit the issue report")
 		err = editor.Edit(f)
 		if err != nil {
 			err = fmt.Errorf("edit manifest: %v", err)
 			return issue.Report{}, err
 		}
+		resume()
 
 		data, err := os.ReadFile(f.Name())
 		if err != nil {
@@ -117,10 +124,13 @@ func tempIssue(ret issue.Report, interactive bool) (issue.Report, error) {
 			break
 		}
 
+		resume = status.Block(progstatus.Permission,
+			fmt.Sprintf("Edit the issue report again? %v", err))
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Println(err.Error() +
 			"Do you want to edit the issue? [y/n]:")
 		text, _ := reader.ReadString('\n')
+		resume()
 		switch text {
 		case "y\n", "Y\n":
 			continue

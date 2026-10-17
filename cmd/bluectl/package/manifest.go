@@ -15,6 +15,7 @@
 package pack
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -22,6 +23,7 @@ import (
 	"github.com/ernestrc/sensible/editor"
 	log "github.com/sirupsen/logrus"
 	"github.com/unstablebuild/blue/release"
+	"github.com/unstablebuild/rune-go-sdk/term/progstatus"
 	"gopkg.in/yaml.v3"
 )
 
@@ -74,6 +76,7 @@ func (m manifest) toYAML() (string, error) {
 }
 
 func tempPackage(
+	ctx context.Context,
 	pack string, author string, extraMdata map[string]string,
 	notes string,
 ) (ret release.Package, err error) {
@@ -107,11 +110,14 @@ func tempPackage(
 	}
 
 	if notes == "" {
+		resume := progstatus.FromContext(ctx).Block(progstatus.Question,
+			fmt.Sprintf("Edit the manifest of package %s", pack))
 		err = editor.Edit(f)
 		if err != nil {
 			err = fmt.Errorf("failed to edit manifest: %v", err)
 			return
 		}
+		resume()
 	}
 
 	err = f.Sync()

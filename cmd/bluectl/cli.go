@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"cloud.google.com/go/storage"
 	multierr "github.com/ernestrc/go-multierror"
@@ -40,6 +41,7 @@ import (
 	"github.com/unstablebuild/blue/logging"
 	"github.com/unstablebuild/blue/release/docrelease"
 	"github.com/unstablebuild/blue/release/gcsrelease"
+	"github.com/unstablebuild/rune-go-sdk/term/progstatus"
 )
 
 type blueCtl struct {
@@ -47,11 +49,14 @@ type blueCtl struct {
 	cmds         map[string]cli.CLI
 	fs           *cli.FlagSet
 	closers      []io.Closer
+	status       *progstatus.Reporter
 	debug        bool
 	version      bool
 }
 
-func initializeConfig(init initializer, configPath string) (*cliConfig, error) {
+func initializeConfig(
+	ctx context.Context, init initializer, configPath string,
+) (*cliConfig, error) {
 	exists, err := init.FolderExists()
 	if err != nil {
 		return nil, err
@@ -60,7 +65,7 @@ func initializeConfig(init initializer, configPath string) (*cliConfig, error) {
 	if !exists {
 		_, _ = fmt.Fprint(os.Stdout,
 			"It looks like it's the first time using bluectl.\n")
-		err := init.Run(context.Background(), nil)
+		err := init.Run(ctx, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -83,9 +88,12 @@ func (c *blueCtl) initFlagSet(configFolder string) {
 	c.fs = fs
 }
 
-// NewBlueCtl returns an blue CLI.
-func newBlueCtl(configFolder string) (*blueCtl, error) {
-	c := new(blueCtl)
+// NewBlueCtl returns an blue CLI that reports its program status to
+// status, which may be nil.
+func newBlueCtl(
+	configFolder string, status *progstatus.Reporter,
+) (*blueCtl, error) {
+	c := &blueCtl{status: status}
 	c.initFlagSet(configFolder)
 	return c, nil
 }
@@ -120,8 +128,10 @@ func (c *blueCtl) Man() cli.Manual {
 	}
 }
 
-func (c *blueCtl) newReleaseManager(init initializer, configFilePath string) (*gcsrelease.Manager, error) {
-	config, err := initializeConfig(init, configFilePath)
+func (c *blueCtl) newReleaseManager(
+	ctx context.Context, init initializer, configFilePath string,
+) (*gcsrelease.Manager, error) {
+	config, err := initializeConfig(ctx, init, configFilePath)
 	if err != nil {
 		return nil, err
 	}
@@ -147,9 +157,9 @@ func (c *blueCtl) newReleaseManager(init initializer, configFilePath string) (*g
 // the same collections ox-api serves from, so the collection names must
 // match its --contributor-*-collection flags.
 func (c *blueCtl) openContributorLedger(
-	init initializer, configFilePath string,
+	ctx context.Context, init initializer, configFilePath string,
 ) (contributorCLI.Ledger, error) {
-	config, err := initializeConfig(init, configFilePath)
+	config, err := initializeConfig(ctx, init, configFilePath)
 	if err != nil {
 		return contributorCLI.Ledger{}, err
 	}
@@ -200,21 +210,21 @@ func (c *blueCtl) initializeCli() error {
 	c.cmds = map[string]cli.CLI{
 		"init": init,
 		"release": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
-			m, err := c.newReleaseManager(init, configFilePath)
+			m, err := c.newReleaseManager(ctx, init, configFilePath)
 			if err != nil {
 				return nil, err
 			}
 			return releaseCLI.NewCLI(m), nil
 		}),
 		"package": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
-			m, err := c.newReleaseManager(init, configFilePath)
+			m, err := c.newReleaseManager(ctx, init, configFilePath)
 			if err != nil {
 				return nil, err
 			}
 			return packageCLI.NewCLI(m), nil
 		}),
 		"secret": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
-			config, err := initializeConfig(init, configFilePath)
+			config, err := initializeConfig(ctx, init, configFilePath)
 			if err != nil {
 				return nil, err
 			}
@@ -227,7 +237,7 @@ func (c *blueCtl) initializeCli() error {
 			return secretCLI.NewCLI(secretManager), nil
 		}),
 		"email": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
-			config, err := initializeConfig(init, configFilePath)
+			config, err := initializeConfig(ctx, init, configFilePath)
 			if err != nil {
 				return nil, err
 			}
@@ -252,7 +262,7 @@ func (c *blueCtl) initializeCli() error {
 		"analysis": newAnalysisCli(),
 		"license":  newLicenseCli(),
 		"issue": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
-			config, err := initializeConfig(init, configFilePath)
+			config, err := initializeConfig(ctx, init, configFilePath)
 			if err != nil {
 				return nil, err
 			}
@@ -267,7 +277,7 @@ func (c *blueCtl) initializeCli() error {
 			return issueCLI.NewCLI(issueTracker, Tag, config.Issue.Author), nil
 		}),
 		"newsletter": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
-			config, err := initializeConfig(init, configFilePath)
+			config, err := initializeConfig(ctx, init, configFilePath)
 			if err != nil {
 				return nil, err
 			}
@@ -285,7 +295,7 @@ func (c *blueCtl) initializeCli() error {
 		// sub-commands that touch the ledger open the collections.
 		"contributor": contributorCLI.NewCLI(
 			func(ctx context.Context) (contributorCLI.Ledger, error) {
-				return c.openContributorLedger(init, configFilePath)
+				return c.openContributorLedger(ctx, init, configFilePath)
 			}),
 	}
 
@@ -315,17 +325,24 @@ func (c *blueCtl) Run(ctx context.Context, args []string) error {
 	}
 
 	ctx = cli.ContextWithOptions(ctx, c.fs)
+	ctx = progstatus.NewContext(ctx, c.status)
+	var command string
+	ctx = cli.ContextWithDispatchHook(ctx, func(path []string) {
+		command = strings.Join(path, " ")
+		c.status.Report(progstatus.Report{
+			State: progstatus.Working, Msg: command,
+		})
+	})
 	err = cli.RunCommand(ctx, rest, c.cmds)
 	switch err {
 	case cli.ErrInvalidArgs:
 		cli.Usage(c)
-		return err
 	case cli.ErrHelp:
 		cli.Usage(c)
-		return nil
-	default:
-		return err
+		err = nil
 	}
+	reportExit(c.status, command, err)
+	return err
 }
 
 func (c *blueCtl) Close() (ret error) {

@@ -64,7 +64,7 @@ func (s *issueEdit) Run(ctx context.Context, args []string) error {
 	closedAt := report.ClosedAt
 	pkg := report.Package
 
-	r, err := tempIssue(report, true)
+	r, err := tempIssue(ctx, report, true)
 	if err != nil {
 		return err
 	}

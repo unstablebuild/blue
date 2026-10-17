@@ -112,7 +112,7 @@ func (s *packageCreate) Run(ctx context.Context, args []string) error {
 		}
 	}
 
-	m, err := tempPackage(pack, getDefaultAuthor(), mdata, notes)
+	m, err := tempPackage(ctx, pack, getDefaultAuthor(), mdata, notes)
 	if err != nil {
 		return err
 	}
