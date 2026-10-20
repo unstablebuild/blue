@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"strings"
 
 	"cloud.google.com/go/storage"
@@ -27,6 +28,7 @@ import (
 	"github.com/unstablebuild/blue/cli"
 	contributorCLI "github.com/unstablebuild/blue/cmd/bluectl/contributor"
 	emailCLI "github.com/unstablebuild/blue/cmd/bluectl/email"
+	ipblockCLI "github.com/unstablebuild/blue/cmd/bluectl/ipblock"
 	issueCLI "github.com/unstablebuild/blue/cmd/bluectl/issue"
 	newsletterCLI "github.com/unstablebuild/blue/cmd/bluectl/newsletter"
 	packageCLI "github.com/unstablebuild/blue/cmd/bluectl/package"
@@ -37,6 +39,7 @@ import (
 	"github.com/unstablebuild/blue/document/firestore"
 	"github.com/unstablebuild/blue/emailprovider"
 	"github.com/unstablebuild/blue/emailprovider/sendgrid"
+	"github.com/unstablebuild/blue/ipblock"
 	"github.com/unstablebuild/blue/issue"
 	"github.com/unstablebuild/blue/logging"
 	"github.com/unstablebuild/blue/release/docrelease"
@@ -113,6 +116,7 @@ func (c *blueCtl) Man() cli.Manual {
 			"license":     newLicenseCli(),
 			"issue":       issueCLI.NewCLI(nil, Tag, ""),
 			"newsletter":  newsletterCLI.NewCLI(nil),
+			"ipblock":     ipblockCLI.NewCLI(nil, ""),
 			"contributor": contributorCLI.NewCLI(nil),
 		}
 	}
@@ -288,6 +292,25 @@ func (c *blueCtl) initializeCli() error {
 			}
 			c.closers = append(c.closers, subscriberDB)
 			return newsletterCLI.NewCLI(subscriberDB), nil
+		}),
+		"ipblock": cli.Lazy(func(ctx context.Context) (cli.CLI, error) {
+			config, err := initializeConfig(ctx, init, configFilePath)
+			if err != nil {
+				return nil, err
+			}
+			blockDB, err := firestore.New(config.Auth.ProjectID,
+				config.IPBlock.Collection, config.Auth.CredentialsFile)
+			if err != nil {
+				return nil, fmt.Errorf("firestore: %w", err)
+			}
+			c.closers = append(c.closers, blockDB)
+			operator := config.IPBlock.Operator
+			if operator == "" {
+				if u, err := user.Current(); err == nil {
+					operator = u.Username
+				}
+			}
+			return ipblockCLI.NewCLI(ipblock.NewService(blockDB), operator), nil
 		}),
 		// The contributor command is not cli.Lazy: its 'verify'
 		// sub-command audits an exported statement and must keep working

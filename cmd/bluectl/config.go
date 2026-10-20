@@ -29,6 +29,9 @@ password:
   collection: blue-secret
 newsletter:
   collection: newsletter-subscribers
+ipblock:
+  collection: ip-blocks
+  operator:
 contributor:
   program: contributor-program
   participants: contributor-participants
@@ -62,6 +65,16 @@ type releaseConfig struct {
 type issueConfig struct {
 	Collection string `yaml:"collection"`
 	Author     string `yaml:"author"`
+}
+
+// ipblockConfig names the Firestore collection of the IP blocklist,
+// which must be the collection the services checking it read.
+type ipblockConfig struct {
+	Collection string `yaml:"collection"`
+
+	// Operator is recorded as who blocked the addresses bluectl blocks.
+	// The OS user name is recorded when it is empty.
+	Operator string `yaml:"operator"`
 }
 
 // contributorConfig names the Firestore collections backing the
@@ -99,6 +112,7 @@ type cliConfig struct {
 	Issue       issueConfig       `yaml:"issue"`
 	Password    collectionConfig  `yaml:"password"`
 	Newsletter  collectionConfig  `yaml:"newsletter"`
+	IPBlock     ipblockConfig     `yaml:"ipblock"`
 	Contributor contributorConfig `yaml:"contributor"`
 	Email       emailConfig       `yaml:"email"`
 }
@@ -125,6 +139,7 @@ func sourceConfigFromProvider(provider config.Provider) (
 		config.Section{Name: "issue", Target: &c.Issue},
 		config.Section{Name: "password", Target: &c.Password},
 		config.Section{Name: "newsletter", Target: &c.Newsletter},
+		config.Section{Name: "ipblock", Target: &c.IPBlock},
 		config.Section{Name: "contributor", Target: &c.Contributor},
 		config.Section{Name: "email", Target: &c.Email},
 	)

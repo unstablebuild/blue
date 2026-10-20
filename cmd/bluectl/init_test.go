@@ -36,6 +36,7 @@ const (
 	defaultIssueCollection      = "blue-issue"
 	defaultSecretsCollection    = "blue-secret"
 	defaultNewsletterCollection = "newsletter-subscribers"
+	defaultIPBlockCollection    = "ip-blocks"
 )
 
 // defaultContributorConfig mirrors the contributor section of
@@ -105,6 +106,7 @@ func testInitializerRun(t *testing.T, dirName string, projectID string) {
 	expectedConfig.Issue.Collection = defaultIssueCollection
 	expectedConfig.Password.Collection = defaultSecretsCollection
 	expectedConfig.Newsletter.Collection = defaultNewsletterCollection
+	expectedConfig.IPBlock.Collection = defaultIPBlockCollection
 	expectedConfig.Contributor = defaultContributorConfig
 
 	assertConfigInitialized(t, i.configFolder, expectedConfig)
@@ -138,6 +140,7 @@ func TestInitializerRun(t *testing.T) {
 		config.Issue.Collection = defaultIssueCollection
 		config.Password.Collection = defaultSecretsCollection
 		config.Newsletter.Collection = defaultNewsletterCollection
+		config.IPBlock.Collection = defaultIPBlockCollection
 		config.Contributor = defaultContributorConfig
 		require.NoError(t, encodeConfig(f, &config))
 		require.NoError(t, f.Close())
